@@ -1,0 +1,23 @@
+{
+  "name": "gs-streamdeck-plugin",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Private Stream Deck plugin for GS bot emergency stop",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx watch src/index.ts",
+    "package:win": "npm run build && pkg dist/index.js --target node18-win-x64 --output com.gsbot.emergencystop.sdPlugin/gs-stop-plugin.exe",
+    "zip": "powershell -NoProfile -Command Compress-Archive -Path com.gsbot.emergencystop.sdPlugin\\* -DestinationPath dist\\com.gsbot.emergencystop.streamDeckPlugin -Force"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.5.4",
+    "@types/ws": "^8.5.13",
+    "pkg": "^5.8.1",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.2"
+  }
+}

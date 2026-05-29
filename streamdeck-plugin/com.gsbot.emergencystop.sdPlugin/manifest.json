@@ -1,0 +1,37 @@
+{
+  "Actions": [
+    {
+      "Name": "Emergency Stop",
+      "UUID": "com.gsbot.emergencystop.action",
+      "Icon": "imgs/actionIcon.svg",
+      "States": [
+        {
+          "Image": "imgs/actionIcon.svg",
+          "TitleAlignment": "middle",
+          "FontSize": "16"
+        }
+      ],
+      "Tooltip": "Stop current GS video immediately",
+      "PropertyInspectorPath": "inspector/propertyinspector.html"
+    }
+  ],
+  "Author": "GS Bot",
+  "Name": "GS Emergency Stop",
+  "Description": "Private Stream Deck action to stop current GS playback",
+  "Version": "0.1.0",
+  "SDKVersion": 2,
+  "Software": {
+    "MinimumVersion": "6.0"
+  },
+  "OS": [
+    {
+      "Platform": "windows",
+      "MinimumVersion": "10"
+    }
+  ],
+  "CodePath": "gs-stop-plugin.exe",
+  "Icon": "imgs/pluginIcon.svg",
+  "URL": "https://local.gs.bot",
+  "Category": "GS Bot",
+  "CategoryIcon": "imgs/pluginIcon.svg"
+}

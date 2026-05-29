@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GS Emergency Stop</title>
+    <style>
+      body {
+        margin: 12px;
+        font-family: Segoe UI, sans-serif;
+        color: #e8e8e8;
+        background: #1f1f1f;
+      }
+
+      .row {
+        margin-bottom: 10px;
+      }
+
+      label {
+        display: block;
+        font-size: 12px;
+        margin-bottom: 4px;
+      }
+
+      input {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 6px;
+        border: 1px solid #555;
+        border-radius: 4px;
+        background: #2d2d2d;
+        color: #fff;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="row">
+      <label for="host">Bot Host</label>
+      <input id="host" type="text" value="127.0.0.1" />
+    </div>
+    <div class="row">
+      <label for="port">Bot Port</label>
+      <input id="port" type="number" value="4317" min="1" max="65535" />
+    </div>
+    <div class="row">
+      <label for="token">Control Token</label>
+      <input id="token" type="password" value="" />
+    </div>
+
+    <script src="propertyinspector.js"></script>
+  </body>
+  </html>
