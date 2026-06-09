@@ -2,13 +2,14 @@ import type { Logger } from "pino";
 import type { RuntimeState } from "../state/runtimeState";
 import { clearExistingTimeout } from "../utils/timers";
 import { ObsClient } from "./obsClient";
+import type { IObsSourceController } from "./obsSourceController.interface";
 
 interface ObsSourceConfig {
   sceneName: string;
   sourceName: string;
 }
 
-export class ObsSourceController {
+export class ObsSourceController implements IObsSourceController {
   constructor(
     private readonly obsClient: ObsClient,
     private readonly config: ObsSourceConfig,

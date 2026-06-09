@@ -4,7 +4,7 @@
   "description": "Scalable Twitch-to-OBS automation bot",
   "main": "dist/app.js",
   "scripts": {
-    "dev": "tsx watch src/app.ts",
+    "dev": "tsx watch src/server.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/app.js",
     "test": "vitest run",
@@ -19,7 +19,11 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@hono/node-server": "^2.0.4",
+    "@types/better-sqlite3": "^7.6.13",
+    "better-sqlite3": "^12.10.0",
     "dotenv": "^16.4.5",
+    "hono": "^4.12.25",
     "obs-websocket-js": "^5.0.6",
     "pino": "^9.3.2",
     "tmi.js": "^1.8.5",

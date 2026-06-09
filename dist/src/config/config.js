@@ -20,6 +20,7 @@ function loadConfig() {
             botUsername: env.TWITCH_BOT_USERNAME,
             oauthToken: env.TWITCH_OAUTH_TOKEN
         },
+        obsMock: env.OBS_MOCK,
         obs: {
             websocketUrl: env.OBS_WEBSOCKET_URL,
             websocketPassword: env.OBS_WEBSOCKET_PASSWORD,
@@ -36,10 +37,17 @@ function loadConfig() {
         },
         cooldown: {
             enabled: env.GS_COOLDOWN_ENABLED,
-            seconds: env.GS_COOLDOWN_SECONDS
+            seconds: env.GS_COOLDOWN_SECONDS,
+            perUserEnabled: env.GS_COOLDOWN_PER_USER,
+            perUserSeconds: env.GS_COOLDOWN_PER_USER_SECONDS
         },
         playback: {
-            durationSeconds: env.GS_DURATION_SECONDS
+            durationSeconds: env.GS_DURATION_SECONDS,
+            chatFeedback: env.GS_CHAT_FEEDBACK
+        },
+        queue: {
+            mode: env.GS_QUEUE_MODE,
+            maxSize: env.GS_QUEUE_MAX_SIZE
         },
         validation: {
             allowedDomains: env.GS_ALLOWED_DOMAINS,
@@ -52,6 +60,22 @@ function loadConfig() {
             port: env.CONTROL_HTTP_PORT,
             token: env.CONTROL_HTTP_TOKEN
         },
-        logLevel: env.LOG_LEVEL
+        youtube: {
+            apiKey: env.YOUTUBE_API_KEY,
+            maxDurationSeconds: env.GS_MAX_VIDEO_DURATION_SECONDS
+        },
+        approval: {
+            enabled: env.GS_MOD_APPROVAL,
+            timeoutSeconds: env.GS_MOD_APPROVAL_TIMEOUT
+        },
+        dataDir: env.GS_DATA_DIR,
+        logLevel: env.LOG_LEVEL,
+        channelPoints: {
+            enabled: env.CHANNEL_POINTS_ENABLED,
+            clientId: env.TWITCH_CLIENT_ID,
+            accessToken: env.TWITCH_USER_ACCESS_TOKEN,
+            broadcasterId: env.TWITCH_BROADCASTER_ID,
+            rewardId: env.CHANNEL_POINTS_REWARD_ID
+        }
     };
 }

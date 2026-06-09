@@ -10,12 +10,14 @@ export class TwitchClient {
   private readonly client: tmi.Client;
 
   constructor(private readonly config: TwitchClientConfig) {
+    // tmi.js expects the token with the "oauth:" prefix
+    const password = config.oauthToken.startsWith("oauth:")
+      ? config.oauthToken
+      : `oauth:${config.oauthToken}`;
+
     this.client = new tmi.Client({
       options: { debug: false },
-      identity: {
-        username: config.botUsername,
-        password: config.oauthToken
-      },
+      identity: { username: config.botUsername, password },
       channels: [config.channel]
     });
   }

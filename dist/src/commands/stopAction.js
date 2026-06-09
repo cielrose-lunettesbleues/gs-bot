@@ -2,7 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.executeEmergencyStop = executeEmergencyStop;
 async function executeEmergencyStop(deps, triggerSource, username) {
-    await deps.obsController.emergencyStop();
+    await deps.queue.stop();
     deps.logger.info({
         triggerSource,
         username: username ?? null,

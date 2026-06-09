@@ -1,6 +1,6 @@
 export interface StopActionDeps {
-  obsController: {
-    emergencyStop: () => Promise<void>;
+  queue: {
+    stop: () => Promise<void>;
   };
   logger: {
     info: (payload: Record<string, unknown>, message: string) => void;
@@ -10,10 +10,10 @@ export interface StopActionDeps {
 
 export async function executeEmergencyStop(
   deps: StopActionDeps,
-  triggerSource: "twitch" | "streamdeck_plugin",
+  triggerSource: "twitch" | "streamdeck_plugin" | "dashboard",
   username?: string
 ): Promise<void> {
-  await deps.obsController.emergencyStop();
+  await deps.queue.stop();
   deps.logger.info(
     {
       triggerSource,

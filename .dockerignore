@@ -1,0 +1,8 @@
+node_modules
+dist
+.env
+data
+*.jsonl
+*.json.bak
+streamdeck-plugin/node_modules
+streamdeck-plugin/dist

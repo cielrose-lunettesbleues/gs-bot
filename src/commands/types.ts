@@ -1,4 +1,25 @@
+import type { BlacklistService } from "../blacklist/blacklistService";
+import type { HistoryService } from "../history/historyService";
+import type { PlaybackItem, EnqueueResult } from "../queue/playbackQueue";
 import type { CommandContext } from "../twitch/twitchTypes";
+
+export type { PlaybackItem, EnqueueResult };
+
+export interface AdminService {
+  isAdminKeyword: (token: string) => boolean;
+  execute: (context: CommandContext, args: string[]) => Promise<void>;
+}
+
+export interface DurationCheckResult {
+  allowed: boolean;
+  durationSeconds?: number;
+  reason?: "too_long" | "video_not_found";
+}
+
+export interface QueueService {
+  enqueue: (item: PlaybackItem) => Promise<EnqueueResult>;
+  stop: () => Promise<void>;
+}
 
 export interface CommandDependencies {
   permissionService: {
@@ -10,14 +31,19 @@ export interface CommandDependencies {
   urlValidator: {
     validate: CommandUrlValidate;
   };
-  obsController: {
-    playTemporarySource: (url: string, durationSeconds: number) => Promise<void>;
-    emergencyStop: () => Promise<void>;
+  queue: QueueService;
+  blacklistService: BlacklistService;
+  historyService: HistoryService;
+  youtubeDurationValidator?: { check: (url: string) => Promise<DurationCheckResult> };
+  approvalService?: {
+    config: { enabled: boolean };
+    submit: (item: { url: string; durationSeconds: number; username: string; userReply: (msg: string) => Promise<void> }, channelNotify: (msg: string) => Promise<void>) => Promise<void>;
   };
+  adminService?: AdminService;
   config: {
     access: { subOnly: boolean; modOnly: boolean };
-    cooldown: { enabled: boolean; seconds: number };
-    playback: { durationSeconds: number };
+    cooldown: { enabled: boolean; seconds: number; perUserEnabled?: boolean; perUserSeconds?: number };
+    playback: { durationSeconds: number; chatFeedback?: boolean };
     validation: {
       allowedDomains: string[];
       allowDirectFiles: boolean;
@@ -36,10 +62,10 @@ export type CommandPermissionCheck = (
   config: { subOnly: boolean; modOnly: boolean }
 ) => { allowed: boolean; reason?: string };
 
-export type CommandCooldownCheck = (config: {
-  enabled: boolean;
-  seconds: number;
-}) => { allowed: boolean; retryAfterSeconds: number };
+export type CommandCooldownCheck = (
+  config: { enabled: boolean; seconds: number; perUserEnabled?: boolean; perUserSeconds?: number },
+  username?: string
+) => { allowed: boolean; retryAfterSeconds: number };
 
 export type CommandUrlValidate = (
   url: string,

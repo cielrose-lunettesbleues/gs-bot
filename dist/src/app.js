@@ -7,12 +7,20 @@ const greenScreenCommand_1 = require("./commands/greenScreenCommand");
 const config_1 = require("./config/config");
 const controlServer_1 = require("./control/controlServer");
 const cooldownService_1 = require("./cooldown/cooldownService");
+const approvalService_1 = require("./approval/approvalService");
+const blacklistService_1 = require("./blacklist/blacklistService");
+const historyService_1 = require("./history/historyService");
+const youtubeDurationValidator_1 = require("./validation/youtubeDurationValidator");
 const logger_1 = require("./logger/logger");
+const mockObsSourceController_1 = require("./obs/mockObsSourceController");
 const obsClient_1 = require("./obs/obsClient");
 const obsSourceController_1 = require("./obs/obsSourceController");
+const overlayBroadcaster_1 = require("./overlay/overlayBroadcaster");
 const permissionService_1 = require("./permissions/permissionService");
+const playbackQueue_1 = require("./queue/playbackQueue");
 const runtimeState_1 = require("./state/runtimeState");
 const twitchClient_1 = require("./twitch/twitchClient");
+const twitchEventSubClient_1 = require("./twitch/twitchEventSubClient");
 const twitchMessageHandler_1 = require("./twitch/twitchMessageHandler");
 const urlValidator_1 = require("./validation/urlValidator");
 async function main() {
@@ -21,14 +29,45 @@ async function main() {
     const permissionService = new permissionService_1.PermissionService();
     const cooldownService = new cooldownService_1.CooldownService();
     const urlValidator = new urlValidator_1.UrlValidator();
+    const blacklistService = new blacklistService_1.BlacklistService(config.dataDir);
+    const historyService = new historyService_1.HistoryService(config.dataDir);
     const runtimeState = (0, runtimeState_1.createRuntimeState)();
-    const obsClient = new obsClient_1.ObsClient();
-    const obsController = new obsSourceController_1.ObsSourceController(obsClient, config.obs, runtimeState, logger);
+    let obsController;
+    let obsClient = null;
+    if (config.obsMock) {
+        logger.warn({}, "OBS mock mode enabled — no OBS connection will be made");
+        obsController = new mockObsSourceController_1.MockObsSourceController(runtimeState, logger);
+    }
+    else {
+        obsClient = new obsClient_1.ObsClient();
+        obsController = new obsSourceController_1.ObsSourceController(obsClient, config.obs, runtimeState, logger);
+    }
+    const overlayBroadcaster = new overlayBroadcaster_1.OverlayBroadcaster();
+    const queue = new playbackQueue_1.PlaybackQueue(obsController, config.queue, logger, (event) => overlayBroadcaster.broadcast(event));
+    const youtubeDurationValidator = config.youtube.apiKey && config.youtube.maxDurationSeconds > 0
+        ? new youtubeDurationValidator_1.YoutubeDurationValidator(config.youtube)
+        : undefined;
+    // Always instantiate ApprovalService so the dashboard toggle works at runtime.
+    // config.approval.enabled controls whether submit() is actually invoked in the command pipeline.
+    const approvalService = new approvalService_1.ApprovalService({ queue, config: config.approval, logger });
+    const adminService = new adminCommands_1.AdminService({
+        runtimeConfig: config,
+        cooldownService,
+        blacklistService,
+        historyService,
+        approvalService,
+        logger
+    });
     const deps = {
         permissionService,
         cooldownService,
         urlValidator,
-        obsController,
+        queue,
+        blacklistService,
+        historyService,
+        youtubeDurationValidator,
+        approvalService,
+        adminService,
         config,
         logger
     };
@@ -39,32 +78,80 @@ async function main() {
     ]);
     const twitchClient = new twitchClient_1.TwitchClient(config.twitch);
     const controlServer = (0, controlServer_1.createControlServer)(config.controlHttp, {
-        obsController,
+        queue,
+        cooldownService,
+        blacklistService,
+        historyService,
+        approvalService,
+        overlayBroadcaster,
+        router,
+        runtimeConfig: config,
         logger
     });
     (0, twitchMessageHandler_1.bindTwitchMessageHandler)(twitchClient, router, logger);
-    await obsClient.connect(config.obs.websocketUrl, config.obs.websocketPassword);
+    if (obsClient) {
+        await obsClient.connect(config.obs.websocketUrl, config.obs.websocketPassword);
+    }
     await obsController.hideSource();
     await twitchClient.connect();
     await controlServer.start();
-    logger.info({ channel: config.twitch.channel }, "GS bot started");
+    // Channel points via EventSub WebSocket
+    let eventSubClient = null;
+    if (config.channelPoints.enabled) {
+        let broadcasterId = config.channelPoints.broadcasterId;
+        if (!broadcasterId) {
+            broadcasterId = await (0, twitchEventSubClient_1.fetchBroadcasterId)(config.twitch.channel, config.channelPoints.clientId, config.channelPoints.accessToken);
+            logger.info({ broadcasterId, channel: config.twitch.channel }, "Resolved broadcaster ID");
+        }
+        eventSubClient = new twitchEventSubClient_1.TwitchEventSubClient({ ...config.channelPoints, broadcasterId }, async (redemption) => {
+            const url = redemption.userInput.trim();
+            if (!url)
+                return;
+            if (blacklistService.isBlocked(redemption.username)) {
+                logger.info({ username: redemption.username }, "Channel points blocked (blacklist)");
+                return;
+            }
+            const urlCheck = urlValidator.validate(url, config.validation);
+            if (!urlCheck.valid) {
+                logger.info({ username: redemption.username, url, reason: urlCheck.reason }, "Channel points URL invalid");
+                return;
+            }
+            if (youtubeDurationValidator) {
+                const durationCheck = await youtubeDurationValidator.check(url);
+                if (!durationCheck.allowed) {
+                    logger.info({ username: redemption.username, url, reason: durationCheck.reason }, "Channel points duration rejected");
+                    return;
+                }
+            }
+            const result = await queue.enqueue({
+                url,
+                durationSeconds: config.playback.durationSeconds,
+                username: redemption.username,
+                reply: async () => undefined
+            });
+            logger.info({ username: redemption.username, url, rewardId: redemption.rewardId, queueStatus: result.status }, "Channel points redemption processed");
+        }, logger);
+        await eventSubClient.connect();
+        logger.info({ rewardId: config.channelPoints.rewardId || "any" }, "Channel points enabled");
+    }
+    logger.info({ channel: config.twitch.channel, obsMock: config.obsMock }, "GS Bot started");
     if (config.controlHttp.enabled) {
-        logger.info({
-            host: config.controlHttp.host,
-            port: config.controlHttp.port
-        }, "Control HTTP server enabled");
+        logger.info({ host: config.controlHttp.host, port: config.controlHttp.port }, "Control HTTP server enabled — dashboard: http://%s:%d/  overlay: http://%s:%d/overlay", config.controlHttp.host, config.controlHttp.port, config.controlHttp.host, config.controlHttp.port);
     }
     const shutdown = async () => {
-        logger.info({}, "Shutting down GS bot");
+        logger.info({}, "Shutting down GS Bot");
         try {
-            await obsController.emergencyStop();
+            await queue.stop();
         }
         catch (error) {
-            logger.error({ error }, "Failed to emergency stop source during shutdown");
+            logger.error({ error }, "Failed to stop queue during shutdown");
         }
+        eventSubClient?.disconnect();
         await twitchClient.disconnect();
         await controlServer.stop();
-        await obsClient.disconnect();
+        if (obsClient) {
+            await obsClient.disconnect();
+        }
         process.exit(0);
     };
     process.on("SIGINT", () => {
