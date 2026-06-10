@@ -12,7 +12,7 @@ function getDashboardHtml() {
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
   --bg:#111827;--surface:#1f2937;--border:#374151;
-  --accent:#6366f1;
+  --accent:#6366f1;--twitch:#9147ff;
   --text:#f9fafb;--muted:#9ca3af;
   --green:#22c55e;--red:#ef4444;--yellow:#f59e0b;
   --radius:8px;--gap:14px;
@@ -48,9 +48,21 @@ input:checked+.slider:before{transform:translateX(18px)}
 .btn-approve{background:var(--green);color:#fff}.btn-approve:hover{filter:brightness(1.1)}
 .btn-deny{background:var(--red);color:#fff}.btn-deny:hover{filter:brightness(1.1)}
 .btn-send{background:var(--accent);color:#fff;padding:7px 16px}.btn-send:hover{filter:brightness(1.1)}
+.btn-twitch{background:var(--twitch);color:#fff}.btn-twitch:hover{filter:brightness(1.1)}
 /* Badges */
 .badge{display:inline-block;padding:2px 7px;border-radius:4px;font-size:11px;font-weight:600}
 .badge-busy{background:#7c3aed;color:#fff}.badge-idle{background:#065f46;color:#6ee7b7}
+.badge-connected{background:#065f46;color:#6ee7b7}.badge-disconnected{background:#374151;color:var(--muted)}
+/* URL copy box */
+.url-copy-row{display:flex;gap:6px;align-items:center}
+.url-copy-box{flex:1;background:#0f172a;border:1px solid var(--border);border-radius:6px;
+  padding:6px 10px;font-size:12px;font-family:monospace;color:#93c5fd;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.btn-copy{padding:5px 10px;font-size:12px;background:var(--border);color:var(--text);border-radius:6px;border:none;cursor:pointer;flex-shrink:0}
+.btn-copy:hover{background:#4b5563}.btn-copy.copied{background:var(--green);color:#fff}
+/* Setup hint */
+.setup-hint{background:#0f172a;border:1px solid var(--border);border-radius:6px;padding:10px 12px;font-size:12px;color:var(--muted);line-height:1.6}
+.setup-hint code{background:#1f2937;border:1px solid var(--border);border-radius:3px;padding:1px 5px;font-size:11px;color:#93c5fd}
 /* Approval */
 .approval-item{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px solid var(--border)}
 .approval-item:last-child{border-bottom:none}
@@ -112,6 +124,42 @@ tr:last-child td{border-bottom:none}
 
 <main>
 
+  <!-- TWITCH + BROWSER SOURCE -->
+  <div class="panel col-full">
+    <div class="panel-title">Twitch & OBS Browser Source</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+
+      <!-- Twitch connection -->
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div class="row">
+          <label style="font-weight:600">Connexion Twitch</label>
+          <span id="twitch-badge"><span class="badge badge-disconnected">Déconnecté</span></span>
+        </div>
+        <div id="twitch-channel-row" class="row" style="display:none">
+          <label style="color:var(--muted);font-size:13px">Canal</label>
+          <strong id="twitch-channel" style="font-size:13px;color:var(--green)"></strong>
+        </div>
+        <div id="twitch-connect-area"></div>
+      </div>
+
+      <!-- Browser Source URL -->
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div class="row">
+          <label style="font-weight:600">OBS Browser Source</label>
+          <span id="overlay-clients-badge" style="font-size:12px;color:var(--muted)">0 client(s)</span>
+        </div>
+        <div class="url-copy-row">
+          <span class="url-copy-box" id="overlay-url"></span>
+          <button class="btn-copy" id="copy-btn" onclick="copyOverlayUrl()">Copier</button>
+        </div>
+        <p style="font-size:11px;color:var(--muted);line-height:1.5">
+          Dans OBS : <em>Ajouter une source → Navigateur</em> → coller cette URL.<br>
+          Taille recommandée : 1920×1080, fond transparent activé.
+        </p>
+      </div>
+    </div>
+  </div>
+
   <!-- CONFIG -->
   <div class="panel">
     <div class="panel-title">Configuration</div>
@@ -134,8 +182,6 @@ tr:last-child td{border-bottom:none}
     <div class="panel-title">Actions</div>
     <div class="row"><label>File d'attente</label>
       <span id="queue-state-text" style="color:var(--muted);font-size:13px">—</span></div>
-    <div class="row"><label>Overlay connecté</label>
-      <span id="overlay-clients" style="color:var(--muted);font-size:13px">0</span></div>
     <button class="btn btn-danger" onclick="emergencyStop()">⏹ Stop urgence</button>
     <button class="btn btn-secondary" onclick="resetCooldown()">🔄 Réinitialiser cooldown</button>
   </div>
@@ -157,9 +203,9 @@ tr:last-child td{border-bottom:none}
 
   <!-- SIMULATEUR DE CHAT -->
   <div class="panel col-full">
-    <div class="panel-title">Simulateur de chat Twitch</div>
+    <div class="panel-title">Simulateur de chat</div>
 
-    <div class="presets" id="preset-buttons">
+    <div class="presets">
       <button class="preset" onclick="setMsg('!gs https://www.youtube.com/watch?v=dQw4w9WgXcQ')">▶ YouTube</button>
       <button class="preset" onclick="setMsg('!gs https://youtu.be/dQw4w9WgXcQ')">▶ youtu.be</button>
       <button class="preset" onclick="setMsg('!gs https://tenor.com/view/cat-1234')">▶ GIF Tenor</button>
@@ -172,7 +218,7 @@ tr:last-child td{border-bottom:none}
     </div>
 
     <div class="chat-window" id="chat-messages">
-      <div class="chat-msg chat-sys"><span class="chat-name">Système</span><span class="chat-text">Simulateur prêt. Ouvre <a href="/overlay" target="_blank" style="color:var(--accent)">/overlay</a> dans un autre onglet pour voir la lecture.</span></div>
+      <div class="chat-msg chat-sys"><span class="chat-name">Système</span><span class="chat-text">Simulateur prêt. Ouvre la Browser Source dans OBS pour voir la lecture.</span></div>
     </div>
 
     <div class="sim-form">
@@ -194,6 +240,10 @@ tr:last-child td{border-bottom:none}
   var token=sessionStorage.getItem(TOKEN_KEY)||'';
   var chatHistory=[];
 
+  // Set overlay URL from current page origin
+  var overlayUrl=window.location.origin+'/overlay';
+  document.getElementById('overlay-url').textContent=overlayUrl;
+
   function showAuthOverlay(err){
     document.getElementById('auth-overlay').style.display='flex';
     document.getElementById('auth-error').style.display=err?'block':'none';
@@ -214,11 +264,43 @@ tr:last-child td{border-bottom:none}
     if(body!==undefined){opts.headers['Content-Type']='application/json';opts.body=JSON.stringify(body);}
     var res=await fetch(path,opts);
     if(res.status===401){showAuthOverlay(true);throw new Error('unauthorized');}
-    if(!res.ok)throw new Error('HTTP '+res.status);
+    if(!res.ok){var e=new Error('HTTP '+res.status);try{var d=await res.json();e.message=d.error||e.message;}catch(x){}throw e;}
     return res.json();
   }
 
   function setDot(ok){document.getElementById('status-dot').className=ok?'ok':'err';}
+
+  function updateTwitch(twitch){
+    var badge=document.getElementById('twitch-badge');
+    var channelRow=document.getElementById('twitch-channel-row');
+    var connectArea=document.getElementById('twitch-connect-area');
+
+    if(twitch.connected){
+      badge.innerHTML='<span class="badge badge-connected">Connecté</span>';
+      channelRow.style.display='flex';
+      document.getElementById('twitch-channel').textContent=twitch.channel||'';
+      connectArea.innerHTML='<button class="btn btn-secondary" onclick="disconnectTwitch()">Déconnecter Twitch</button>';
+    } else {
+      badge.innerHTML='<span class="badge badge-disconnected">Déconnecté</span>';
+      channelRow.style.display='none';
+      if(twitch.oauth&&twitch.oauth.available){
+        var authUrl='https://id.twitch.tv/oauth2/authorize?'+
+          'client_id='+encodeURIComponent(twitch.oauth.clientId)+
+          '&redirect_uri='+encodeURIComponent(twitch.oauth.redirectUri)+
+          '&response_type=token'+
+          '&scope=chat%3Aread+chat%3Aedit+channel%3Aread%3Aredemptions';
+        connectArea.innerHTML='<button class="btn btn-twitch" onclick="connectTwitch(\''+authUrl.replace(/'/g,'\\\'')+'\')">'
+          +'Connecter avec Twitch</button>';
+      } else {
+        connectArea.innerHTML='<div class="setup-hint">'
+          +'Pour activer la connexion Twitch OAuth :<br>'
+          +'1. Créer une app sur <strong>dev.twitch.tv</strong><br>'
+          +'2. Redirect URI : <code>'+esc(twitch.oauth&&twitch.oauth.redirectUri||window.location.origin+'/oauth/callback')+'</code><br>'
+          +'3. Ajouter <code>TWITCH_CLIENT_ID=xxx</code> dans <code>.env</code>'
+          +'</div>';
+      }
+    }
+  }
 
   function updateConfig(cfg){
     document.getElementById('cfg-subonly').checked=cfg.access.subOnly;
@@ -273,9 +355,32 @@ tr:last-child td{border-bottom:none}
       updateQueue(status.queue);
       updateApprovals(status.approval.pending);
       updateHistory(history.entries);
-      document.getElementById('overlay-clients').textContent=status.overlay.clients;
+      updateTwitch(status.twitch);
+      document.getElementById('overlay-clients-badge').textContent=status.overlay.clients+' client(s)';
     }catch(e){if(e.message!=='unauthorized')setDot(false);}
   }
+
+  // Twitch OAuth
+  window.connectTwitch=function(authUrl){
+    window.location.href=authUrl;
+  };
+  window.disconnectTwitch=async function(){
+    if(!confirm('Déconnecter le bot Twitch et effacer la configuration OAuth ?'))return;
+    try{
+      await api('POST','/api/twitch/disconnect');
+      addMsg('sys','Système','Twitch déconnecté.');
+      refresh();
+    }catch(e){addMsg('err','Erreur',e.message);}
+  };
+
+  // URL copy
+  window.copyOverlayUrl=function(){
+    navigator.clipboard.writeText(overlayUrl).then(function(){
+      var btn=document.getElementById('copy-btn');
+      btn.textContent='Copié !';btn.className='btn-copy copied';
+      setTimeout(function(){btn.textContent='Copier';btn.className='btn-copy';},2000);
+    });
+  };
 
   // === Chat simulator ===
   function now(){return new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});}
@@ -328,7 +433,6 @@ tr:last-child td{border-bottom:none}
     }
   };
 
-  // Enter to send
   document.getElementById('sim-message').addEventListener('keydown',function(e){
     if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();window.sendSimulate();}
   });

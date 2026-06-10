@@ -8,6 +8,7 @@ const http_1 = __importDefault(require("http"));
 const stopAction_1 = require("../commands/stopAction");
 const dashboardHtml_1 = require("./dashboardHtml");
 const overlayHtml_1 = require("../overlay/overlayHtml");
+const oauthCallbackHtml_1 = require("./oauthCallbackHtml");
 function parseBearerToken(req) {
     const auth = req.headers.authorization;
     if (!auth)
@@ -33,24 +34,30 @@ function createControlServer(config, deps) {
     const handleRequest = async (req, res) => {
         const url = req.url ?? "/";
         const method = req.method ?? "GET";
-        // Dashboard HTML — no auth required
+        // Dashboard HTML — no auth
         if (method === "GET" && url === "/") {
             res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
             res.end((0, dashboardHtml_1.getDashboardHtml)());
             return;
         }
-        // Overlay HTML — no auth required (loaded as OBS Browser Source)
+        // Overlay HTML — no auth (OBS Browser Source can't send headers)
         if (method === "GET" && url === "/overlay") {
             res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
             res.end((0, overlayHtml_1.getOverlayHtml)());
             return;
         }
-        // Overlay SSE stream — no auth (same reason: OBS Browser Source can't set headers)
+        // Overlay SSE — no auth
         if (method === "GET" && url === "/overlay/events") {
             deps.overlayBroadcaster.connect(req, res);
             return;
         }
-        // Legacy emergency-stop (backward compat with StreamDeck plugins etc.)
+        // OAuth callback page — no auth (redirect from Twitch)
+        if (method === "GET" && url === "/oauth/callback") {
+            res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+            res.end((0, oauthCallbackHtml_1.getOAuthCallbackHtml)());
+            return;
+        }
+        // Legacy emergency-stop (StreamDeck plugins etc.)
         if (url === "/actions/emergency-stop") {
             if (method !== "POST") {
                 respondJson(res, 405, { ok: false, error: "method_not_allowed" });
@@ -77,6 +84,7 @@ function createControlServer(config, deps) {
         if (method === "GET" && url === "/api/status") {
             const cfg = deps.runtimeConfig;
             const pending = deps.approvalService.listPending();
+            const twitch = deps.twitchBot.status();
             respondJson(res, 200, {
                 config: {
                     access: { subOnly: cfg.access.subOnly, modOnly: cfg.access.modOnly },
@@ -85,7 +93,16 @@ function createControlServer(config, deps) {
                 },
                 queue: deps.queue.getState(),
                 approval: { pendingCount: pending.length, pending },
-                overlay: { clients: deps.overlayBroadcaster.clientCount() }
+                overlay: { clients: deps.overlayBroadcaster.clientCount() },
+                twitch: {
+                    connected: twitch.connected,
+                    channel: twitch.channel,
+                    oauth: {
+                        available: Boolean(twitch.oauthClientId),
+                        clientId: twitch.oauthClientId,
+                        redirectUri: twitch.redirectUri
+                    }
+                }
             });
             return;
         }
@@ -156,7 +173,7 @@ function createControlServer(config, deps) {
             respondJson(res, ok ? 200 : 404, { ok });
             return;
         }
-        // POST /api/simulate — inject a chat message directly into the command router
+        // POST /api/simulate — inject a chat message into the command router
         if (method === "POST" && url === "/api/simulate") {
             const raw = await readBody(req);
             let body;
@@ -190,6 +207,46 @@ function createControlServer(config, deps) {
             catch (error) {
                 deps.logger.error({ error, username, message }, "Dashboard: simulate error");
                 respondJson(res, 500, { ok: false, error: "command_error" });
+            }
+            return;
+        }
+        // POST /api/twitch/auth — receive OAuth token, connect bot
+        if (method === "POST" && url === "/api/twitch/auth") {
+            const raw = await readBody(req);
+            let body;
+            try {
+                body = JSON.parse(raw);
+            }
+            catch {
+                respondJson(res, 400, { ok: false, error: "invalid_json" });
+                return;
+            }
+            const token = String(body.token ?? "").trim();
+            if (!token) {
+                respondJson(res, 400, { ok: false, error: "token_required" });
+                return;
+            }
+            try {
+                const result = await deps.twitchBot.connectOAuth(token);
+                deps.logger.info({ channel: result.channel }, "Dashboard: Twitch OAuth connected");
+                respondJson(res, 200, { ok: true, channel: result.channel });
+            }
+            catch (error) {
+                const msg = error instanceof Error ? error.message : "OAuth connection failed";
+                deps.logger.error({ error }, "Dashboard: Twitch OAuth error");
+                respondJson(res, 400, { ok: false, error: msg });
+            }
+            return;
+        }
+        // POST /api/twitch/disconnect — stop bot and clear persisted config
+        if (method === "POST" && url === "/api/twitch/disconnect") {
+            try {
+                await deps.twitchBot.disconnectAndClear();
+                respondJson(res, 200, { ok: true });
+            }
+            catch (error) {
+                deps.logger.error({ error }, "Dashboard: Twitch disconnect error");
+                respondJson(res, 500, { ok: false, error: "disconnect_failed" });
             }
             return;
         }

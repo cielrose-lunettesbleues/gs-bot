@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.createGreenScreenCommand = createGreenScreenCommand;
+const urlResolver_1 = require("../media/urlResolver");
 function createGreenScreenCommand(deps, commandName) {
     return {
         name: commandName,
@@ -36,6 +37,7 @@ function createGreenScreenCommand(deps, commandName) {
                 await context.reply(`@${context.user.username} URL non autorisée.`);
                 return;
             }
+            const resolvedUrl = await (0, urlResolver_1.resolveMediaUrl)(url);
             if (deps.youtubeDurationValidator) {
                 const durationCheck = await deps.youtubeDurationValidator.check(url);
                 if (!durationCheck.allowed) {
@@ -43,8 +45,7 @@ function createGreenScreenCommand(deps, commandName) {
                         await context.reply(`@${context.user.username} Vidéo introuvable.`);
                     }
                     else {
-                        const max = deps.config.youtube?.maxDurationSeconds ?? 0;
-                        await context.reply(`@${context.user.username} Vidéo trop longue (max ${max}s, durée ${durationCheck.durationSeconds ?? "?"}s).`);
+                        await context.reply(`@${context.user.username} Vidéo trop longue (durée ${durationCheck.durationSeconds ?? "?"}s).`);
                     }
                     return;
                 }
@@ -52,7 +53,7 @@ function createGreenScreenCommand(deps, commandName) {
             // Route to approval queue for non-mods when approval is enabled
             if (deps.approvalService?.config.enabled && !context.user.isMod) {
                 await deps.approvalService.submit({
-                    url,
+                    url: resolvedUrl,
                     durationSeconds: deps.config.playback.durationSeconds,
                     username: context.user.username,
                     userReply: context.reply
@@ -60,7 +61,7 @@ function createGreenScreenCommand(deps, commandName) {
                 return;
             }
             const result = await deps.queue.enqueue({
-                url,
+                url: resolvedUrl,
                 durationSeconds: deps.config.playback.durationSeconds,
                 username: context.user.username,
                 reply: context.reply
@@ -89,13 +90,11 @@ function createGreenScreenCommand(deps, commandName) {
                     }
                     return;
             }
-            if (result.status !== "dropped") {
-                deps.historyService.record({
-                    username: context.user.username,
-                    url,
-                    durationSeconds: deps.config.playback.durationSeconds
-                });
-            }
+            deps.historyService.record({
+                username: context.user.username,
+                url: resolvedUrl,
+                durationSeconds: deps.config.playback.durationSeconds
+            });
             deps.logger.info({ username: context.user.username, command: commandName, url, queueStatus: result.status }, "Green screen command executed");
         }
     };

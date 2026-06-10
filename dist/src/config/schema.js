@@ -16,9 +16,10 @@ const envBool = (def) => zod_1.z.preprocess((val) => {
     return val;
 }, zod_1.z.boolean().default(def));
 exports.envSchema = zod_1.z.object({
-    TWITCH_CHANNEL: zod_1.z.string().min(1),
-    TWITCH_BOT_USERNAME: zod_1.z.string().min(1),
-    TWITCH_OAUTH_TOKEN: zod_1.z.string().min(1),
+    TWITCH_MOCK: envBool(false),
+    TWITCH_CHANNEL: zod_1.z.string().default(""),
+    TWITCH_BOT_USERNAME: zod_1.z.string().default(""),
+    TWITCH_OAUTH_TOKEN: zod_1.z.string().default(""),
     OBS_MOCK: envBool(false),
     OBS_WEBSOCKET_URL: zod_1.z.string().url().default("ws://localhost:4455"),
     OBS_WEBSOCKET_PASSWORD: zod_1.z.string().default(""),
@@ -62,7 +63,8 @@ exports.envSchema = zod_1.z.object({
     TWITCH_CLIENT_ID: zod_1.z.string().default(""),
     TWITCH_USER_ACCESS_TOKEN: zod_1.z.string().default(""),
     TWITCH_BROADCASTER_ID: zod_1.z.string().default(""),
-    CHANNEL_POINTS_REWARD_ID: zod_1.z.string().default("")
+    CHANNEL_POINTS_REWARD_ID: zod_1.z.string().default(""),
+    TWITCH_REDIRECT_URI: zod_1.z.string().default("")
 }).superRefine((env, ctx) => {
     if (env.CONTROL_HTTP_ENABLED && env.CONTROL_HTTP_TOKEN.trim().length === 0) {
         ctx.addIssue({

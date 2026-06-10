@@ -11,8 +11,16 @@ function makeDeps() {
             enqueue: vitest_1.vi.fn(async () => ({ status: "playing" })),
             stop: vitest_1.vi.fn(async () => undefined)
         },
-        blacklistService: { isBlocked: vitest_1.vi.fn(() => false) },
-        historyService: { record: vitest_1.vi.fn() },
+        blacklistService: {
+            isBlocked: vitest_1.vi.fn(() => false),
+            block: vitest_1.vi.fn(() => true),
+            unblock: vitest_1.vi.fn(() => true),
+            list: vitest_1.vi.fn(() => [])
+        },
+        historyService: {
+            record: vitest_1.vi.fn(),
+            getLast: vitest_1.vi.fn(() => [])
+        },
         config: {
             access: { subOnly: true, modOnly: false },
             cooldown: { enabled: true, seconds: 60 },

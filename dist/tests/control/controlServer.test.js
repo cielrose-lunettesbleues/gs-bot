@@ -97,10 +97,16 @@ function makeDeps(overrides = {}) {
         },
         overlayBroadcaster: {
             connect: vitest_1.vi.fn(),
+            addClient: vitest_1.vi.fn(() => () => undefined),
             broadcast: vitest_1.vi.fn(),
             clientCount: vitest_1.vi.fn(() => 0)
         },
         router: { route: vitest_1.vi.fn(async () => undefined) },
+        twitchBot: {
+            status: vitest_1.vi.fn(() => ({ connected: false, channel: null, oauthClientId: null, redirectUri: "http://127.0.0.1:4317/oauth/callback" })),
+            connectOAuth: vitest_1.vi.fn(async () => ({ channel: "testchannel" })),
+            disconnectAndClear: vitest_1.vi.fn(async () => undefined)
+        },
         runtimeConfig: {
             access: { subOnly: false, modOnly: false },
             cooldown: { enabled: true, seconds: 60 },
@@ -164,7 +170,7 @@ function makeDeps(overrides = {}) {
         const res = await makeRequest("GET", port, "/overlay");
         (0, vitest_1.expect)(res.statusCode).toBe(200);
         (0, vitest_1.expect)(res.body).toContain("<!DOCTYPE html>");
-        (0, vitest_1.expect)(res.body).toContain("overlay/events");
+        (0, vitest_1.expect)(res.body).toContain("EventSource");
     });
     (0, vitest_1.it)("GET /overlay/events calls overlayBroadcaster.connect", async () => {
         const port = await findOpenPort();
@@ -262,6 +268,66 @@ function makeDeps(overrides = {}) {
         const res = await makeRequest("POST", port, "/api/deny/bob", "tok");
         (0, vitest_1.expect)(res.statusCode).toBe(200);
         (0, vitest_1.expect)(deps.approvalService.deny).toHaveBeenCalledWith("bob", vitest_1.expect.any(Function));
+    });
+    (0, vitest_1.it)("GET /oauth/callback serves callback HTML (no auth)", async () => {
+        const port = await findOpenPort();
+        const server = (0, controlServer_1.createControlServer)({ enabled: true, host: "127.0.0.1", port, token: "t" }, makeDeps());
+        runningServer = server;
+        await server.start();
+        const res = await makeRequest("GET", port, "/oauth/callback");
+        (0, vitest_1.expect)(res.statusCode).toBe(200);
+        (0, vitest_1.expect)(res.body).toContain("<!DOCTYPE html>");
+        (0, vitest_1.expect)(res.body).toContain("access_token");
+    });
+    (0, vitest_1.it)("GET /api/status includes twitch section", async () => {
+        const port = await findOpenPort();
+        const deps = makeDeps({
+            twitchBot: {
+                status: vitest_1.vi.fn(() => ({ connected: true, channel: "streamer", oauthClientId: "clientabc", redirectUri: "http://127.0.0.1/oauth/callback" })),
+                connectOAuth: vitest_1.vi.fn(async () => ({ channel: "streamer" })),
+                disconnectAndClear: vitest_1.vi.fn(async () => undefined)
+            }
+        });
+        const server = (0, controlServer_1.createControlServer)({ enabled: true, host: "127.0.0.1", port, token: "tok" }, deps);
+        runningServer = server;
+        await server.start();
+        const res = await makeRequest("GET", port, "/api/status", "tok");
+        (0, vitest_1.expect)(res.statusCode).toBe(200);
+        const body = JSON.parse(res.body);
+        (0, vitest_1.expect)(body.twitch.connected).toBe(true);
+        (0, vitest_1.expect)(body.twitch.channel).toBe("streamer");
+        (0, vitest_1.expect)(body.twitch.oauth.available).toBe(true);
+    });
+    (0, vitest_1.it)("POST /api/twitch/auth calls connectOAuth and returns channel", async () => {
+        const port = await findOpenPort();
+        const deps = makeDeps();
+        const server = (0, controlServer_1.createControlServer)({ enabled: true, host: "127.0.0.1", port, token: "tok" }, deps);
+        runningServer = server;
+        await server.start();
+        const res = await makeRequest("POST", port, "/api/twitch/auth", "tok", { token: "oauth-abc" });
+        (0, vitest_1.expect)(res.statusCode).toBe(200);
+        const body = JSON.parse(res.body);
+        (0, vitest_1.expect)(body.ok).toBe(true);
+        (0, vitest_1.expect)(body.channel).toBe("testchannel");
+        (0, vitest_1.expect)(deps.twitchBot.connectOAuth).toHaveBeenCalledWith("oauth-abc");
+    });
+    (0, vitest_1.it)("POST /api/twitch/auth returns 400 when token missing", async () => {
+        const port = await findOpenPort();
+        const server = (0, controlServer_1.createControlServer)({ enabled: true, host: "127.0.0.1", port, token: "tok" }, makeDeps());
+        runningServer = server;
+        await server.start();
+        const res = await makeRequest("POST", port, "/api/twitch/auth", "tok", { token: "" });
+        (0, vitest_1.expect)(res.statusCode).toBe(400);
+    });
+    (0, vitest_1.it)("POST /api/twitch/disconnect calls disconnectAndClear", async () => {
+        const port = await findOpenPort();
+        const deps = makeDeps();
+        const server = (0, controlServer_1.createControlServer)({ enabled: true, host: "127.0.0.1", port, token: "tok" }, deps);
+        runningServer = server;
+        await server.start();
+        const res = await makeRequest("POST", port, "/api/twitch/disconnect", "tok");
+        (0, vitest_1.expect)(res.statusCode).toBe(200);
+        (0, vitest_1.expect)(deps.twitchBot.disconnectAndClear).toHaveBeenCalled();
     });
     (0, vitest_1.it)("POST /api/simulate routes message and returns replies", async () => {
         const port = await findOpenPort();

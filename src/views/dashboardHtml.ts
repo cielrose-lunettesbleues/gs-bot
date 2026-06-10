@@ -301,8 +301,8 @@ input:checked+.slider:before{transform:translateX(18px)}
               + (item.url ? '<div class="approval-url" title="'+esc(item.url)+'">'+esc(item.url)+'</div>' : '')
               + '</div>'
               + '<div class="approval-btns">'
-              + '<button class="btn btn-sm btn-green" onclick="approvePending(\''+u+'\')">✓</button>'
-              + '<button class="btn btn-sm btn-danger" onclick="denyPending(\''+u+'\')">✗</button>'
+              + '<button class="btn btn-sm btn-green" onclick="approvePending(\\''+u+'\\')">✓</button>'
+              + '<button class="btn btn-sm btn-danger" onclick="denyPending(\\''+u+'\\')">✗</button>'
               + '</div></div>';
           }).join('')
         : '<p class="empty">Aucune demande en attente</p>';
@@ -397,12 +397,12 @@ input:checked+.slider:before{transform:translateX(18px)}
     if(btn.dataset.confirm !== '1'){
       btn.textContent = '⚠ Confirmer le stop ?';
       btn.dataset.confirm = '1';
-      setTimeout(function(){ btn.textContent = '⏹ Stop d\'urgence'; delete btn.dataset.confirm; }, 3000);
+      setTimeout(function(){ btn.textContent = "⏹ Stop d'urgence"; delete btn.dataset.confirm; }, 3000);
       return;
     }
     delete btn.dataset.confirm;
     btn.disabled = true;
-    btn.textContent = '⏹ Stop d\'urgence';
+    btn.textContent = "⏹ Stop d'urgence";
     try { await api('POST','/api/queue/stop'); toast('File vidée.','ok'); refresh(); }
     catch(e){ toast('Erreur','err'); }
     finally { btn.disabled = false; }

@@ -4,7 +4,7 @@ const vitest_1 = require("vitest");
 const playbackQueue_1 = require("../../src/queue/playbackQueue");
 function makeObs() {
     return {
-        setSourceUrl: vitest_1.vi.fn(async () => undefined),
+        setSourceUrl: vitest_1.vi.fn(async (_url) => undefined),
         showSource: vitest_1.vi.fn(async () => undefined),
         hideSource: vitest_1.vi.fn(async () => undefined)
     };

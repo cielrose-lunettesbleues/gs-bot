@@ -15,6 +15,7 @@ function loadConfig() {
     }
     const env = parsed.data;
     return {
+        twitchMock: env.TWITCH_MOCK,
         twitch: {
             channel: env.TWITCH_CHANNEL,
             botUsername: env.TWITCH_BOT_USERNAME,
@@ -76,6 +77,10 @@ function loadConfig() {
             accessToken: env.TWITCH_USER_ACCESS_TOKEN,
             broadcasterId: env.TWITCH_BROADCASTER_ID,
             rewardId: env.CHANNEL_POINTS_REWARD_ID
+        },
+        oauth: {
+            clientId: env.TWITCH_CLIENT_ID,
+            redirectUri: env.TWITCH_REDIRECT_URI
         }
     };
 }
