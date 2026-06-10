@@ -37,6 +37,19 @@ video,img{
   border:none;
   pointer-events:none;
 }
+/*
+ * For Shorts (9:16 wrapper), YouTube always renders the player in 16:9
+ * internally, putting the 9:16 video in the center with black side bars.
+ * Fix: scale the 16:9 iframe so its center column (the actual video) fills
+ * the 9:16 wrapper. Math: scale = (16/9)/(9/16) = 256/81 ≈ 3.16× wider.
+ * Add 4% top/bottom crop to hide the title bar chrome.
+ */
+.yt-wrap.yt-short iframe{
+  left:-114%;
+  top:-4%;
+  width:329%;
+  height:104%;
+}
 iframe{
   position:absolute;inset:0;
   width:100%;height:100%;

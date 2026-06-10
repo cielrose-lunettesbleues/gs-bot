@@ -49,15 +49,26 @@ export async function searchShortVideo(
     items?: Array<{
       id: string;
       contentDetails: { duration: string };
-      snippet: { title: string };
+      snippet: {
+        title: string;
+        thumbnails?: {
+          high?: { width: number; height: number };
+          default?: { width: number; height: number };
+        };
+      };
     }>;
   };
 
   for (const item of videosData.items ?? []) {
     const duration = parseDuration(item.contentDetails.duration);
     if (duration > 0 && duration <= maxDurationSeconds) {
+      // Detect Shorts by portrait thumbnail (height > width)
+      const thumb = item.snippet.thumbnails?.high ?? item.snippet.thumbnails?.default;
+      const isShort = thumb ? thumb.height > thumb.width : false;
       return {
-        url: `https://www.youtube.com/watch?v=${item.id}`,
+        url: isShort
+          ? `https://www.youtube.com/shorts/${item.id}`
+          : `https://www.youtube.com/watch?v=${item.id}`,
         title: item.snippet.title,
         durationSeconds: duration
       };
