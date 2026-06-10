@@ -55,12 +55,27 @@ iframe{
     return m ? m[1] : null;
   }
 
+  // Listen for YouTube state changes (enablejsapi=1 sends postMessage to parent)
+  // info === 0 means ended
+  window.addEventListener('message', function(ev){
+    if(ev.origin !== 'https://www.youtube.com') return;
+    try {
+      var d = JSON.parse(ev.data);
+      if(d.event === 'onStateChange' && d.info === 0) hide();
+    } catch(e){}
+  });
+
   function buildMedia(url){
     var id = ytId(url);
     if(id){
+      var isShort = /youtube\\.com\\/shorts\\//.test(url);
       var f=document.createElement('iframe');
-      f.src='https://www.youtube.com/embed/'+id+'?autoplay=1&controls=0&modestbranding=1&rel=0';
+      f.src='https://www.youtube.com/embed/'+id+'?autoplay=1&controls=0&modestbranding=1&rel=0&enablejsapi=1';
       f.allow='autoplay; fullscreen';
+      if(isShort){
+        // Resize iframe to 9:16 so YouTube fills it without black bars
+        f.style.cssText='position:absolute;top:0;bottom:0;height:100%;width:calc(100vh * 9 / 16);left:50%;transform:translateX(-50%);';
+      }
       return f;
     }
     if(/\\.(gif|png|jpg|jpeg|webp)(\\?.*)?$/i.test(url)){
@@ -71,8 +86,8 @@ iframe{
     var v=document.createElement('video');
     v.src=url;
     v.autoplay=true;
-    v.loop=true;
     v.playsInline=true;
+    v.addEventListener('ended', hide);
     return v;
   }
 
