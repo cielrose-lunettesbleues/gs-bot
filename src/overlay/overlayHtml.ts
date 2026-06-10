@@ -23,12 +23,6 @@ video,img{
   position:absolute;inset:0;
   overflow:hidden;
 }
-.yt-wrap.yt-short{
-  inset:unset;
-  top:0;bottom:0;height:100%;
-  width:calc(100vh * 9 / 16);
-  left:50%;transform:translateX(-50%);
-}
 /* iframe 12% oversized so the chrome (title bar, borders) is cropped */
 .yt-wrap iframe{
   position:absolute;
@@ -38,17 +32,28 @@ video,img{
   pointer-events:none;
 }
 /*
- * For Shorts (9:16 wrapper), YouTube always renders the player in 16:9
- * internally, putting the 9:16 video in the center with black side bars.
- * Fix: scale the 16:9 iframe so its center column (the actual video) fills
- * the 9:16 wrapper. Math: scale = (16/9)/(9/16) = 256/81 ≈ 3.16× wider.
- * Add 4% top/bottom crop to hide the title bar chrome.
+ * Shorts: full-screen wrapper with blurred thumbnail background on the sides.
+ * The video plays in a centred 9:16 column (.yt-short-inner) with overflow:hidden
+ * to crop the player chrome. The blurred background fills the 16:9 canvas.
  */
-.yt-wrap.yt-short iframe{
-  left:-114%;
-  top:-4%;
-  width:329%;
-  height:104%;
+.yt-short-bg{
+  position:absolute;inset:-5%;
+  background-size:cover;background-position:center;
+  filter:blur(24px) brightness(.4);
+}
+.yt-short-inner{
+  position:absolute;
+  top:0;bottom:0;height:100%;
+  width:calc(100vh * 9 / 16);
+  left:50%;transform:translateX(-50%);
+  overflow:hidden;
+}
+.yt-short-inner iframe{
+  position:absolute;
+  left:-6%;top:-6%;
+  width:112%;height:112%;
+  border:none;
+  pointer-events:none;
 }
 iframe{
   position:absolute;inset:0;
@@ -107,10 +112,21 @@ iframe{
         +'&enablejsapi=1&origin='+encodeURIComponent(location.origin)
         +'&iv_load_policy=3&disablekb=1';
       f.allow='autoplay; fullscreen';
-      // Wrap in overflow:hidden container so the 108% iframe crops the player chrome
       var w=document.createElement('div');
-      w.className='yt-wrap'+(isShort?' yt-short':'');
-      w.appendChild(f);
+      w.className='yt-wrap';
+      if(isShort){
+        // Blurred thumbnail fills the 16:9 canvas; video plays in a centred 9:16 column
+        var bg=document.createElement('div');
+        bg.className='yt-short-bg';
+        bg.style.backgroundImage='url(https://img.youtube.com/vi/'+id+'/maxresdefault.jpg)';
+        w.appendChild(bg);
+        var inner=document.createElement('div');
+        inner.className='yt-short-inner';
+        inner.appendChild(f);
+        w.appendChild(inner);
+      } else {
+        w.appendChild(f);
+      }
       return w;
     }
     if(/\\.(gif|png|jpg|jpeg|webp)(\\?.*)?$/i.test(url)){
