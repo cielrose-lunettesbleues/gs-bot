@@ -1,4 +1,4 @@
-const TENOR_API = "https://tenor.googleapis.com/v2/search";
+const GIPHY_API = "https://api.giphy.com/v1/gifs/search";
 
 export interface TenorSearchResult {
   url: string;
@@ -8,33 +8,29 @@ export interface TenorSearchResult {
 export async function searchGif(query: string, apiKey: string): Promise<TenorSearchResult | null> {
   const params = new URLSearchParams({
     q: query,
-    key: apiKey,
+    api_key: apiKey,
     limit: "1",
-    media_filter: "gif"
+    rating: "g"
   });
 
-  const res = await fetch(`${TENOR_API}?${params}`);
+  const res = await fetch(`${GIPHY_API}?${params}`);
   if (!res.ok) return null;
 
   const data = (await res.json()) as {
-    results?: Array<{
+    data?: Array<{
       title?: string;
-      content_description?: string;
-      media_formats?: {
-        gif?: { url: string };
-        tinygif?: { url: string };
+      images?: {
+        original?: { url: string };
+        downsized?: { url: string };
       };
     }>;
   };
 
-  const item = data.results?.[0];
+  const item = data.data?.[0];
   if (!item) return null;
 
-  const url = item.media_formats?.gif?.url ?? item.media_formats?.tinygif?.url;
+  const url = item.images?.original?.url ?? item.images?.downsized?.url;
   if (!url) return null;
 
-  return {
-    url,
-    title: item.title || item.content_description || query
-  };
+  return { url, title: item.title || query };
 }

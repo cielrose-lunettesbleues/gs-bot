@@ -42,7 +42,7 @@ export async function createApp(config: ServerConfig, logger: Logger) {
     clientSecret: config.twitch.clientSecret,
     redirectUri: config.twitch.redirectUri
   };
-  const tenantManager = new TenantManager(db, logger, config.youtubeApiKey || undefined, config.tenorApiKey || undefined);
+  const tenantManager = new TenantManager(db, logger, config.youtubeApiKey || undefined, config.giphyApiKey || undefined);
 
   // Purge expired sessions every hour
   setInterval(() => purgeExpiredSessions(db), 3_600_000);

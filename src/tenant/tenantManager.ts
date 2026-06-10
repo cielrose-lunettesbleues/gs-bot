@@ -76,7 +76,7 @@ export class TenantManager {
     private readonly db: Database,
     private readonly logger: Logger,
     private readonly youtubeApiKey?: string,
-    private readonly tenorApiKey?: string
+    private readonly giphyApiKey?: string
   ) {}
 
   getOrCreate(userId: number): TenantServices {
@@ -122,8 +122,8 @@ export class TenantManager {
       youtubeSearch: this.youtubeApiKey
         ? (query: string, maxDuration: number) => searchShortVideo(query, maxDuration, this.youtubeApiKey!)
         : undefined,
-      gifSearch: this.tenorApiKey
-        ? (query: string) => searchGif(query, this.tenorApiKey!)
+      gifSearch: this.giphyApiKey
+        ? (query: string) => searchGif(query, this.giphyApiKey!)
         : undefined,
       approvalService,
       adminService,
