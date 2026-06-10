@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createGreenScreenCommand } from "../../src/commands/greenScreenCommand";
+import type { EnqueueResult } from "../../src/queue/playbackQueue";
 
 function makeDeps() {
   return {
@@ -7,11 +8,19 @@ function makeDeps() {
     cooldownService: { checkAndConsume: vi.fn(() => ({ allowed: true, retryAfterSeconds: 0 })) },
     urlValidator: { validate: vi.fn(() => ({ valid: true })) },
     queue: {
-      enqueue: vi.fn(async () => ({ status: "playing" as const })),
+      enqueue: vi.fn(async (): Promise<EnqueueResult> => ({ status: "playing" })),
       stop: vi.fn(async () => undefined)
     },
-    blacklistService: { isBlocked: vi.fn(() => false) },
-    historyService: { record: vi.fn() },
+    blacklistService: {
+      isBlocked: vi.fn(() => false),
+      block: vi.fn(() => true),
+      unblock: vi.fn(() => true),
+      list: vi.fn(() => [] as string[])
+    },
+    historyService: {
+      record: vi.fn(),
+      getLast: vi.fn(() => [])
+    },
     config: {
       access: { subOnly: true, modOnly: false },
       cooldown: { enabled: true, seconds: 60 },

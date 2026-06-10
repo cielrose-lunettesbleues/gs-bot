@@ -3,7 +3,7 @@ import { PlaybackQueue } from "../../src/queue/playbackQueue";
 
 function makeObs() {
   return {
-    setSourceUrl: vi.fn(async () => undefined),
+    setSourceUrl: vi.fn(async (_url: string) => undefined),
     showSource: vi.fn(async () => undefined),
     hideSource: vi.fn(async () => undefined)
   };

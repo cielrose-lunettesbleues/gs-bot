@@ -72,6 +72,7 @@ function makeDeps(overrides: Partial<ControlServerDeps> = {}): ControlServerDeps
     },
     overlayBroadcaster: {
       connect: vi.fn(),
+      addClient: vi.fn(() => () => undefined),
       broadcast: vi.fn(),
       clientCount: vi.fn(() => 0)
     },
@@ -156,7 +157,7 @@ describe("controlServer", () => {
     const res = await makeRequest("GET", port, "/overlay");
     expect(res.statusCode).toBe(200);
     expect(res.body).toContain("<!DOCTYPE html>");
-    expect(res.body).toContain("overlay/events");
+    expect(res.body).toContain("EventSource");
   });
 
   it("GET /overlay/events calls overlayBroadcaster.connect", async () => {

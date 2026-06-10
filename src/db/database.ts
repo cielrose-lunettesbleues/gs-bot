@@ -205,7 +205,7 @@ export function insertHistory(
 }
 
 export function getHistory(db: Database, userId: number, limit: number): DbHistoryEntry[] {
-  return db.prepare("SELECT * FROM history WHERE user_id=? ORDER BY played_at DESC LIMIT ?")
+  return db.prepare("SELECT * FROM history WHERE user_id=? ORDER BY id DESC LIMIT ?")
     .all(userId, limit) as DbHistoryEntry[];
 }
 

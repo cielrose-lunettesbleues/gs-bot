@@ -52,9 +52,8 @@ export function createGreenScreenCommand(deps: CommandDependencies, commandName:
           if (durationCheck.reason === "video_not_found") {
             await context.reply(`@${context.user.username} Vidéo introuvable.`);
           } else {
-            const max = deps.config.youtube?.maxDurationSeconds ?? 0;
             await context.reply(
-              `@${context.user.username} Vidéo trop longue (max ${max}s, durée ${durationCheck.durationSeconds ?? "?"}s).`
+              `@${context.user.username} Vidéo trop longue (durée ${durationCheck.durationSeconds ?? "?"}s).`
             );
           }
           return;
@@ -111,13 +110,11 @@ export function createGreenScreenCommand(deps: CommandDependencies, commandName:
           return;
       }
 
-      if (result.status !== "dropped") {
-        deps.historyService.record({
-          username: context.user.username,
-          url,
-          durationSeconds: deps.config.playback.durationSeconds
-        });
-      }
+      deps.historyService.record({
+        username: context.user.username,
+        url,
+        durationSeconds: deps.config.playback.durationSeconds
+      });
 
       deps.logger.info(
         { username: context.user.username, command: commandName, url, queueStatus: result.status },

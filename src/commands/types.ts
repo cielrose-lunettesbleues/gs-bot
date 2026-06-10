@@ -1,5 +1,5 @@
-import type { BlacklistService } from "../blacklist/blacklistService";
-import type { HistoryService } from "../history/historyService";
+import type { IBlacklistService } from "../blacklist/blacklistService";
+import type { IHistoryService } from "../history/historyService";
 import type { PlaybackItem, EnqueueResult } from "../queue/playbackQueue";
 import type { CommandContext } from "../twitch/twitchTypes";
 
@@ -32,8 +32,8 @@ export interface CommandDependencies {
     validate: CommandUrlValidate;
   };
   queue: QueueService;
-  blacklistService: BlacklistService;
-  historyService: HistoryService;
+  blacklistService: IBlacklistService;
+  historyService: IHistoryService;
   youtubeDurationValidator?: { check: (url: string) => Promise<DurationCheckResult> };
   approvalService?: {
     config: { enabled: boolean };

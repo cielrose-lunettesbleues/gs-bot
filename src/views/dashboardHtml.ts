@@ -102,7 +102,7 @@ tr:last-child td{border-bottom:none}
     <div style="display:flex;flex-direction:column;gap:8px">
       <p style="font-size:13px;color:var(--muted)">Ajoute cette URL comme <strong style="color:var(--text)">source Navigateur</strong> dans OBS (1920×1080, fond transparent).</p>
       <div class="url-copy-row">
-        <span class="url-copy-box" id="overlay-url"></span>
+        <span class="url-copy-box" id="overlay-url">/overlay/${channelName}</span>
         <button class="btn-copy" id="copy-btn" onclick="copyOverlayUrl()">Copier</button>
       </div>
       <p style="font-size:11px;color:var(--muted)">Clients connectés : <span id="overlay-clients">0</span></p>
@@ -181,7 +181,8 @@ tr:last-child td{border-bottom:none}
 <script>
 (function(){
   var overlayUrl = window.location.origin + '/overlay/${channelName}';
-  document.getElementById('overlay-url').textContent = overlayUrl;
+  var urlEl = document.getElementById('overlay-url');
+  if (urlEl) urlEl.textContent = overlayUrl;
 
   async function api(method, path, body) {
     var opts = { method, headers: {} };

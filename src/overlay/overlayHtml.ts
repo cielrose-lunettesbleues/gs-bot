@@ -98,7 +98,7 @@ iframe{
     var es=new EventSource('/overlay/'+channel+'/events');
     es.onmessage=function(ev){
       var d=JSON.parse(ev.data);
-      if(d.type==='play') show(d);
+      if(d.type==='start') show(d);
       else if(d.type==='stop') hide();
     };
     es.onerror=function(){

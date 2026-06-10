@@ -1,0 +1,5 @@
+{
+  "TWITCH_CLIENT_ID": "b5gizjz1j1i07g212j4x7h32jjkc50",
+  "TWITCH_CLIENT_SECRET": "who2z06ju3avkjtmnce0lt91cm4j4w",
+  "TWITCH_REDIRECT_URI": "https://cautious-umbrella-5vq4xgrq569p34j5q-4317.app.github.dev/auth/twitch/callback"
+}

@@ -1,6 +1,6 @@
 import type { ApprovalService } from "../approval/approvalService";
-import type { BlacklistService } from "../blacklist/blacklistService";
-import type { HistoryService } from "../history/historyService";
+import type { IBlacklistService } from "../blacklist/blacklistService";
+import type { IHistoryService } from "../history/historyService";
 import type { CommandContext } from "../twitch/twitchTypes";
 import type { Command } from "./types";
 
@@ -25,8 +25,8 @@ interface MutableRuntimeConfig {
 interface AdminDeps {
   runtimeConfig: MutableRuntimeConfig;
   cooldownService: { reset: (username?: string) => void };
-  blacklistService: BlacklistService;
-  historyService: HistoryService;
+  blacklistService: IBlacklistService;
+  historyService: IHistoryService;
   approvalService?: ApprovalService;
   logger: {
     info: (payload: Record<string, unknown>, message: string) => void;

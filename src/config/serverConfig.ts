@@ -1,4 +1,6 @@
 import dotenv from "dotenv";
+import fs from "fs";
+import path from "path";
 import { z } from "zod";
 
 dotenv.config();
@@ -10,9 +12,9 @@ const schema = z.object({
   LOG_LEVEL: z
     .enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"])
     .default("info"),
-  TWITCH_CLIENT_ID: z.string().min(1, "TWITCH_CLIENT_ID is required"),
-  TWITCH_CLIENT_SECRET: z.string().min(1, "TWITCH_CLIENT_SECRET is required"),
-  TWITCH_REDIRECT_URI: z.string().url("TWITCH_REDIRECT_URI must be a valid URL")
+  TWITCH_CLIENT_ID: z.string().default(""),
+  TWITCH_CLIENT_SECRET: z.string().default(""),
+  TWITCH_REDIRECT_URI: z.string().default("")
 });
 
 export interface ServerConfig {
@@ -27,8 +29,42 @@ export interface ServerConfig {
   };
 }
 
+// Loads optional overrides from data/server-config.json (set via the /setup UI).
+// These take precedence over environment variables so the operator never needs
+// to touch the .env file manually.
+function loadPersistedEnv(dataDir: string): Record<string, string> {
+  try {
+    const configPath = path.join(dataDir, "server-config.json");
+    const raw = fs.readFileSync(configPath, "utf-8");
+    return JSON.parse(raw) as Record<string, string>;
+  } catch {
+    return {};
+  }
+}
+
+export function saveServerOAuthConfig(
+  dataDir: string,
+  clientId: string,
+  clientSecret: string,
+  redirectUri: string
+): void {
+  fs.mkdirSync(dataDir, { recursive: true });
+  const configPath = path.join(dataDir, "server-config.json");
+  fs.writeFileSync(
+    configPath,
+    JSON.stringify({ TWITCH_CLIENT_ID: clientId, TWITCH_CLIENT_SECRET: clientSecret, TWITCH_REDIRECT_URI: redirectUri }, null, 2)
+  );
+}
+
 export function loadServerConfig(): ServerConfig {
-  const parsed = schema.safeParse(process.env);
+  // Determine dataDir early (before full parse) so we can load persisted overrides.
+  const dataDir = process.env.GS_DATA_DIR ?? "./data";
+  const persisted = loadPersistedEnv(dataDir);
+
+  // Persisted file overrides env vars — env vars override schema defaults.
+  const merged = { ...process.env, ...persisted };
+
+  const parsed = schema.safeParse(merged);
   if (!parsed.success) {
     const issues = parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`);
     throw new Error(`Invalid configuration:\n${issues.join("\n")}`);

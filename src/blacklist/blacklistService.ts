@@ -1,7 +1,14 @@
 import type { Database } from "../db/database";
 import { blockUser, isBlocked, listBlocked, unblockUser } from "../db/database";
 
-export class BlacklistService {
+export interface IBlacklistService {
+  isBlocked(username: string): boolean;
+  block(username: string): boolean;
+  unblock(username: string): boolean;
+  list(): string[];
+}
+
+export class BlacklistService implements IBlacklistService {
   constructor(private readonly db: Database, private readonly userId: number) {}
 
   isBlocked(username: string): boolean {

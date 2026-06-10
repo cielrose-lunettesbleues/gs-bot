@@ -8,7 +8,12 @@ export interface HistoryEntry {
   durationSeconds: number;
 }
 
-export class HistoryService {
+export interface IHistoryService {
+  record(entry: Omit<HistoryEntry, "timestamp">): void;
+  getLast(n: number): HistoryEntry[];
+}
+
+export class HistoryService implements IHistoryService {
   constructor(private readonly db: Database, private readonly userId: number) {}
 
   record(entry: Omit<HistoryEntry, "timestamp">): void {
@@ -20,11 +25,13 @@ export class HistoryService {
   }
 
   getLast(n: number): HistoryEntry[] {
-    return getHistory(this.db, this.userId, n).map((row) => ({
-      timestamp: new Date(row.played_at * 1000).toISOString(),
-      username: row.username,
-      url: row.url,
-      durationSeconds: row.duration_seconds
-    }));
+    return getHistory(this.db, this.userId, n)
+      .map((row) => ({
+        timestamp: new Date(row.played_at * 1000).toISOString(),
+        username: row.username,
+        url: row.url,
+        durationSeconds: row.duration_seconds
+      }))
+      .reverse();
   }
 }

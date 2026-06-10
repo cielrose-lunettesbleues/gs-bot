@@ -29,7 +29,8 @@ import { TenantManager } from "./tenant/tenantManager";
 import { getOverlayHtml } from "./overlay/overlayHtml";
 import { getLoginHtml } from "./views/loginHtml";
 import { getDashboardHtml } from "./views/dashboardHtml";
-import { loadServerConfig } from "./config/serverConfig";
+import { getSetupHtml } from "./views/setupHtml";
+import { loadServerConfig, saveServerOAuthConfig } from "./config/serverConfig";
 import type { ServerConfig } from "./config/serverConfig";
 
 // ─── App bootstrap ────────────────────────────────────────────────────────────
@@ -49,11 +50,43 @@ export async function createApp(config: ServerConfig, logger: Logger) {
   const app = new Hono();
   app.use("*", sessionMiddleware(db, oauthConfig));
 
+  // ─── First-run setup (no auth required) ──────────────────────────────────────
+
+  app.get("/setup", (c) => {
+    if (oauthConfig.clientId && oauthConfig.clientSecret) return c.redirect("/");
+    return c.html(getSetupHtml());
+  });
+
+  app.post("/setup", async (c) => {
+    if (oauthConfig.clientId && oauthConfig.clientSecret) {
+      return c.json({ ok: false, error: "already_configured" }, 400);
+    }
+    const body = await c.req.json<{ clientId?: string; clientSecret?: string; redirectUri?: string }>();
+    const clientId = (body.clientId ?? "").trim();
+    const clientSecret = (body.clientSecret ?? "").trim();
+    const redirectUri = (body.redirectUri ?? "").trim();
+
+    if (!clientId || !clientSecret || !redirectUri) {
+      return c.json({ ok: false, error: "missing_fields" }, 400);
+    }
+
+    saveServerOAuthConfig(config.dataDir, clientId, clientSecret, redirectUri);
+
+    // Update in-memory config — no restart needed
+    oauthConfig.clientId = clientId;
+    oauthConfig.clientSecret = clientSecret;
+    oauthConfig.redirectUri = redirectUri;
+
+    logger.info({}, "OAuth configuration saved via setup wizard");
+    return c.json({ ok: true });
+  });
+
   // ─── Public pages ────────────────────────────────────────────────────────────
 
   app.get("/", (c) => {
+    if (!oauthConfig.clientId || !oauthConfig.clientSecret) return c.redirect("/setup");
     const user = requireAuth(c);
-    if (!user) return c.html(getLoginHtml(config.twitch.clientId));
+    if (!user) return c.html(getLoginHtml(oauthConfig.clientId));
     return c.redirect("/dashboard");
   });
 
@@ -66,6 +99,9 @@ export async function createApp(config: ServerConfig, logger: Logger) {
   // ─── Twitch OAuth ─────────────────────────────────────────────────────────
 
   app.get("/auth/twitch", (c) => {
+    if (!oauthConfig.clientId || !oauthConfig.clientSecret) {
+      return c.redirect("/");
+    }
     const state = crypto.randomUUID();
     // Store state in a short-lived cookie for CSRF protection
     c.header("Set-Cookie", `oauth_state=${state}; HttpOnly; SameSite=Lax; Path=/; Max-Age=300`);
@@ -92,7 +128,7 @@ export async function createApp(config: ServerConfig, logger: Logger) {
 
     try {
       const tokens = await exchangeCode(oauthConfig, code);
-      const userInfo = await fetchUserInfo(tokens.accessToken, config.twitch.clientId);
+      const userInfo = await fetchUserInfo(tokens.accessToken, oauthConfig.clientId);
 
       const dbUser = upsertUser(db, {
         twitch_id: userInfo.id,
@@ -103,21 +139,25 @@ export async function createApp(config: ServerConfig, logger: Logger) {
         token_expires_at: tokens.expiresAt
       });
 
-      // Create tenant services and start Twitch bot
+      // Create tenant services and session before starting the bot so the user
+      // always reaches the dashboard even if the IRC connection is slow/fails.
       const tenant = tenantManager.getOrCreate(dbUser.id);
-      await tenant.twitchBotManager.start({
-        channel: userInfo.login,
-        botUsername: userInfo.login,
-        oauthToken: tokens.accessToken
-      });
-
       const sessionId = generateSessionId();
       createSession(db, sessionId, dbUser.id);
       setSessionCookie(c, sessionId);
 
+      // Start the Twitch bot in the background — don't block the redirect.
+      tenant.twitchBotManager.start({
+        channel: userInfo.login,
+        botUsername: userInfo.login,
+        oauthToken: tokens.accessToken
+      }).catch((err) =>
+        logger.error({ err, channel: userInfo.login }, "Twitch bot failed to start after login")
+      );
+
       logger.info({ userId: dbUser.id, channel: userInfo.login }, "User logged in via Twitch OAuth");
       // Clear the state cookie
-      c.header("Set-Cookie", "oauth_state=; HttpOnly; Max-Age=0; Path=/", false);
+      c.header("Set-Cookie", "oauth_state=; HttpOnly; Max-Age=0; Path=/", { append: true });
       return c.redirect("/dashboard");
     } catch (err) {
       logger.error({ err }, "OAuth callback error");
@@ -158,7 +198,7 @@ export async function createApp(config: ServerConfig, logger: Logger) {
         await new Promise<void>((r) => setTimeout(r, 25_000));
         if (!stream.aborted) {
           try {
-            await stream.writeSSE({ data: "", comment: "keepalive" });
+            await stream.writeSSE({ data: "" });
           } catch {
             break;
           }
