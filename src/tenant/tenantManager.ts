@@ -1,6 +1,6 @@
 import type { Logger } from "pino";
 import type { Database } from "../db/database";
-import { getTenantConfig, updateTenantConfig, type DbTenantConfig } from "../db/database";
+import { getTenantConfig, updateTenantConfig, getUserById, type DbTenantConfig } from "../db/database";
 import { AdminService, createAdminCommands } from "../commands/adminCommands";
 import { createEmergencyStopCommand } from "../commands/emergencyStopCommand";
 import { createGreenScreenCommand } from "../commands/greenScreenCommand";
@@ -138,6 +138,16 @@ export class TenantManager {
     ]);
 
     const twitchBotManager = new TwitchBotManager(router, this.logger);
+
+    // Auto-reconnect on startup / after redeploy using stored credentials
+    const dbUser = getUserById(this.db, userId);
+    if (dbUser?.access_token && dbUser?.twitch_login) {
+      twitchBotManager.start({
+        channel: dbUser.twitch_login,
+        botUsername: dbUser.twitch_login,
+        oauthToken: dbUser.access_token
+      }).catch((err) => this.logger.error({ err, userId }, "Failed to auto-start Twitch bot"));
+    }
 
     const services: TenantServices = {
       runtimeConfig,
