@@ -2,642 +2,376 @@
 
 ## Project Overview
 
-This project is a scalable Twitch-to-OBS automation tool.
+GS Bot est un outil d'automatisation Twitch → OBS en mode **SaaS multi-tenant**.
 
-The goal is to let Twitch chat users trigger a live video source inside OBS through a chat command such as `!gs <url>`. The video source should remain hidden by default and only appear temporarily when an authorized command is triggered.
+Plusieurs streamers peuvent partager la même instance. Chaque streamer se connecte via OAuth Twitch, obtient son propre bot isolé et son propre dashboard. Il n'y a pas de fichier `.env` à configurer côté utilisateur final.
 
-The project must be designed as a clean, extensible, and maintainable application. It should be easy to run locally, easy to configure, and easy to evolve into a more advanced streaming tool later.
-
-Core idea:
+Flux principal :
 
 ```txt
-Twitch Chat Command → Bot Validation → OBS WebSocket Action → Source Appears → Timeout → Source Hides
+Twitch Chat Command → Bot Validation → PlaybackQueue → OverlayBroadcaster → OBS Browser Source
 ```
 
 ---
 
-## Product Goals
+## Architecture actuelle
 
-The application should:
+### Mode d'exécution
 
-* Listen to Twitch chat commands.
-* Detect a command like `!gs <video_url>`.
-* Validate user permissions.
-* Validate URL safety.
-* Apply optional cooldown logic.
-* Send commands to OBS through OBS WebSocket.
-* Update a dedicated video/browser source.
-* Show the source for a configured duration.
-* Hide the source automatically.
-* Provide emergency stop commands.
-* Be easy to configure without editing core code.
-
----
-
-## Core Features
-
-### Twitch Command
-
-Default command:
-
-```txt
-!gs <url>
+```bash
+npm run dev   # → src/server.ts (mode SaaS multi-tenant, port 4317 par défaut)
+npm test      # → vitest (129 tests)
 ```
 
-Example:
+`src/app.ts` (ancien mode standalone) est exclu de la compilation tsconfig.
+
+### Stack
 
 ```txt
-!gs https://example.com/video.mp4
-```
-
-The command name must be configurable.
-
----
-
-### OBS Source Behavior
-
-The OBS source must:
-
-* Be hidden by default.
-* Become visible when a valid command is triggered.
-* Load or update the provided video URL.
-* Stay visible for a configured duration.
-* Automatically hide after the duration ends.
-* Be hideable instantly with an emergency command.
-
-Default emergency command:
-
-```txt
-!gstop
+Node.js + TypeScript
+Hono          — serveur HTTP + SSE
+better-sqlite3 — SQLite par tenant
+tmi.js        — connexion IRC Twitch
+zod           — validation config
+pino          — logs structurés
+vitest        — tests unitaires
 ```
 
 ---
 
-## Access Control
+## Flux utilisateur complet
 
-The bot must support the following configurable access rules:
+### Premier lancement (opérateur)
 
-```json
-{
-  "subOnly": true,
-  "modOnly": false,
-  "cooldownEnabled": true,
-  "cooldownSeconds": 60
-}
-```
+1. L'opérateur visite `/setup`
+2. Il crée une app Twitch sur dev.twitch.tv et renseigne Client ID + Client Secret + Redirect URI
+3. `POST /setup` sauvegarde dans `data/server-config.json` et met à jour `oauthConfig` en mémoire
+4. Pas de restart nécessaire
 
-Rules:
+### Connexion streamer
 
-```txt
-If modOnly = true, only moderators can use the command.
-If subOnly = true, only subscribers can use the command.
-If both are false, everyone can use the command.
+1. Le streamer visite `/` → page login avec bouton "Connexion avec Twitch"
+2. `/auth/twitch` → redirect OAuth Twitch (state CSRF via cookie)
+3. `/auth/twitch/callback` → échange code, récupère profil Twitch, crée/met à jour user en DB
+4. Session créée, cookie `gs_session` posé (30j, HttpOnly, SameSite=Lax)
+5. Bot IRC démarré en arrière-plan (non-bloquant)
+6. Redirect vers `/dashboard`
 
-If cooldownEnabled = true, cooldown rules are applied.
-If cooldownEnabled = false, commands can be triggered without cooldown.
-```
+### Dashboard
 
-These options must be easy to disable or enable.
+- URL Browser Source OBS affichée immédiatement (pré-rendue côté serveur + complétée par JS)
+- Configuration toggles (sub-only, mod-only, cooldown, approbation mod)
+- Simulateur de chat intégré pour tester sans Twitch
+- Historique des lectures récentes
+- File d'approbations en attente
+- Refresh automatique toutes les 5s via `/api/status`
 
-Admin/mod commands should eventually allow live configuration:
+### OBS Browser Source
 
-```txt
-!gs subonly on
-!gs subonly off
-!gs modonly on
-!gs modonly off
-!gs cooldown on
-!gs cooldown off
-!gs cooldown 60
-!gstop
-```
-
-For the MVP, configuration can be handled through a config file or environment variables.
+- URL : `http://host/overlay/:channel`
+- Fond transparent, 1920×1080
+- Reçoit les events via SSE (`GET /overlay/:channel/events`)
+- Event `{ type: "start", url, durationSeconds }` → affiche le média
+- Event `{ type: "stop" }` → cache le média
 
 ---
 
-## Scalability Requirements
-
-This project must be built with scalability in mind from the beginning.
-
-Scalability does not only mean handling many users. It also means:
-
-* Clean architecture.
-* Clear separation of responsibilities.
-* Easy addition of new commands.
-* Easy addition of new platforms later.
-* Easy replacement of OBS actions.
-* Easy testing.
-* Easy deployment.
-* Minimal coupling between Twitch, OBS, validation, and configuration.
-
-Avoid writing one large bot file that handles everything.
-
-The codebase must be modular.
-
----
-
-## Recommended Tech Stack
-
-Preferred stack:
-
-```txt
-Node.js
-TypeScript
-tmi.js or Twitch EventSub/IRC client
-obs-websocket-js
-dotenv
-zod
-pino or winston
-```
-
-TypeScript is preferred for maintainability and long-term scalability.
-
----
-
-## Suggested Folder Structure
+## Structure des dossiers
 
 ```txt
 src/
-  app.ts
+  server.ts                   — point d'entrée SaaS (Hono)
   config/
-    config.ts
-    schema.ts
+    serverConfig.ts           — chargement config + persistence data/server-config.json
+  auth/
+    oauthHandler.ts           — OAuth Twitch (exchange, refresh, fetchUserInfo, sessions)
+    sessionMiddleware.ts      — middleware Hono session + helpers cookie
+  tenant/
+    tenantManager.ts          — crée/cache les services isolés par userId
+  db/
+    database.ts               — schéma SQLite + fonctions CRUD (users, sessions, tenant_configs, history, blacklist)
+  views/
+    setupHtml.ts              — wizard premier lancement
+    loginHtml.ts              — page connexion Twitch
+    dashboardHtml.ts          — dashboard multi-tenant (HTML/CSS/JS inline)
+  overlay/
+    overlayHtml.ts            — page OBS Browser Source (SSE client)
+    overlayBroadcaster.ts     — diffuse les events PlaybackEvent aux clients SSE
   twitch/
-    twitchClient.ts
-    twitchMessageHandler.ts
-    twitchTypes.ts
-  obs/
-    obsClient.ts
-    obsSourceController.ts
+    twitchClient.ts           — wrapper tmi.js
+    twitchMessageHandler.ts   — liaison tmi.js → CommandRouter
+    twitchBotManager.ts       — start/stop/status du bot par tenant
   commands/
-    commandRouter.ts
-    greenScreenCommand.ts
-    emergencyStopCommand.ts
-    adminCommands.ts
+    commandRouter.ts          — dispatch des commandes chat
+    greenScreenCommand.ts     — commande !gs <url>
+    emergencyStopCommand.ts   — commande !gstop
+    adminCommands.ts          — commandes admin (!gs subonly, !gs cooldown, etc.)
+    types.ts                  — interfaces CommandDependencies
   permissions/
-    permissionService.ts
+    permissionService.ts      — vérifie sub/mod
   cooldown/
-    cooldownService.ts
+    cooldownService.ts        — cooldown global + reset
+  approval/
+    approvalService.ts        — file d'attente d'approbation mod
+  blacklist/
+    blacklistService.ts       — liste noire par tenant (interface IBlacklistService)
+  history/
+    historyService.ts         — historique de lecture par tenant (interface IHistoryService)
   validation/
-    urlValidator.ts
-    domainWhitelist.ts
+    urlValidator.ts           — validation URL/domaine/extension
   queue/
-    playbackQueue.ts
+    playbackQueue.ts          — file de lecture (mode queue/replace/drop)
+  obs/
+    mockObsSourceController.ts — contrôleur OBS sans WebSocket (overlay SSE)
   state/
-    runtimeState.ts
+    runtimeState.ts           — état runtime de la source
   logger/
-    logger.ts
-  utils/
-    timers.ts
-    errors.ts
+    logger.ts                 — pino logger
 tests/
-  permissions/
-  cooldown/
-  validation/
+  blacklist/
+  history/
   commands/
+  control/
+  queue/
+  ...
+data/                         — créé automatiquement
+  gs.sqlite                   — base de données
+  server-config.json          — credentials OAuth persistés via /setup
+docs/
+  session-2026-06-10.md       — journal de la session de développement SaaS
 .env.example
-README.md
 AGENTS.md
-package.json
+README.md
 tsconfig.json
 ```
 
 ---
 
-## Architecture Principles
+## Configuration
 
-### 1. Separate Twitch from OBS
-
-Twitch code should never directly manipulate OBS.
-
-Bad:
-
-```txt
-Twitch message handler directly calls OBS source update.
-```
-
-Good:
-
-```txt
-Twitch message handler → command router → command service → OBS controller
-```
-
----
-
-### 2. Commands Should Be Modular
-
-Each command should be its own module.
-
-Example:
-
-```txt
-greenScreenCommand.ts
-emergencyStopCommand.ts
-adminCommands.ts
-```
-
-Each command should expose:
-
-```ts
-name
-aliases
-permission requirements
-handler function
-```
-
----
-
-### 3. Configuration Should Be Centralized
-
-All configuration must come from a central config system.
-
-Do not hardcode:
-
-* Twitch channel name.
-* Bot username.
-* OBS WebSocket URL.
-* OBS password.
-* Source name.
-* Scene name.
-* Cooldown duration.
-* Command name.
-* Allowed domains.
-* Video duration.
-
-Use:
-
-```txt
-.env
-config file
-validated config schema
-```
-
-Use `zod` or a similar schema validator to prevent invalid runtime configuration.
-
----
-
-### 4. Permission Logic Must Be Isolated
-
-Permission checks must live in a dedicated service.
-
-Example:
-
-```ts
-permissionService.canUseGreenScreen(user, config)
-```
-
-The command should not directly contain complex permission logic.
-
----
-
-### 5. Cooldown Logic Must Be Isolated
-
-Cooldown must be handled by a dedicated service.
-
-It should support:
-
-* Global cooldown.
-* Per-user cooldown later.
-* Disabling cooldown entirely.
-* Resetting cooldown manually.
-
----
-
-### 6. OBS Logic Must Be Abstracted
-
-The OBS layer should expose simple methods:
-
-```ts
-showSource()
-hideSource()
-setSourceUrl(url)
-playTemporarySource(url, duration)
-```
-
-Command modules should not know the raw OBS WebSocket request names unless necessary.
-
----
-
-### 7. URL Validation Is Critical
-
-Never blindly display user-submitted URLs.
-
-The validator should check:
-
-* URL format.
-* Protocol: only `https`.
-* Allowed domains.
-* File extension if direct media file.
-* Optional max duration later.
-* Optional NSFW/spam filtering later.
-
-Default allowed domains can include:
-
-```txt
-youtube.com
-youtu.be
-streamable.com
-tenor.com
-giphy.com
-```
-
-Direct files may be allowed only if explicitly configured:
-
-```txt
-.mp4
-.webm
-.mov
-```
-
----
-
-## MVP Behavior
-
-The MVP should support:
-
-```txt
-!gs <url>
-```
-
-Flow:
-
-```txt
-1. Bot receives a Twitch chat message.
-2. Bot checks whether the message starts with the configured command.
-3. Bot extracts the URL.
-4. Bot checks permissions.
-5. Bot checks cooldown if enabled.
-6. Bot validates the URL.
-7. Bot sends URL to OBS source.
-8. Bot enables the OBS source.
-9. Bot waits for configured duration.
-10. Bot disables the OBS source.
-11. Bot sends an optional confirmation message in chat.
-```
-
----
-
-## Configuration Example
+### Variables d'environnement (toutes optionnelles)
 
 ```env
-TWITCH_CHANNEL=mychannel
-TWITCH_BOT_USERNAME=mybot
-TWITCH_OAUTH_TOKEN=oauth:xxxxxxxxxxxx
-
-OBS_WEBSOCKET_URL=ws://127.0.0.1:4455
-OBS_WEBSOCKET_PASSWORD=your_password
-
-OBS_SCENE_NAME=Main
-OBS_SOURCE_NAME=GreenScreenSource
-
-GS_COMMAND=!gs
-GS_STOP_COMMAND=!gstop
-
-GS_SUB_ONLY=true
-GS_MOD_ONLY=false
-
-GS_COOLDOWN_ENABLED=true
-GS_COOLDOWN_SECONDS=60
-
-GS_DURATION_SECONDS=15
-
-GS_ALLOWED_DOMAINS=youtube.com,youtu.be,streamable.com,tenor.com,giphy.com
-GS_ALLOW_DIRECT_FILES=true
-GS_ALLOWED_FILE_EXTENSIONS=.mp4,.webm,.mov
-
+PORT=4317
+HOST=0.0.0.0
+GS_DATA_DIR=./data
 LOG_LEVEL=info
+
+# Optionnel si configuré via /setup :
+TWITCH_CLIENT_ID=
+TWITCH_CLIENT_SECRET=
+TWITCH_REDIRECT_URI=
+```
+
+### Persistence via /setup
+
+Le wizard `/setup` sauvegarde dans `data/server-config.json` :
+
+```json
+{
+  "TWITCH_CLIENT_ID": "xxx",
+  "TWITCH_CLIENT_SECRET": "xxx",
+  "TWITCH_REDIRECT_URI": "https://monapp.com/auth/twitch/callback"
+}
+```
+
+Ce fichier surcharge les variables d'environnement. Le serveur se met à jour en mémoire sans restart.
+
+### Configuration par tenant (SQLite)
+
+Chaque streamer a sa propre ligne dans `tenant_configs` :
+
+```txt
+sub_only, mod_only
+cooldown_enabled, cooldown_seconds
+approval_enabled, approval_timeout_seconds
+queue_mode (queue|replace|drop), queue_max_size
+duration_seconds
+allowed_domains, allow_direct_files, allowed_file_extensions
+max_video_duration_seconds
+```
+
+Modifiable en live via `PATCH /api/config` depuis le dashboard.
+
+---
+
+## API REST
+
+Toutes les routes `/api/*` requièrent une session valide (cookie `gs_session`).
+
+| Méthode | Route | Description |
+|---------|-------|-------------|
+| GET | `/api/status` | État complet du tenant |
+| GET | `/api/history?n=30` | Historique de lecture |
+| PATCH | `/api/config` | Modification config à chaud |
+| POST | `/api/queue/stop` | Stop d'urgence |
+| POST | `/api/cooldown/reset` | Reset cooldown |
+| POST | `/api/approve/:username` | Approbation mod |
+| POST | `/api/deny/:username` | Refus mod |
+| POST | `/api/simulate` | Simulateur de chat |
+
+---
+
+## Overlay SSE
+
+```txt
+GET /overlay/:channel         → HTML OBS Browser Source
+GET /overlay/:channel/events  → SSE stream (sans auth, OBS ne gère pas les cookies)
+```
+
+Events envoyés :
+
+```ts
+{ type: "start"; url: string; durationSeconds: number }  // jouer
+{ type: "stop" }                                          // cacher
+{ type: "connected" }                                     // connexion initiale
 ```
 
 ---
 
-## Runtime Safety
+## Services tenant
 
-The app must include safety mechanisms:
-
-* Emergency stop command.
-* Automatic source hiding.
-* Cooldown.
-* Permission checks.
-* URL validation.
-* Error handling if OBS disconnects.
-* Error handling if Twitch disconnects.
-* Logs for every command attempt.
-* Logs for denied commands.
-
-The bot should never crash because of a bad chat command.
-
----
-
-## Error Handling Rules
-
-The app should handle:
-
-* Missing URL.
-* Invalid URL.
-* Unauthorized user.
-* Cooldown active.
-* OBS unavailable.
-* Twitch disconnected.
-* Invalid configuration.
-* Unsupported domain.
-* Source not found.
-* Scene not found.
-
-Errors should be logged clearly.
-
-Chat responses should be short and user-friendly.
-
-Example:
+Chaque `userId` a ses propres instances isolées dans `TenantManager` :
 
 ```txt
-@user URL non autorisée.
-@user Commande en cooldown.
-@user Seuls les subs peuvent utiliser cette commande.
+PlaybackQueue          — file de lecture avec modes queue/replace/drop
+CooldownService        — cooldown global en mémoire
+ApprovalService        — file d'attente d'approbation (en mémoire)
+BlacklistService       — liste noire persistée en SQLite
+HistoryService         — historique persisté en SQLite
+OverlayBroadcaster     — diffusion SSE vers OBS
+TwitchBotManager       — connexion IRC tmi.js
+CommandRouter          — dispatch !gs et !gstop
 ```
 
 ---
 
-## Logging
+## Principes d'architecture
 
-Use structured logs.
+### 1. Isolation par tenant
 
-Each command attempt should log:
+Chaque streamer a ses propres services. Pas de partage d'état global entre tenants.
+
+### 2. Config mutable par référence
+
+`oauthConfig` est un objet muté en place après `/setup`. Les middlewares qui le capturent par référence voient les changements sans restart.
+
+### 3. Bot IRC non-bloquant
+
+`twitchBotManager.start()` est fire-and-forget dans le callback OAuth. L'utilisateur atteint toujours le dashboard même si le bot ne peut pas se connecter à IRC.
+
+### 4. OBS sans WebSocket
+
+Pas d'`obs-websocket-js`. L'overlay est une page HTML servie par le bot lui-même (Browser Source OBS). Les commandes passent via SSE. Plus simple, plus portable, fonctionne sans configuration OBS complexe.
+
+### 5. Séparation Twitch / Logique / OBS
 
 ```txt
-timestamp
-username
-command
-url
-permission result
-cooldown result
-validation result
-OBS action result
+tmi.js → twitchMessageHandler → CommandRouter → GreenScreenCommand → PlaybackQueue → OverlayBroadcaster → SSE → OBS
 ```
 
-Avoid logging sensitive secrets such as OAuth tokens or OBS passwords.
+### 6. Interfaces pour les services testables
+
+`IBlacklistService` et `IHistoryService` permettent les mocks dans les tests sans dépendance SQLite.
 
 ---
 
-## Testing Strategy
-
-The project should include unit tests for:
+## Commandes Twitch supportées
 
 ```txt
-permissionService
-cooldownService
-urlValidator
-commandRouter
-greenScreenCommand
+!gs <url>              — joue un média dans l'overlay OBS
+!gstop                 — stop immédiat
+!gs subonly on|off     — active/désactive le mode sub-only (mod)
+!gs modonly on|off     — active/désactive le mode mod-only (mod)
+!gs cooldown on|off    — active/désactive le cooldown (mod)
+!gs cooldown <n>       — définit la durée du cooldown en secondes (mod)
+!gs history [n]        — affiche les n dernières URLs jouées
+!gs blacklist add <user>    — blackliste un user (mod)
+!gs blacklist remove <user> — retire du blacklist (mod)
 ```
 
-Priority test cases:
-
-* Sub-only enabled.
-* Mod-only enabled.
-* Both disabled.
-* Cooldown enabled.
-* Cooldown disabled.
-* Invalid URL.
-* Unsupported domain.
-* Missing URL.
-* OBS failure.
-
-````
-
 ---
 
-## Future Features
+## Tests
 
-The architecture should make these future features easy to add:
-
-- Queue system for multiple video requests.
-- Vote system.
-- Channel point redemption support.
-- Web dashboard.
-- Per-user cooldown.
-- Per-role cooldown.
-- Blacklist users.
-- URL history.
-- Clip support.
-- YouTube duration check.
-- Moderation approval queue.
-- Stream Deck control.
-- Multiple OBS scenes.
-- Multiple source profiles.
-- Sound effect triggers.
-- Browser overlay frontend.
-- Docker deployment.
-- Cloud-hosted configuration panel.
-
----
-
-## Development Guidelines for AI Coding Agents
-
-When modifying this project:
-
-1. Keep the architecture modular.
-2. Do not place all logic in one file.
-3. Prefer TypeScript types over loose objects.
-4. Validate all environment variables.
-5. Keep Twitch-specific code inside `src/twitch`.
-6. Keep OBS-specific code inside `src/obs`.
-7. Keep command behavior inside `src/commands`.
-8. Keep permission checks inside `src/permissions`.
-9. Keep cooldown logic inside `src/cooldown`.
-10. Keep URL checks inside `src/validation`.
-11. Add tests for every new service.
-12. Do not hardcode secrets.
-13. Do not expose OBS password or Twitch OAuth token in logs.
-14. Prefer small, composable functions.
-15. Prefer explicit error handling over silent failures.
-16. Keep the MVP simple but extensible.
-17. Make configuration easy to understand.
-18. Document any new command in the README.
-19. Ensure the app can start with one command.
-20. Ensure the app fails clearly if configuration is invalid.
-
----
-
-## Coding Style
-
-Use:
-
-```txt
-TypeScript
-async/await
-strict mode
-clear service boundaries
-descriptive function names
-small files
-explicit return types for public functions
-````
-
-Avoid:
-
-```txt
-large god files
-hardcoded config
-global mutable state when avoidable
-silent catch blocks
-business logic inside Twitch event listeners
-raw OBS WebSocket calls spread everywhere
+```bash
+npm test    # 129 tests, ~3s
 ```
+
+Couverture :
+- `permissionService`, `cooldownService`, `urlValidator`
+- `commandRouter`, `greenScreenCommand`, `adminCommands`, `stopAction`
+- `playbackQueue`, `approvalService`, `overlayBroadcaster`
+- `blacklistService`, `historyService` (avec SQLite réel en mémoire)
+- `controlServer` (serveur de contrôle legacy)
+- `twitchEventSubClient`, `youtubeDurationValidator`
+
+### Règles de test
+
+- Les services SQLite (`BlacklistService`, `HistoryService`) utilisent une DB réelle via `openDatabase(testDir)`.
+- Ne pas mocker la DB — les tests d'intégration SQLite ont déjà évité des bugs de prod.
+- `IBlacklistService` et `IHistoryService` pour mocker dans les tests de commandes.
+
+---
+
+## Guidelines pour agents IA
+
+1. Le point d'entrée est `src/server.ts`. Ne pas modifier `src/app.ts` (exclu de la compilation).
+2. Toute nouvelle feature utilisateur doit être au niveau tenant (ajouter dans `TenantManager`, services isolés).
+3. Les routes API (`/api/*`) requièrent `requireAuth(c)` — ne jamais bypasser.
+4. L'overlay (`/overlay/*`) est sans auth — OBS ne gère pas les cookies.
+5. Ne pas `await` de connexions réseau dans le callback OAuth — utiliser fire-and-forget avec `.catch()` logué.
+6. Les mutations de config doivent passer par `tenantManager.persistConfig()` (persiste en DB + met à jour la référence mémoire).
+7. Ajouter les interfaces `I*` pour tout nouveau service qui a besoin d'être mocké.
+8. Ne pas hardcoder de secrets. Ne pas logger de tokens ou secrets OAuth.
+9. Utiliser `openDatabase(testDir)` dans les tests qui touchent SQLite.
+10. Après toute modification, vérifier : `npx tsc --noEmit && npm test`.
+
+---
+
+## Features implémentées
+
+- [x] Connexion Twitch chat via tmi.js
+- [x] Commande `!gs <url>` avec validation URL
+- [x] Commande `!gstop` (stop d'urgence)
+- [x] Commandes admin (`subonly`, `modonly`, `cooldown`, `history`, `blacklist`)
+- [x] File de lecture (modes queue/replace/drop)
+- [x] Cooldown global configurable
+- [x] Contrôle d'accès (sub-only, mod-only)
+- [x] Blacklist utilisateurs (persistée en DB)
+- [x] Historique de lecture (persisté en DB)
+- [x] File d'approbation mod
+- [x] OBS Browser Source via SSE (sans WebSocket)
+- [x] Dashboard web multi-tenant
+- [x] OAuth Twitch complet (Authorization Code + refresh token)
+- [x] Sessions persistées SQLite (30 jours)
+- [x] Wizard de premier lancement `/setup`
+- [x] Config persistée sans restart (`data/server-config.json`)
+- [x] Architecture multi-tenant (isolation par userId)
+- [x] Simulateur de chat depuis le dashboard
+
+## Features futures
+
+- [ ] Queue système pour plusieurs requests simultanées (architecture prête)
+- [ ] Support Channel Points (EventSub)
+- [ ] Cooldown par utilisateur
+- [ ] Vérification durée YouTube
+- [ ] Déploiement Docker
+- [ ] Filtrage NSFW/spam
+- [ ] Profils de sources multiples
+- [ ] Stream Deck plugin (base existante dans `streamdeck-plugin/`)
 
 ---
 
 ## Definition of Done
 
-A feature is done when:
+Une feature est terminée quand :
 
-* It is implemented in the correct module.
-* It has basic tests.
-* It is configurable if relevant.
-* It does not break existing commands.
-* It logs useful information.
-* It handles errors gracefully.
-* It is documented if user-facing.
-* It keeps the app easy to run locally.
-
----
-
-## MVP Definition of Done
-
-The MVP is complete when:
-
-* The bot connects to Twitch.
-* The bot connects to OBS.
-* `!gs <url>` works.
-* The OBS source is hidden by default.
-* The OBS source appears when triggered.
-* The OBS source disappears automatically.
-* `subOnly`, `modOnly`, and `cooldownEnabled` are configurable.
-* Cooldown can be disabled.
-* Permission checks work.
-* URL validation works.
-* `!gstop` hides the source immediately.
-* The project can be started with a simple command:
-
-```txt
-npm install
-npm run dev
-```
-
----
-
-## Project Philosophy
-
-This project should feel like a serious streaming tool, not a quick bot script.
-
-The MVP should be simple, but the foundation must be clean enough to support future features without rewriting everything.
-
-Build for:
-
-```txt
-stability
-clarity
-safety
-scalability
-developer experience
-streamer control
-```
+- Implémentée dans le bon module (`src/<domaine>/`)
+- Tests unitaires ajoutés
+- Configurable si pertinent (via dashboard ou DB)
+- Ne casse pas les tests existants (`npm test` → tout vert)
+- TypeScript compile sans erreur (`npx tsc --noEmit`)
+- Gère les erreurs gracieusement (pas de crash serveur)
+- Les routes API valident l'auth (`requireAuth`)
+- Les secrets ne sont pas loggués
