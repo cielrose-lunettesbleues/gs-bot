@@ -16,6 +16,7 @@ import { PlaybackQueue } from "../queue/playbackQueue";
 import { TwitchBotManager } from "../twitch/twitchBotManager";
 import { MockObsSourceController } from "../obs/mockObsSourceController";
 import { createRuntimeState } from "../state/runtimeState";
+import { searchShortVideo } from "../media/youtubeSearch";
 
 // The mutable runtime config that all tenant services share via reference
 export interface TenantRuntimeConfig {
@@ -72,7 +73,8 @@ export class TenantManager {
 
   constructor(
     private readonly db: Database,
-    private readonly logger: Logger
+    private readonly logger: Logger,
+    private readonly youtubeApiKey?: string
   ) {}
 
   getOrCreate(userId: number): TenantServices {
@@ -115,6 +117,9 @@ export class TenantManager {
       blacklistService,
       historyService,
       youtubeDurationValidator: undefined,
+      youtubeSearch: this.youtubeApiKey
+        ? (query: string, maxDuration: number) => searchShortVideo(query, maxDuration, this.youtubeApiKey!)
+        : undefined,
       approvalService,
       adminService,
       config: runtimeConfig,

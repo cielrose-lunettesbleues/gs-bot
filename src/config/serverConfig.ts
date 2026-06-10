@@ -14,7 +14,8 @@ const schema = z.object({
     .default("info"),
   TWITCH_CLIENT_ID: z.string().default(""),
   TWITCH_CLIENT_SECRET: z.string().default(""),
-  TWITCH_REDIRECT_URI: z.string().default("")
+  TWITCH_REDIRECT_URI: z.string().default(""),
+  GS_YOUTUBE_API_KEY: z.string().default("")
 });
 
 export interface ServerConfig {
@@ -22,6 +23,7 @@ export interface ServerConfig {
   host: string;
   dataDir: string;
   logLevel: string;
+  youtubeApiKey: string;
   twitch: {
     clientId: string;
     clientSecret: string;
@@ -75,6 +77,7 @@ export function loadServerConfig(): ServerConfig {
     host: env.HOST,
     dataDir: env.GS_DATA_DIR,
     logLevel: env.LOG_LEVEL,
+    youtubeApiKey: env.GS_YOUTUBE_API_KEY,
     twitch: {
       clientId: env.TWITCH_CLIENT_ID,
       clientSecret: env.TWITCH_CLIENT_SECRET,

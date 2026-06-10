@@ -1,6 +1,8 @@
 import type { Command, CommandDependencies } from "./types";
 import { resolveMediaUrl } from "../media/urlResolver";
 
+const URL_RE = /^https?:\/\//i;
+
 export function createGreenScreenCommand(deps: CommandDependencies, commandName: string): Command {
   return {
     name: commandName,
@@ -11,9 +13,9 @@ export function createGreenScreenCommand(deps: CommandDependencies, commandName:
         return;
       }
 
-      const url = args[0];
-      if (!url) {
-        await context.reply(`@${context.user.username} URL manquante.`);
+      const firstArg = args[0];
+      if (!firstArg) {
+        await context.reply(`@${context.user.username} Usage : ${commandName} <url> ou ${commandName} <mots clés>`);
         return;
       }
 
@@ -41,33 +43,61 @@ export function createGreenScreenCommand(deps: CommandDependencies, commandName:
         return;
       }
 
-      const urlDecision = deps.urlValidator.validate(url, deps.config.validation);
-      if (!urlDecision.valid) {
-        await context.reply(`@${context.user.username} URL non autorisée.`);
-        return;
-      }
+      let videoUrl: string;
 
-      const resolvedUrl = await resolveMediaUrl(url);
-
-      if (deps.youtubeDurationValidator) {
-        const durationCheck = await deps.youtubeDurationValidator.check(url);
-        if (!durationCheck.allowed) {
-          if (durationCheck.reason === "video_not_found") {
-            await context.reply(`@${context.user.username} Vidéo introuvable.`);
-          } else {
-            await context.reply(
-              `@${context.user.username} Vidéo trop longue (durée ${durationCheck.durationSeconds ?? "?"}s).`
-            );
-          }
+      if (URL_RE.test(firstArg)) {
+        // ── URL mode ────────────────────────────────────────────────────────
+        const urlDecision = deps.urlValidator.validate(firstArg, deps.config.validation);
+        if (!urlDecision.valid) {
+          await context.reply(`@${context.user.username} URL non autorisée.`);
           return;
         }
+
+        videoUrl = await resolveMediaUrl(firstArg);
+
+        if (deps.youtubeDurationValidator) {
+          const durationCheck = await deps.youtubeDurationValidator.check(firstArg);
+          if (!durationCheck.allowed) {
+            if (durationCheck.reason === "video_not_found") {
+              await context.reply(`@${context.user.username} Vidéo introuvable.`);
+            } else {
+              await context.reply(
+                `@${context.user.username} Vidéo trop longue (${durationCheck.durationSeconds ?? "?"}s).`
+              );
+            }
+            return;
+          }
+        }
+      } else {
+        // ── Search mode ─────────────────────────────────────────────────────
+        if (!deps.youtubeSearch) {
+          await context.reply(`@${context.user.username} Recherche YouTube non configurée (clé API manquante).`);
+          return;
+        }
+
+        const query = args.join(" ");
+        await context.reply(`@${context.user.username} Recherche YouTube en cours...`);
+
+        const result = await deps.youtubeSearch(query, deps.config.playback.durationSeconds);
+        if (!result) {
+          await context.reply(
+            `@${context.user.username} Aucune vidéo courte trouvée pour "${query}".`
+          );
+          return;
+        }
+
+        videoUrl = result.url;
+        deps.logger.info(
+          { username: context.user.username, query, url: videoUrl, title: result.title },
+          "YouTube search result found"
+        );
       }
 
-      // Route to approval queue for non-mods when approval is enabled
+      // ── Approval / enqueue ───────────────────────────────────────────────
       if (deps.approvalService?.config.enabled && !context.user.isMod) {
         await deps.approvalService.submit(
           {
-            url: resolvedUrl,
+            url: videoUrl,
             durationSeconds: deps.config.playback.durationSeconds,
             username: context.user.username,
             userReply: context.reply
@@ -78,7 +108,7 @@ export function createGreenScreenCommand(deps: CommandDependencies, commandName:
       }
 
       const result = await deps.queue.enqueue({
-        url: resolvedUrl,
+        url: videoUrl,
         durationSeconds: deps.config.playback.durationSeconds,
         username: context.user.username,
         reply: context.reply
@@ -115,12 +145,12 @@ export function createGreenScreenCommand(deps: CommandDependencies, commandName:
 
       deps.historyService.record({
         username: context.user.username,
-        url: resolvedUrl,
+        url: videoUrl,
         durationSeconds: deps.config.playback.durationSeconds
       });
 
       deps.logger.info(
-        { username: context.user.username, command: commandName, url, queueStatus: result.status },
+        { username: context.user.username, command: commandName, url: videoUrl, queueStatus: result.status },
         "Green screen command executed"
       );
     }
