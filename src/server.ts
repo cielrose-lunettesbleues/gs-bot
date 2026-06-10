@@ -229,7 +229,8 @@ export async function createApp(config: ServerConfig, logger: Logger) {
       config: {
         access: cfg.access,
         cooldown: { enabled: cfg.cooldown.enabled, seconds: cfg.cooldown.seconds },
-        approval: { enabled: cfg.approval.enabled }
+        approval: { enabled: cfg.approval.enabled },
+        playback: { durationSeconds: cfg.playback.durationSeconds }
       },
       queue: tenant.queue.getState(),
       approval: { pendingCount: pending.length, pending },
@@ -260,6 +261,9 @@ export async function createApp(config: ServerConfig, logger: Logger) {
       patch.cooldown_seconds = Math.floor(body.cooldownSeconds);
     }
     if (typeof body.approvalEnabled === "boolean") patch.approval_enabled = body.approvalEnabled ? 1 : 0;
+    if (typeof body.durationSeconds === "number" && body.durationSeconds >= 1) {
+      patch.duration_seconds = Math.floor(body.durationSeconds);
+    }
     tenantManager.persistConfig(user.id, patch);
     logger.info({ userId: user.id, patch }, "Config updated");
     return c.json({ ok: true });
