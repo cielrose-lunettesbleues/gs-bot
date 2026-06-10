@@ -31,16 +31,7 @@ video,img{
   border:none;
   pointer-events:none;
 }
-/*
- * Shorts: full-screen wrapper with blurred thumbnail background on the sides.
- * The video plays in a centred 9:16 column (.yt-short-inner) with overflow:hidden
- * to crop the player chrome. The blurred background fills the 16:9 canvas.
- */
-.yt-short-bg{
-  position:absolute;inset:-5%;
-  background-size:cover;background-position:center;
-  filter:blur(24px) brightness(.4);
-}
+/* Shorts: centred 9:16 column, transparent sides */
 .yt-short-inner{
   position:absolute;
   top:0;bottom:0;height:100%;
@@ -110,16 +101,11 @@ iframe{
       f.src='https://www.youtube.com/embed/'+id
         +'?autoplay=1&controls=0&modestbranding=1&rel=0'
         +'&enablejsapi=1&origin='+encodeURIComponent(location.origin)
-        +'&iv_load_policy=3&disablekb=1';
+        +'&iv_load_policy=3&disablekb=1&loop=1&playlist='+id;
       f.allow='autoplay; fullscreen';
       var w=document.createElement('div');
       w.className='yt-wrap';
       if(isShort){
-        // Blurred thumbnail fills the 16:9 canvas; video plays in a centred 9:16 column
-        var bg=document.createElement('div');
-        bg.className='yt-short-bg';
-        bg.style.backgroundImage='url(https://img.youtube.com/vi/'+id+'/maxresdefault.jpg)';
-        w.appendChild(bg);
         var inner=document.createElement('div');
         inner.className='yt-short-inner';
         inner.appendChild(f);
@@ -155,7 +141,7 @@ iframe{
     }
     // Client-side fallback timer for YouTube and GIFs (no native 'ended' event)
     if(data.durationSeconds && !(/\\.(mp4|webm|mov)(\\?.*)?$/i.test(data.url))){
-      hideTimer=setTimeout(hide, data.durationSeconds*1000);
+      hideTimer=setTimeout(hide, Math.max(data.durationSeconds*1000-500, 500));
     }
   }
 
