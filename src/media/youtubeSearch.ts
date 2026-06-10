@@ -59,10 +59,12 @@ export async function searchShortVideo(
     }>;
   };
 
-  for (const item of videosData.items ?? []) {
+  const items = videosData.items ?? [];
+
+  // First pass: video within the configured duration limit
+  for (const item of items) {
     const duration = parseDuration(item.contentDetails.duration);
     if (duration > 0 && duration <= maxDurationSeconds) {
-      // Detect Shorts by portrait thumbnail (height > width)
       const thumb = item.snippet.thumbnails?.high ?? item.snippet.thumbnails?.default;
       const isShort = thumb ? thumb.height > thumb.width : false;
       return {
@@ -74,5 +76,20 @@ export async function searchShortVideo(
       };
     }
   }
+
+  // Fallback: no short clip found — return the first Short (portrait thumbnail)
+  for (const item of items) {
+    const duration = parseDuration(item.contentDetails.duration);
+    if (duration <= 0) continue;
+    const thumb = item.snippet.thumbnails?.high ?? item.snippet.thumbnails?.default;
+    if (thumb && thumb.height > thumb.width) {
+      return {
+        url: `https://www.youtube.com/shorts/${item.id}`,
+        title: item.snippet.title,
+        durationSeconds: duration
+      };
+    }
+  }
+
   return null;
 }
