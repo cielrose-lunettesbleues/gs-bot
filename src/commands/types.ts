@@ -36,6 +36,7 @@ export interface CommandDependencies {
   historyService: IHistoryService;
   youtubeDurationValidator?: { check: (url: string) => Promise<DurationCheckResult> };
   youtubeSearch?: (query: string, maxDurationSeconds: number) => Promise<{ url: string; title: string; durationSeconds: number } | null>;
+  gifSearch?: (query: string) => Promise<{ url: string; title: string } | null>;
   approvalService?: {
     config: { enabled: boolean };
     submit: (item: { url: string; durationSeconds: number; username: string; userReply: (msg: string) => Promise<void> }, channelNotify: (msg: string) => Promise<void>) => Promise<void>;

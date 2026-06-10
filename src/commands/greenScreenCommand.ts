@@ -71,28 +71,50 @@ export function createGreenScreenCommand(deps: CommandDependencies, commandName:
         }
       } else {
         // ── Search mode ─────────────────────────────────────────────────────
-        if (!deps.youtubeSearch) {
-          await context.reply(`@${context.user.username} Recherche YouTube non configurée (clé API manquante).`);
-          return;
-        }
+        const hasGif = args.some((a) => a.toLowerCase() === "gif");
 
-        const query = args.join(" ");
-        await context.reply(`@${context.user.username} Recherche YouTube en cours...`);
-
-        const searchResult = await deps.youtubeSearch(query, deps.config.playback.durationSeconds);
-        if (!searchResult) {
-          await context.reply(
-            `@${context.user.username} Aucune vidéo courte trouvée pour "${query}".`
+        if (hasGif) {
+          // ── GIF search via Tenor ───────────────────────────────────────
+          if (!deps.gifSearch) {
+            await context.reply(`@${context.user.username} Recherche GIF non configurée (clé Tenor manquante).`);
+            return;
+          }
+          const gifQuery = args.filter((a) => a.toLowerCase() !== "gif").join(" ").trim();
+          if (!gifQuery) {
+            await context.reply(`@${context.user.username} Usage : ${commandName} gif <mots clés>`);
+            return;
+          }
+          await context.reply(`@${context.user.username} Recherche GIF en cours...`);
+          const gifResult = await deps.gifSearch(gifQuery);
+          if (!gifResult) {
+            await context.reply(`@${context.user.username} Aucun GIF trouvé pour "${gifQuery}".`);
+            return;
+          }
+          videoUrl = gifResult.url;
+          deps.logger.info(
+            { username: context.user.username, query: gifQuery, url: videoUrl, title: gifResult.title },
+            "Tenor GIF search result found"
           );
-          return;
+        } else {
+          // ── YouTube search ─────────────────────────────────────────────
+          if (!deps.youtubeSearch) {
+            await context.reply(`@${context.user.username} Recherche YouTube non configurée (clé API manquante).`);
+            return;
+          }
+          const query = args.join(" ");
+          await context.reply(`@${context.user.username} Recherche YouTube en cours...`);
+          const searchResult = await deps.youtubeSearch(query, deps.config.playback.durationSeconds);
+          if (!searchResult) {
+            await context.reply(`@${context.user.username} Aucune vidéo courte trouvée pour "${query}".`);
+            return;
+          }
+          videoUrl = searchResult.url;
+          playDuration = searchResult.durationSeconds;
+          deps.logger.info(
+            { username: context.user.username, query, url: videoUrl, title: searchResult.title, durationSeconds: playDuration },
+            "YouTube search result found"
+          );
         }
-
-        videoUrl = searchResult.url;
-        playDuration = searchResult.durationSeconds;
-        deps.logger.info(
-          { username: context.user.username, query, url: videoUrl, title: searchResult.title, durationSeconds: playDuration },
-          "YouTube search result found"
-        );
       }
 
       // ── Approval / enqueue ───────────────────────────────────────────────
