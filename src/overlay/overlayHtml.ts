@@ -154,7 +154,7 @@ iframe{
       info.classList.add('visible');
     }
     // Client-side fallback timer for YouTube and GIFs (no native 'ended' event)
-    if(data.durationSeconds && !(/\.(mp4|webm|mov)(\?.*)?$/i.test(data.url))){
+    if(data.durationSeconds && !(/\\.(mp4|webm|mov)(\\?.*)?$/i.test(data.url))){
       hideTimer=setTimeout(hide, data.durationSeconds*1000);
     }
   }
