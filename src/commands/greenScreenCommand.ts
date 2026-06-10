@@ -1,4 +1,5 @@
 import type { Command, CommandDependencies } from "./types";
+import { resolveMediaUrl } from "../media/urlResolver";
 
 export function createGreenScreenCommand(deps: CommandDependencies, commandName: string): Command {
   return {
@@ -46,6 +47,8 @@ export function createGreenScreenCommand(deps: CommandDependencies, commandName:
         return;
       }
 
+      const resolvedUrl = await resolveMediaUrl(url);
+
       if (deps.youtubeDurationValidator) {
         const durationCheck = await deps.youtubeDurationValidator.check(url);
         if (!durationCheck.allowed) {
@@ -64,7 +67,7 @@ export function createGreenScreenCommand(deps: CommandDependencies, commandName:
       if (deps.approvalService?.config.enabled && !context.user.isMod) {
         await deps.approvalService.submit(
           {
-            url,
+            url: resolvedUrl,
             durationSeconds: deps.config.playback.durationSeconds,
             username: context.user.username,
             userReply: context.reply
@@ -75,7 +78,7 @@ export function createGreenScreenCommand(deps: CommandDependencies, commandName:
       }
 
       const result = await deps.queue.enqueue({
-        url,
+        url: resolvedUrl,
         durationSeconds: deps.config.playback.durationSeconds,
         username: context.user.username,
         reply: context.reply
@@ -112,7 +115,7 @@ export function createGreenScreenCommand(deps: CommandDependencies, commandName:
 
       deps.historyService.record({
         username: context.user.username,
-        url,
+        url: resolvedUrl,
         durationSeconds: deps.config.playback.durationSeconds
       });
 
