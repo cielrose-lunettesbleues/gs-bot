@@ -44,6 +44,7 @@ export function createGreenScreenCommand(deps: CommandDependencies, commandName:
       }
 
       let videoUrl: string;
+      let playDuration = deps.config.playback.durationSeconds;
 
       if (URL_RE.test(firstArg)) {
         // ── URL mode ────────────────────────────────────────────────────────
@@ -78,17 +79,18 @@ export function createGreenScreenCommand(deps: CommandDependencies, commandName:
         const query = args.join(" ");
         await context.reply(`@${context.user.username} Recherche YouTube en cours...`);
 
-        const result = await deps.youtubeSearch(query, deps.config.playback.durationSeconds);
-        if (!result) {
+        const searchResult = await deps.youtubeSearch(query, deps.config.playback.durationSeconds);
+        if (!searchResult) {
           await context.reply(
             `@${context.user.username} Aucune vidéo courte trouvée pour "${query}".`
           );
           return;
         }
 
-        videoUrl = result.url;
+        videoUrl = searchResult.url;
+        playDuration = searchResult.durationSeconds;
         deps.logger.info(
-          { username: context.user.username, query, url: videoUrl, title: result.title },
+          { username: context.user.username, query, url: videoUrl, title: searchResult.title, durationSeconds: playDuration },
           "YouTube search result found"
         );
       }
@@ -98,7 +100,7 @@ export function createGreenScreenCommand(deps: CommandDependencies, commandName:
         await deps.approvalService.submit(
           {
             url: videoUrl,
-            durationSeconds: deps.config.playback.durationSeconds,
+            durationSeconds: playDuration,
             username: context.user.username,
             userReply: context.reply
           },
@@ -109,7 +111,7 @@ export function createGreenScreenCommand(deps: CommandDependencies, commandName:
 
       const result = await deps.queue.enqueue({
         url: videoUrl,
-        durationSeconds: deps.config.playback.durationSeconds,
+        durationSeconds: playDuration,
         username: context.user.username,
         reply: context.reply
       });
@@ -120,7 +122,7 @@ export function createGreenScreenCommand(deps: CommandDependencies, commandName:
         case "playing":
           if (feedback) {
             await context.reply(
-              `@${context.user.username} En cours (${deps.config.playback.durationSeconds}s).`
+              `@${context.user.username} En cours (${playDuration}s).`
             );
           }
           break;
@@ -146,7 +148,7 @@ export function createGreenScreenCommand(deps: CommandDependencies, commandName:
       deps.historyService.record({
         username: context.user.username,
         url: videoUrl,
-        durationSeconds: deps.config.playback.durationSeconds
+        durationSeconds: playDuration
       });
 
       deps.logger.info(

@@ -29,11 +29,11 @@ video,img{
   width:calc(100vh * 9 / 16);
   left:50%;transform:translateX(-50%);
 }
-/* iframe 8% oversized so the chrome (title bar, borders) is cropped */
+/* iframe 12% oversized so the chrome (title bar, borders) is cropped */
 .yt-wrap iframe{
   position:absolute;
-  left:-4%;top:-4%;
-  width:108%;height:108%;
+  left:-6%;top:-6%;
+  width:112%;height:112%;
   border:none;
   pointer-events:none;
 }
@@ -113,7 +113,10 @@ iframe{
     return v;
   }
 
+  var hideTimer = null;
+
   function show(data){
+    if(hideTimer){ clearTimeout(hideTimer); hideTimer=null; }
     mediaEl.innerHTML='';
     mediaEl.appendChild(buildMedia(data.url));
     requestAnimationFrame(function(){wrap.classList.add('visible');});
@@ -121,9 +124,14 @@ iframe{
       infoUser.textContent='@'+data.username;
       info.classList.add('visible');
     }
+    // Client-side fallback timer for YouTube (postMessage not always reliable in OBS)
+    if(ytId(data.url) && data.durationSeconds){
+      hideTimer=setTimeout(hide, data.durationSeconds*1000);
+    }
   }
 
   function hide(){
+    if(hideTimer){ clearTimeout(hideTimer); hideTimer=null; }
     wrap.classList.remove('visible');
     info.classList.remove('visible');
     setTimeout(function(){mediaEl.innerHTML='';},500);
