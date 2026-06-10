@@ -18,6 +18,25 @@ video,img{
   object-fit:contain;
   border:none;
 }
+/* YouTube wrapper: overflow:hidden clips the player chrome */
+.yt-wrap{
+  position:absolute;inset:0;
+  overflow:hidden;
+}
+.yt-wrap.yt-short{
+  inset:unset;
+  top:0;bottom:0;height:100%;
+  width:calc(100vh * 9 / 16);
+  left:50%;transform:translateX(-50%);
+}
+/* iframe 8% oversized so the chrome (title bar, borders) is cropped */
+.yt-wrap iframe{
+  position:absolute;
+  left:-4%;top:-4%;
+  width:108%;height:108%;
+  border:none;
+  pointer-events:none;
+}
 iframe{
   position:absolute;inset:0;
   width:100%;height:100%;
@@ -70,13 +89,16 @@ iframe{
     if(id){
       var isShort = /youtube\\.com\\/shorts\\//.test(url);
       var f=document.createElement('iframe');
-      f.src='https://www.youtube.com/embed/'+id+'?autoplay=1&controls=0&modestbranding=1&rel=0&enablejsapi=1';
+      f.src='https://www.youtube.com/embed/'+id
+        +'?autoplay=1&controls=0&modestbranding=1&rel=0'
+        +'&enablejsapi=1&origin='+encodeURIComponent(location.origin)
+        +'&iv_load_policy=3&disablekb=1';
       f.allow='autoplay; fullscreen';
-      if(isShort){
-        // Resize iframe to 9:16 so YouTube fills it without black bars
-        f.style.cssText='position:absolute;top:0;bottom:0;height:100%;width:calc(100vh * 9 / 16);left:50%;transform:translateX(-50%);';
-      }
-      return f;
+      // Wrap in overflow:hidden container so the 108% iframe crops the player chrome
+      var w=document.createElement('div');
+      w.className='yt-wrap'+(isShort?' yt-short':'');
+      w.appendChild(f);
+      return w;
     }
     if(/\\.(gif|png|jpg|jpeg|webp)(\\?.*)?$/i.test(url)){
       var i=document.createElement('img');

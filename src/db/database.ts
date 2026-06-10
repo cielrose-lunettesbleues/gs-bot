@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS tenant_configs (
   approval_timeout_seconds   INTEGER NOT NULL DEFAULT 60,
   queue_mode                 TEXT    NOT NULL DEFAULT 'queue',
   queue_max_size             INTEGER NOT NULL DEFAULT 3,
-  duration_seconds           INTEGER NOT NULL DEFAULT 15,
+  duration_seconds           INTEGER NOT NULL DEFAULT 30,
   chat_feedback              INTEGER NOT NULL DEFAULT 1,
   allowed_domains            TEXT    NOT NULL DEFAULT 'youtube.com,youtu.be,streamable.com,tenor.com,giphy.com',
   allow_direct_files         INTEGER NOT NULL DEFAULT 1,
