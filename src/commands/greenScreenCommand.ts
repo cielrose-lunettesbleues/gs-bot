@@ -137,9 +137,19 @@ export function createGreenScreenCommand(deps: CommandDependencies, commandName:
           const query = mainArgs.join(" ");
           if (feedback) await context.reply(`@${context.user.username} Recherche en cours...`);
           const maxDuration = deps.config.validation.maxDurationSeconds;
-          let searchResult = deps.tiktokSearch ? await deps.tiktokSearch(query, maxDuration) : null;
+          let searchResult = null;
+          let searchSource = "none";
+          if (deps.tiktokSearch) {
+            searchResult = await deps.tiktokSearch(query, maxDuration);
+            if (searchResult) {
+              searchSource = "tiktok";
+            } else {
+              deps.logger.warn({ username: context.user.username, query }, "TikTok search returned null, falling back to YouTube");
+            }
+          }
           if (!searchResult && deps.youtubeSearch) {
             searchResult = await deps.youtubeSearch(query, maxDuration);
+            if (searchResult) searchSource = "youtube";
           }
           if (!searchResult) {
             if (feedback) await context.reply(`@${context.user.username} Aucune vidéo trouvée pour "${query}".`);
@@ -149,7 +159,7 @@ export function createGreenScreenCommand(deps: CommandDependencies, commandName:
           playDuration = searchResult.durationSeconds;
           portrait = searchResult.portrait;
           deps.logger.info(
-            { username: context.user.username, query, url: videoUrl, title: searchResult.title, durationSeconds: playDuration },
+            { username: context.user.username, query, url: videoUrl, title: searchResult.title, durationSeconds: playDuration, source: searchSource },
             "Video search result found"
           );
         }
