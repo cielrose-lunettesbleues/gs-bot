@@ -161,6 +161,15 @@ iframe{
       }
       return w;
     }
+    if(/tiktok\\.com\\/embed/i.test(url)){
+      var c=document.createElement('div');
+      c.className='tk-short-inner';
+      var f=document.createElement('iframe');
+      f.src=url;
+      f.allow='autoplay; fullscreen';
+      c.appendChild(f);
+      return c;
+    }
     if(/\\.(gif|png|jpg|jpeg|webp)(\\?.*)?$/i.test(url)){
       var i=document.createElement('img');
       i.src=url;
