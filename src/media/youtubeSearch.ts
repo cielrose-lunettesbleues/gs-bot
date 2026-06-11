@@ -24,10 +24,9 @@ export async function searchShortVideo(
   const searchParams = new URLSearchParams({
     part: "id",
     type: "video",
-    videoEmbeddable: "true",
-    order: "relevance",
+    videoDuration: "short",
     q: query,
-    maxResults: "50",
+    maxResults: "10",
     key: apiKey
   });
 
@@ -41,7 +40,7 @@ export async function searchShortVideo(
   if (!ids.length) return null;
 
   const videosParams = new URLSearchParams({
-    part: "contentDetails,snippet,statistics",
+    part: "contentDetails,snippet",
     id: ids.join(","),
     key: apiKey
   });
@@ -53,7 +52,6 @@ export async function searchShortVideo(
     items?: Array<{
       id: string;
       contentDetails: { duration: string };
-      statistics: { viewCount?: string };
       snippet: {
         title: string;
         thumbnails?: {
@@ -64,44 +62,36 @@ export async function searchShortVideo(
     }>;
   };
 
-  const allItems = videosData.items ?? [];
+  const items = videosData.items ?? [];
 
-  function buildResult(item: typeof allItems[0], duration: number): YoutubeSearchResult {
-    const thumb = item.snippet.thumbnails?.high ?? item.snippet.thumbnails?.default;
-    const isShort = thumb ? thumb.height > thumb.width : false;
-    return {
-      url: isShort
-        ? `https://www.youtube.com/shorts/${item.id}`
-        : `https://www.youtube.com/watch?v=${item.id}`,
-      title: item.snippet.title,
-      durationSeconds: duration
-    };
-  }
-
-  // Among candidates within duration, pick the most viewed (best signal for quality/relevance)
-  const candidates = allItems
-    .map((item) => ({ item, duration: parseDuration(item.contentDetails.duration) }))
-    .filter(({ duration }) => duration > 0 && duration <= durationCeiling)
-    .sort((a, b) => Number(b.item.statistics.viewCount ?? 0) - Number(a.item.statistics.viewCount ?? 0));
-
-  if (candidates.length > 0) {
-    const { item, duration } = candidates[0];
-    return buildResult(item, duration);
-  }
-
-  // Fallback: no clip within duration — most-viewed Short (portrait)
-  const shortFallbacks = allItems
-    .map((item) => ({ item, duration: parseDuration(item.contentDetails.duration) }))
-    .filter(({ item, duration }) => {
-      if (duration <= 0) return false;
+  // First pass: first video within the duration limit
+  for (const item of items) {
+    const duration = parseDuration(item.contentDetails.duration);
+    if (duration > 0 && duration <= durationCeiling) {
       const thumb = item.snippet.thumbnails?.high ?? item.snippet.thumbnails?.default;
-      return thumb ? thumb.height > thumb.width : false;
-    })
-    .sort((a, b) => Number(b.item.statistics.viewCount ?? 0) - Number(a.item.statistics.viewCount ?? 0));
+      const isShort = thumb ? thumb.height > thumb.width : false;
+      return {
+        url: isShort
+          ? `https://www.youtube.com/shorts/${item.id}`
+          : `https://www.youtube.com/watch?v=${item.id}`,
+        title: item.snippet.title,
+        durationSeconds: duration
+      };
+    }
+  }
 
-  if (shortFallbacks.length > 0) {
-    const { item, duration } = shortFallbacks[0];
-    return buildResult(item, duration);
+  // Fallback: no clip within duration — return the first Short (portrait thumbnail)
+  for (const item of items) {
+    const duration = parseDuration(item.contentDetails.duration);
+    if (duration <= 0) continue;
+    const thumb = item.snippet.thumbnails?.high ?? item.snippet.thumbnails?.default;
+    if (thumb && thumb.height > thumb.width) {
+      return {
+        url: `https://www.youtube.com/shorts/${item.id}`,
+        title: item.snippet.title,
+        durationSeconds: duration
+      };
+    }
   }
 
   return null;
