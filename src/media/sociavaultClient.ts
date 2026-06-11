@@ -85,8 +85,11 @@ async function fetchVideoInfo(tiktokUrl: string, apiKey: string, log?: SimpleLog
     return null;
   }
 
-  const durationSeconds =
+  let durationSeconds =
     d.video?.duration ?? d.duration ?? d.music?.video_duration ?? d.music?.duration ?? 0;
+  // TikTok API sometimes returns duration in milliseconds; normalize if implausibly large
+  if (durationSeconds > 600) durationSeconds = Math.round(durationSeconds / 1000);
+  log?.info({ tiktokUrl, durationSeconds }, "SociaVault video-info duration resolved");
 
   return { url: mp4, durationSeconds, portrait: true };
 }
@@ -121,7 +124,9 @@ export async function sociavaultSearch(
   if (!videos.length) return null;
 
   function duration(v: AwemeInfo) {
-    return v.video?.duration ?? v.music?.video_duration ?? v.music?.duration ?? 0;
+    let d = v.video?.duration ?? v.music?.video_duration ?? v.music?.duration ?? 0;
+    if (d > 600) d = Math.round(d / 1000);
+    return d;
   }
 
   function valid(v: AwemeInfo) {
