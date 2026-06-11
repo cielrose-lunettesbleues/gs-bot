@@ -17,7 +17,9 @@
       "WebFetch(domain:dev.to)",
       "WebFetch(domain:docs.fluxer.app)",
       "WebFetch(domain:klipy.com)",
-      "Bash(npx vitest *)"
+      "Bash(npx vitest *)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:www.tikwm.com)"
     ]
   }
 }

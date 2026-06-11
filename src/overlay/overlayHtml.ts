@@ -58,18 +58,13 @@ video,img{
   border:none;
   pointer-events:none;
 }
-/* TikTok: same 9:16 column, no chrome crop */
+/* TikTok: same 9:16 column — video plays as <video> (no iframe) */
 .tk-short-inner{
   position:absolute;
   top:0;bottom:0;height:100%;
   width:calc(100vh * 9 / 16);
   left:50%;transform:translateX(-50%);
   overflow:hidden;
-}
-.tk-short-inner iframe{
-  position:absolute;inset:0;
-  width:100%;height:100%;
-  border:none;pointer-events:none;
 }
 iframe{
   position:absolute;inset:0;
@@ -173,12 +168,21 @@ iframe{
     }
     var tk=tkId(url);
     if(tk){
-      var f2=document.createElement('iframe');
-      f2.src='https://www.tiktok.com/embed/v2/'+tk;
-      f2.allow='autoplay; fullscreen';
       var c=document.createElement('div');
       c.className='tk-short-inner';
-      c.appendChild(f2);
+      fetch('https://www.tikwm.com/api/?url='+encodeURIComponent(url))
+        .then(function(r){return r.json();})
+        .then(function(d){
+          if(d.code===0&&d.data&&d.data.play){
+            var v=document.createElement('video');
+            v.src=d.data.play;
+            v.autoplay=true;
+            v.playsInline=true;
+            v.addEventListener('ended',hide);
+            c.appendChild(v);
+          }
+        })
+        .catch(function(){});
       return c;
     }
     if(/\\.(gif|png|jpg|jpeg|webp)(\\?.*)?$/i.test(url)){

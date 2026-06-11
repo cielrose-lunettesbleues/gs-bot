@@ -112,23 +112,24 @@ export function createGreenScreenCommand(deps: CommandDependencies, commandName:
             "Tenor GIF search result found"
           );
         } else {
-          // ── YouTube search ─────────────────────────────────────────────
-          if (!deps.youtubeSearch) {
-            await context.reply(`@${context.user.username} Recherche YouTube non configurée (clé API manquante).`);
+          // ── Video search (TikTok preferred, YouTube fallback) ──────────
+          const searcher = deps.tiktokSearch ?? deps.youtubeSearch;
+          if (!searcher) {
+            await context.reply(`@${context.user.username} Recherche vidéo non configurée.`);
             return;
           }
           const query = mainArgs.join(" ");
-          if (feedback) await context.reply(`@${context.user.username} Recherche YouTube en cours...`);
-          const searchResult = await deps.youtubeSearch(query, deps.config.validation.maxDurationSeconds);
+          if (feedback) await context.reply(`@${context.user.username} Recherche en cours...`);
+          const searchResult = await searcher(query, deps.config.validation.maxDurationSeconds);
           if (!searchResult) {
-            if (feedback) await context.reply(`@${context.user.username} Aucune vidéo courte trouvée pour "${query}".`);
+            if (feedback) await context.reply(`@${context.user.username} Aucune vidéo trouvée pour "${query}".`);
             return;
           }
           videoUrl = searchResult.url;
           playDuration = searchResult.durationSeconds;
           deps.logger.info(
             { username: context.user.username, query, url: videoUrl, title: searchResult.title, durationSeconds: playDuration },
-            "YouTube search result found"
+            "Video search result found"
           );
         }
       }

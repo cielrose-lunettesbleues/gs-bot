@@ -17,6 +17,7 @@ import { TwitchBotManager } from "../twitch/twitchBotManager";
 import { MockObsSourceController } from "../obs/mockObsSourceController";
 import { createRuntimeState } from "../state/runtimeState";
 import { searchShortVideo } from "../media/youtubeSearch";
+import { searchTiktokVideo } from "../media/tiktokSearch";
 import { searchGif } from "../media/klipySearch";
 
 // The mutable runtime config that all tenant services share via reference
@@ -119,6 +120,7 @@ export class TenantManager {
       blacklistService,
       historyService,
       youtubeDurationValidator: undefined,
+      tiktokSearch: (query: string, maxDuration: number) => searchTiktokVideo(query, maxDuration),
       youtubeSearch: this.youtubeApiKey
         ? (query: string, maxDuration: number) => searchShortVideo(query, maxDuration, this.youtubeApiKey!)
         : undefined,
