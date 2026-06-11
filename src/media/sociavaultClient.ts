@@ -26,10 +26,12 @@ interface PlayAddr {
 
 interface AwemeInfo {
   aweme_id?: string;
+  desc?: string;
   author?: { unique_id?: string };
   video?: {
     duration?: number;
     play_addr?: PlayAddr;
+    download_addr?: PlayAddr;
     bit_rate?: BitRateEntry[] | Record<string, BitRateEntry>;
   };
   music?: { duration?: number; video_duration?: number };
@@ -61,31 +63,45 @@ function toArray<T>(v: T[] | Record<string, T> | undefined): T[] {
 }
 
 // Prefer tiktokv.us direct-play URLs (H.264, OBS-compatible) over CDN URLs (may be H.265)
-function pickMp4(bitRates: BitRateEntry[], playAddr?: PlayAddr): string | undefined {
+function pickMp4(bitRates: BitRateEntry[], playAddr?: PlayAddr, downloadAddr?: PlayAddr, log?: SimpleLogger): string | undefined {
   const allUrls: string[] = [];
   for (const e of bitRates) allUrls.push(...toArray(e.play_addr?.url_list));
   allUrls.push(...toArray(playAddr?.url_list));
+  allUrls.push(...toArray(downloadAddr?.url_list));
 
-  const direct = allUrls.find(u => u.includes("tiktokv."));
-  if (direct) return direct;
+  log?.info({
+    bitRateCount: bitRates.length,
+    codecTypes: bitRates.map(e => e.codec_type),
+    allUrlDomains: allUrls.map(u => { try { return new URL(u).hostname; } catch { return "?"; } })
+  }, "SociaVault available streams");
 
-  // Fallback: H.264 by codec_type
+  // 1. download_addr tiktokv.us (H.264 download endpoint)
+  const dlDirect = toArray(downloadAddr?.url_list).find(u => u.includes("tiktokv."));
+  if (dlDirect) return dlDirect;
+
+  // 2. bit_rate with codec_type 0 (H.264), prefer tiktokv.us URL within it
   for (const e of bitRates) {
     if (e.codec_type === 0) {
-      const u = toArray(e.play_addr?.url_list)[0];
-      if (u) return u;
+      const urls = toArray(e.play_addr?.url_list);
+      return urls.find(u => u.includes("tiktokv.")) ?? urls[0];
     }
   }
 
-  // Last resort: last bit_rate entry first URL
+  // 3. Any tiktokv.us URL from play_addr or bit_rate
+  const direct = allUrls.find(u => u.includes("tiktokv."));
+  if (direct) return direct;
+
+  // 4. Last bit_rate entry (lowest quality, more likely H.264)
   const last = bitRates[bitRates.length - 1];
-  return last ? toArray(last.play_addr?.url_list)[0] : toArray(playAddr?.url_list)[0];
+  if (last) return toArray(last.play_addr?.url_list)[0];
+
+  return toArray(playAddr?.url_list)[0];
 }
 
 function resolveFromAweme(aweme: AwemeInfo | VideoDetail, log?: SimpleLogger, label?: string): TiktokResolved | null {
   const vid = aweme.video;
   const bitRates = toArray(vid?.bit_rate);
-  const mp4 = pickMp4(bitRates, vid?.play_addr);
+  const mp4 = pickMp4(bitRates, vid?.play_addr, (aweme as AwemeInfo).video?.download_addr, log);
   if (!mp4) return null;
 
   const rawDuration =
@@ -174,7 +190,7 @@ export async function sociavaultSearch(
     return null;
   }
 
-  log?.info({ aweme_id: chosen.aweme_id, author: chosen.author?.unique_id, duration: duration(chosen) }, "SociaVault chosen video");
+  log?.info({ aweme_id: chosen.aweme_id, author: chosen.author?.unique_id, duration: duration(chosen), desc: chosen.desc?.slice(0, 80) }, "SociaVault chosen video");
 
   // Try to extract MP4 directly from search result (saves the video-info API call)
   const direct = resolveFromAweme(chosen, log, "search-direct");
