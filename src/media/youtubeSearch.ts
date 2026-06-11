@@ -13,36 +13,49 @@ export interface YoutubeSearchResult {
   durationSeconds: number;
 }
 
+async function searchIds(query: string, order: "relevance" | "viewCount", apiKey: string): Promise<string[]> {
+  const params = new URLSearchParams({
+    part: "id",
+    type: "video",
+    videoDuration: "short",
+    videoEmbeddable: "true",
+    safeSearch: "none",
+    order,
+    q: query,
+    maxResults: "25",
+    key: apiKey
+  });
+  const res = await fetch(`${SEARCH_API}?${params}`);
+  if (!res.ok) return [];
+  const data = (await res.json()) as { items?: Array<{ id: { videoId: string } }> };
+  return (data.items ?? []).map((i) => i.id.videoId).filter(Boolean);
+}
+
 export async function searchShortVideo(
   query: string,
   maxDurationSeconds: number,
   apiKey: string
 ): Promise<YoutubeSearchResult | null> {
-  const searchParams = new URLSearchParams({
-    part: "id",
-    type: "video",
-    videoDuration: "short",
-    order: "viewCount",
-    q: query,
-    maxResults: "25",
-    key: apiKey
-  });
+  // Two searches in parallel: relevance (best text match) + viewCount (most popular)
+  const [relevanceIds, viewCountIds] = await Promise.all([
+    searchIds(query, "relevance", apiKey),
+    searchIds(query, "viewCount", apiKey)
+  ]);
 
-  const searchRes = await fetch(`${SEARCH_API}?${searchParams}`);
-  if (!searchRes.ok) return null;
+  // Merge and deduplicate, preserving order (relevance first, then viewCount-only)
+  const seen = new Set<string>();
+  const mergedIds: string[] = [];
+  for (const id of [...relevanceIds, ...viewCountIds]) {
+    if (!seen.has(id)) { seen.add(id); mergedIds.push(id); }
+  }
+  if (!mergedIds.length) return null;
 
-  const searchData = (await searchRes.json()) as {
-    items?: Array<{ id: { videoId: string } }>;
-  };
-  const ids = (searchData.items ?? []).map((i) => i.id.videoId).filter(Boolean);
-  if (!ids.length) return null;
-
+  // Fetch details + statistics in one call
   const videosParams = new URLSearchParams({
-    part: "contentDetails,snippet",
-    id: ids.join(","),
+    part: "contentDetails,snippet,statistics",
+    id: mergedIds.join(","),
     key: apiKey
   });
-
   const videosRes = await fetch(`${VIDEOS_API}?${videosParams}`);
   if (!videosRes.ok) return null;
 
@@ -50,6 +63,7 @@ export async function searchShortVideo(
     items?: Array<{
       id: string;
       contentDetails: { duration: string };
+      statistics: { viewCount?: string };
       snippet: {
         title: string;
         thumbnails?: {
@@ -60,36 +74,52 @@ export async function searchShortVideo(
     }>;
   };
 
-  const items = videosData.items ?? [];
+  const allItems = videosData.items ?? [];
 
-  // First pass: video within the configured duration limit
-  for (const item of items) {
-    const duration = parseDuration(item.contentDetails.duration);
-    if (duration > 0 && duration <= maxDurationSeconds) {
-      const thumb = item.snippet.thumbnails?.high ?? item.snippet.thumbnails?.default;
-      const isShort = thumb ? thumb.height > thumb.width : false;
-      return {
-        url: isShort
-          ? `https://www.youtube.com/shorts/${item.id}`
-          : `https://www.youtube.com/watch?v=${item.id}`,
-        title: item.snippet.title,
-        durationSeconds: duration
-      };
-    }
+  function buildResult(item: typeof allItems[0], duration: number): YoutubeSearchResult {
+    const thumb = item.snippet.thumbnails?.high ?? item.snippet.thumbnails?.default;
+    const isShort = thumb ? thumb.height > thumb.width : false;
+    return {
+      url: isShort
+        ? `https://www.youtube.com/shorts/${item.id}`
+        : `https://www.youtube.com/watch?v=${item.id}`,
+      title: item.snippet.title,
+      durationSeconds: duration
+    };
   }
 
-  // Fallback: no short clip found — return the first Short (portrait thumbnail)
-  for (const item of items) {
-    const duration = parseDuration(item.contentDetails.duration);
-    if (duration <= 0) continue;
-    const thumb = item.snippet.thumbnails?.high ?? item.snippet.thumbnails?.default;
-    if (thumb && thumb.height > thumb.width) {
-      return {
-        url: `https://www.youtube.com/shorts/${item.id}`,
-        title: item.snippet.title,
-        durationSeconds: duration
-      };
-    }
+  // First pass: candidates within duration limit, sorted by view count
+  const candidates = allItems
+    .map((item) => ({ item, duration: parseDuration(item.contentDetails.duration) }))
+    .filter(({ duration }) => duration > 0 && duration <= maxDurationSeconds)
+    .sort((a, b) => {
+      const va = Number(a.item.statistics.viewCount ?? 0);
+      const vb = Number(b.item.statistics.viewCount ?? 0);
+      return vb - va;
+    });
+
+  if (candidates.length > 0) {
+    const { item, duration } = candidates[0];
+    return buildResult(item, duration);
+  }
+
+  // Fallback: no clip within duration — take the most-viewed Short (portrait)
+  const shortFallbacks = allItems
+    .map((item) => ({ item, duration: parseDuration(item.contentDetails.duration) }))
+    .filter(({ item, duration }) => {
+      if (duration <= 0) return false;
+      const thumb = item.snippet.thumbnails?.high ?? item.snippet.thumbnails?.default;
+      return thumb ? thumb.height > thumb.width : false;
+    })
+    .sort((a, b) => {
+      const va = Number(a.item.statistics.viewCount ?? 0);
+      const vb = Number(b.item.statistics.viewCount ?? 0);
+      return vb - va;
+    });
+
+  if (shortFallbacks.length > 0) {
+    const { item, duration } = shortFallbacks[0];
+    return buildResult(item, duration);
   }
 
   return null;
