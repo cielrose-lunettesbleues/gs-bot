@@ -64,23 +64,21 @@ export async function searchShortVideo(
 
   const items = videosData.items ?? [];
 
-  // First pass: first video within the duration limit
+  // First pass: first Short within the duration limit
   for (const item of items) {
     const duration = parseDuration(item.contentDetails.duration);
-    if (duration > 0 && duration <= durationCeiling) {
-      const thumb = item.snippet.thumbnails?.high ?? item.snippet.thumbnails?.default;
-      const isShort = thumb ? thumb.height > thumb.width : false;
+    if (duration <= 0 || duration > durationCeiling) continue;
+    const thumb = item.snippet.thumbnails?.high ?? item.snippet.thumbnails?.default;
+    if (thumb && thumb.height > thumb.width) {
       return {
-        url: isShort
-          ? `https://www.youtube.com/shorts/${item.id}`
-          : `https://www.youtube.com/watch?v=${item.id}`,
+        url: `https://www.youtube.com/shorts/${item.id}`,
         title: item.snippet.title,
         durationSeconds: duration
       };
     }
   }
 
-  // Fallback: no clip within duration — return the first Short (portrait thumbnail)
+  // Fallback 1: no Short within duration — any Short regardless of duration
   for (const item of items) {
     const duration = parseDuration(item.contentDetails.duration);
     if (duration <= 0) continue;
@@ -88,6 +86,30 @@ export async function searchShortVideo(
     if (thumb && thumb.height > thumb.width) {
       return {
         url: `https://www.youtube.com/shorts/${item.id}`,
+        title: item.snippet.title,
+        durationSeconds: duration
+      };
+    }
+  }
+
+  // Fallback 2: no Short at all — first landscape video within duration
+  for (const item of items) {
+    const duration = parseDuration(item.contentDetails.duration);
+    if (duration > 0 && duration <= durationCeiling) {
+      return {
+        url: `https://www.youtube.com/watch?v=${item.id}`,
+        title: item.snippet.title,
+        durationSeconds: duration
+      };
+    }
+  }
+
+  // Fallback 3: last resort — first landscape video regardless of duration
+  for (const item of items) {
+    const duration = parseDuration(item.contentDetails.duration);
+    if (duration > 0) {
+      return {
+        url: `https://www.youtube.com/watch?v=${item.id}`,
         title: item.snippet.title,
         durationSeconds: duration
       };
