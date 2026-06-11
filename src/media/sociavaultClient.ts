@@ -70,7 +70,11 @@ async function fetchVideoInfo(tiktokUrl: string, apiKey: string, log?: SimpleLog
     return Array.isArray(list) ? list[0] : Object.values(list)[0];
   }
 
-  const bitRates = d.video?.bit_rate ?? [];
+  // bit_rate may be a real array or a numeric-keyed object {"0":{...},"1":{...}}
+  const bitRateRaw = d.video?.bit_rate;
+  const bitRates: BitRateEntry[] = !bitRateRaw ? []
+    : Array.isArray(bitRateRaw) ? bitRateRaw
+    : Object.values(bitRateRaw as Record<string, BitRateEntry>);
   // Prefer H.264 (codec_type 0) for OBS Chromium compatibility; H.265 (codec_type 2) won't render
   const h264 = bitRates.find(e => e.codec_type === 0);
   const chosen = h264 ?? bitRates[bitRates.length - 1];
