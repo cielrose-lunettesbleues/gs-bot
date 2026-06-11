@@ -17,11 +17,7 @@ interface SimpleLogger {
 
 interface BitRateEntry {
   codec_type?: number;
-  play_addr?: { url_list?: string[] | Record<string, string> };
-}
-
-interface PlayAddr {
-  url_list?: string[] | Record<string, string>;
+  play_addr?: { url_list?: unknown };
 }
 
 interface AwemeInfo {
@@ -30,89 +26,95 @@ interface AwemeInfo {
   author?: { unique_id?: string };
   video?: {
     duration?: number;
-    play_addr?: PlayAddr;
-    download_addr?: PlayAddr;
-    bit_rate?: BitRateEntry[] | Record<string, BitRateEntry>;
+    play_addr?: { url_list?: unknown };
+    download_addr?: { url_list?: unknown };
+    bit_rate?: unknown;
   };
   music?: { duration?: number; video_duration?: number };
   is_ads?: boolean;
 }
 
-interface SearchItem {
-  aweme_info?: AwemeInfo;
-}
-
 interface VideoDetail {
   video?: {
     duration?: number;
-    play_addr?: PlayAddr;
-    bit_rate?: BitRateEntry[] | Record<string, BitRateEntry>;
+    play_addr?: { url_list?: unknown };
+    download_addr?: { url_list?: unknown };
+    bit_rate?: unknown;
   };
   duration?: number;
   music?: { duration?: number; video_duration?: number };
 }
 
+// Safely extract a string array from TikTok's url_list (real array or {"0":"url",...} object)
+function extractUrls(urlList: unknown): string[] {
+  if (!urlList) return [];
+  const raw = Array.isArray(urlList) ? urlList : Object.values(urlList as Record<string, unknown>);
+  return raw.filter((u): u is string => typeof u === "string" && u.length > 0);
+}
+
+// Safely extract BitRateEntry array from TikTok's bit_rate (real array or {"0":{...},...} object)
+function extractBitRates(bitRate: unknown): BitRateEntry[] {
+  if (!bitRate) return [];
+  const raw = Array.isArray(bitRate) ? bitRate : Object.values(bitRate as Record<string, unknown>);
+  return raw.filter((e): e is BitRateEntry => !!e && typeof e === "object");
+}
+
+// Normalize duration: TikTok API sometimes returns milliseconds (> 600 means implausibly long in seconds)
 function normalizeDuration(d: number): number {
-  // TikTok API sometimes returns milliseconds; values > 600 are implausibly long in seconds
   return d > 600 ? Math.round(d / 1000) : d;
 }
 
-function toArray<T>(v: T[] | Record<string, T> | undefined): T[] {
-  if (!v) return [];
-  return Array.isArray(v) ? v : Object.values(v);
-}
+// Pick best MP4 URL, preferring tiktokv.us (serves H.264) over CDN URLs (may be H.265/HEVC)
+function pickMp4(video: AwemeInfo["video"] | VideoDetail["video"], log?: SimpleLogger): string | undefined {
+  if (!video) return undefined;
 
-// Prefer tiktokv.us direct-play URLs (H.264, OBS-compatible) over CDN URLs (may be H.265)
-function pickMp4(bitRates: BitRateEntry[], playAddr?: PlayAddr, downloadAddr?: PlayAddr, log?: SimpleLogger): string | undefined {
-  const allUrls: string[] = [];
-  for (const e of bitRates) allUrls.push(...toArray(e.play_addr?.url_list));
-  allUrls.push(...toArray(playAddr?.url_list));
-  allUrls.push(...toArray(downloadAddr?.url_list));
+  const bitRates = extractBitRates(video.bit_rate);
+  const allCandidates: Array<{ url: string; codec_type?: number; source: string }> = [];
 
-  log?.info({
-    bitRateCount: bitRates.length,
-    codecTypes: bitRates.map(e => e.codec_type),
-    allUrlDomains: allUrls.map(u => { try { return new URL(u).hostname; } catch { return "?"; } })
-  }, "SociaVault available streams");
-
-  // 1. download_addr tiktokv.us (H.264 download endpoint)
-  const dlDirect = toArray(downloadAddr?.url_list).find(u => u.includes("tiktokv."));
-  if (dlDirect) return dlDirect;
-
-  // 2. bit_rate with codec_type 0 (H.264), prefer tiktokv.us URL within it
   for (const e of bitRates) {
-    if (e.codec_type === 0) {
-      const urls = toArray(e.play_addr?.url_list);
-      return urls.find(u => u.includes("tiktokv.")) ?? urls[0];
+    for (const url of extractUrls(e.play_addr?.url_list)) {
+      allCandidates.push({ url, codec_type: e.codec_type, source: "bit_rate" });
     }
   }
+  for (const url of extractUrls(video.play_addr?.url_list)) {
+    allCandidates.push({ url, source: "play_addr" });
+  }
+  for (const url of extractUrls(video.download_addr?.url_list)) {
+    allCandidates.push({ url, source: "download_addr" });
+  }
 
-  // 3. Any tiktokv.us URL from play_addr or bit_rate
-  const direct = allUrls.find(u => u.includes("tiktokv."));
-  if (direct) return direct;
+  if (log) {
+    log.info({
+      bitRateCount: bitRates.length,
+      codecTypes: bitRates.map(e => e.codec_type),
+      candidateCount: allCandidates.length,
+      hasTiktokv: allCandidates.some(c => c.url.includes("tiktokv.")),
+      hasH264: allCandidates.some(c => c.codec_type === 0),
+    }, "SociaVault available streams");
+  }
 
+  if (!allCandidates.length) return undefined;
+
+  // 1. H.264 (codec_type 0) with tiktokv.us
+  for (const c of allCandidates) {
+    if (c.codec_type === 0 && c.url.includes("tiktokv.")) return c.url;
+  }
+  // 2. Any tiktokv.us URL (direct endpoint, usually H.264 compatible)
+  const direct = allCandidates.find(c => c.url.includes("tiktokv."));
+  if (direct) return direct.url;
+  // 3. H.264 by codec_type only
+  const h264 = allCandidates.find(c => c.codec_type === 0);
+  if (h264) return h264.url;
   // 4. Last bit_rate entry (lowest quality, more likely H.264)
-  const last = bitRates[bitRates.length - 1];
-  if (last) return toArray(last.play_addr?.url_list)[0];
-
-  return toArray(playAddr?.url_list)[0];
+  const lastBr = [...allCandidates].reverse().find(c => c.source === "bit_rate");
+  if (lastBr) return lastBr.url;
+  // 5. Any candidate
+  return allCandidates[0].url;
 }
 
-function resolveFromAweme(aweme: AwemeInfo | VideoDetail, log?: SimpleLogger, label?: string): TiktokResolved | null {
-  const vid = aweme.video;
-  const bitRates = toArray(vid?.bit_rate);
-  const mp4 = pickMp4(bitRates, vid?.play_addr, (aweme as AwemeInfo).video?.download_addr, log);
-  if (!mp4) return null;
-
-  const rawDuration =
-    vid?.duration ??
-    (aweme as AwemeInfo).music?.video_duration ??
-    (aweme as AwemeInfo).music?.duration ??
-    (aweme as VideoDetail).duration ?? 0;
-  const durationSeconds = normalizeDuration(rawDuration);
-
-  log?.info({ label, durationSeconds, url: mp4.slice(0, 80) }, "SociaVault mp4 resolved");
-  return { url: mp4, durationSeconds, portrait: true };
+function getDuration(video?: AwemeInfo["video"] | VideoDetail["video"], music?: { duration?: number; video_duration?: number }, fallbackDuration?: number): number {
+  const raw = video?.duration ?? music?.video_duration ?? music?.duration ?? fallbackDuration ?? 0;
+  return normalizeDuration(raw);
 }
 
 async function fetchVideoInfo(tiktokUrl: string, apiKey: string, log?: SimpleLogger): Promise<TiktokResolved | null> {
@@ -134,15 +136,19 @@ async function fetchVideoInfo(tiktokUrl: string, apiKey: string, log?: SimpleLog
   const data = (await res.json()) as { data?: { aweme_detail?: VideoDetail } };
   const d = data.data?.aweme_detail;
   if (!d) {
-    log?.warn({ tiktokUrl, data: JSON.stringify(data).slice(0, 200) }, "SociaVault video-info: no aweme_detail");
+    log?.warn({ tiktokUrl, keys: Object.keys(data.data ?? {}) }, "SociaVault video-info: no aweme_detail");
     return null;
   }
 
-  const result = resolveFromAweme(d, log, "video-info");
-  if (!result) {
-    log?.warn({ tiktokUrl, video: JSON.stringify(d.video).slice(0, 200) }, "SociaVault video-info: no mp4 url");
+  const mp4 = pickMp4(d.video, log);
+  if (!mp4) {
+    log?.warn({ tiktokUrl }, "SociaVault video-info: no mp4 url found");
+    return null;
   }
-  return result;
+
+  const durationSeconds = getDuration(d.video, d.music, d.duration);
+  log?.info({ tiktokUrl, durationSeconds }, "SociaVault video-info resolved");
+  return { url: mp4, durationSeconds, portrait: true };
 }
 
 export async function sociavaultSearch(
@@ -168,51 +174,49 @@ export async function sociavaultSearch(
     return null;
   }
 
-  const data = (await res.json()) as { data?: { search_item_list?: Record<string, SearchItem> } };
-  const items = toArray(data.data?.search_item_list);
-  const videos = items.map(i => i.aweme_info).filter((a): a is AwemeInfo => !!a);
-  log?.info({ query, count: videos.length }, "SociaVault search raw results");
-  if (!videos.length) return null;
+  const data = (await res.json()) as { data?: { search_item_list?: unknown } };
+  const rawItems = data.data?.search_item_list;
+  const items: AwemeInfo[] = (Array.isArray(rawItems) ? rawItems : Object.values(rawItems as Record<string, unknown> ?? {}))
+    .map((i: unknown) => (i as { aweme_info?: AwemeInfo })?.aweme_info)
+    .filter((a): a is AwemeInfo => !!a && typeof a === "object");
 
-  function duration(v: AwemeInfo) {
-    const d = v.video?.duration ?? v.music?.video_duration ?? v.music?.duration ?? 0;
-    return normalizeDuration(d);
+  log?.info({ query, count: items.length }, "SociaVault search raw results");
+  if (!items.length) return null;
+
+  function videoDuration(v: AwemeInfo): number {
+    return getDuration(v.video, v.music);
   }
 
-  function valid(v: AwemeInfo) {
-    return !v.is_ads && !!v.aweme_id && !!v.author?.unique_id && duration(v) > 0;
+  function valid(v: AwemeInfo): boolean {
+    return !v.is_ads && !!v.aweme_id && !!v.author?.unique_id;
   }
 
-  let chosen = videos.find(v => valid(v) && duration(v) <= ceiling);
-  if (!chosen) chosen = videos.find(v => valid(v));
+  // Prefer valid videos within ceiling, otherwise any valid video
+  let chosen = items.find(v => valid(v) && videoDuration(v) > 0 && videoDuration(v) <= ceiling);
+  if (!chosen) chosen = items.find(v => valid(v));
   if (!chosen) {
-    log?.warn({ query, sample: JSON.stringify(videos[0]).slice(0, 200) }, "SociaVault search: no valid video found");
+    log?.warn({ query }, "SociaVault search: no valid video found");
     return null;
   }
 
-  log?.info({ aweme_id: chosen.aweme_id, author: chosen.author?.unique_id, duration: duration(chosen), desc: chosen.desc?.slice(0, 80) }, "SociaVault chosen video");
+  const dur = videoDuration(chosen);
+  log?.info({ aweme_id: chosen.aweme_id, author: chosen.author!.unique_id, duration: dur, desc: chosen.desc?.slice(0, 80) }, "SociaVault chosen video");
 
   // Try to extract MP4 directly from search result (saves the video-info API call)
-  const direct = resolveFromAweme(chosen, log, "search-direct");
-  if (direct) {
-    return {
-      ...direct,
-      durationSeconds: direct.durationSeconds || duration(chosen) || 15,
-      title: `@${chosen.author!.unique_id}`
-    };
+  const mp4 = pickMp4(chosen.video, log);
+  if (mp4) {
+    const durationSeconds = dur || 15;
+    log?.info({ source: "search-direct", durationSeconds }, "SociaVault URL resolved without video-info call");
+    return { url: mp4, durationSeconds, portrait: true, title: `@${chosen.author!.unique_id}` };
   }
 
-  // Fallback: call video-info endpoint (costs an extra credit)
-  log?.warn({ aweme_id: chosen.aweme_id }, "SociaVault search: no direct URL, falling back to video-info");
+  // Fallback: call video-info endpoint
+  log?.warn({ aweme_id: chosen.aweme_id }, "SociaVault: no direct URL in search result, calling video-info");
   const tiktokUrl = `https://www.tiktok.com/@${chosen.author!.unique_id}/video/${chosen.aweme_id}`;
   const resolved = await fetchVideoInfo(tiktokUrl, apiKey, log);
   if (!resolved) return null;
 
-  return {
-    ...resolved,
-    durationSeconds: resolved.durationSeconds || duration(chosen) || 15,
-    title: `@${chosen.author!.unique_id}`
-  };
+  return { ...resolved, durationSeconds: resolved.durationSeconds || dur || 15, title: `@${chosen.author!.unique_id}` };
 }
 
 export async function sociavaultResolve(
