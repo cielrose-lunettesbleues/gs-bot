@@ -20,6 +20,8 @@ async function searchIds(query: string, order: "relevance" | "viewCount", apiKey
     videoDuration: "short",
     videoEmbeddable: "true",
     safeSearch: "none",
+    regionCode: "FR",
+    relevanceLanguage: "fr",
     order,
     q: query,
     maxResults: "25",
