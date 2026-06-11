@@ -27,10 +27,15 @@ interface SearchItem {
   aweme_info?: AwemeInfo;
 }
 
+interface BitRateEntry {
+  codec_type?: number; // 0 = H.264/AVC, 2 = H.265/HEVC
+  play_addr?: { url_list?: string[] | Record<string, string> };
+}
+
 interface VideoDetail {
   video?: {
     duration?: number;
-    bit_rate?: Array<{ play_addr?: { url_list?: string[] | Record<string, string> } }>;
+    bit_rate?: BitRateEntry[];
   };
   duration?: number;
   music?: { duration?: number; video_duration?: number };
@@ -59,10 +64,18 @@ async function fetchVideoInfo(tiktokUrl: string, apiKey: string, log?: SimpleLog
     return null;
   }
 
-  const rawUrlList = d.video?.bit_rate?.[0]?.play_addr?.url_list;
-  const mp4 = Array.isArray(rawUrlList)
-    ? rawUrlList[0]
-    : rawUrlList ? Object.values(rawUrlList)[0] : undefined;
+  function firstUrl(entry: BitRateEntry): string | undefined {
+    const list = entry.play_addr?.url_list;
+    if (!list) return undefined;
+    return Array.isArray(list) ? list[0] : Object.values(list)[0];
+  }
+
+  const bitRates = d.video?.bit_rate ?? [];
+  // Prefer H.264 (codec_type 0) for OBS Chromium compatibility; H.265 (codec_type 2) won't render
+  const h264 = bitRates.find(e => e.codec_type === 0);
+  const chosen = h264 ?? bitRates[bitRates.length - 1];
+  const mp4 = chosen ? firstUrl(chosen) : undefined;
+  log?.info({ tiktokUrl, codec_type: chosen?.codec_type, totalEntries: bitRates.length }, "SociaVault bit_rate selected");
   if (!mp4) {
     log?.warn({ tiktokUrl, video: JSON.stringify(d.video).slice(0, 200) }, "SociaVault video-info: no mp4 url");
     return null;
