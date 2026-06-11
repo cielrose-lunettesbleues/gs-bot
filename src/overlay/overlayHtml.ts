@@ -125,11 +125,6 @@ iframe{
     return m ? m[1] : null;
   }
 
-  function tkId(url){
-    var m = url.match(/tiktok\\.com\\/@[^/]+\\/video\\/(\\d+)/) || url.match(/tiktok\\.com\\/v\\/(\\d+)/);
-    return m ? m[1] : null;
-  }
-
   // Listen for YouTube state changes (enablejsapi=1 sends postMessage to parent)
   // info === 0 means ended
   window.addEventListener('message', function(ev){
@@ -140,7 +135,7 @@ iframe{
     } catch(e){}
   });
 
-  function buildMedia(url){
+  function buildMedia(url, portrait){
     var id = ytId(url);
     if(id){
       var isShort = /youtube\\.com\\/shorts\\//.test(url);
@@ -166,25 +161,6 @@ iframe{
       }
       return w;
     }
-    var tk=tkId(url);
-    if(tk){
-      var c=document.createElement('div');
-      c.className='tk-short-inner';
-      fetch('https://www.tikwm.com/api/?url='+encodeURIComponent(url))
-        .then(function(r){return r.json();})
-        .then(function(d){
-          if(d.code===0&&d.data&&d.data.play){
-            var v=document.createElement('video');
-            v.src=d.data.play;
-            v.autoplay=true;
-            v.playsInline=true;
-            v.addEventListener('ended',hide);
-            c.appendChild(v);
-          }
-        })
-        .catch(function(){});
-      return c;
-    }
     if(/\\.(gif|png|jpg|jpeg|webp)(\\?.*)?$/i.test(url)){
       var i=document.createElement('img');
       i.src=url;
@@ -195,6 +171,12 @@ iframe{
     v.autoplay=true;
     v.playsInline=true;
     v.addEventListener('ended', hide);
+    if(portrait){
+      var c=document.createElement('div');
+      c.className='tk-short-inner';
+      c.appendChild(v);
+      return c;
+    }
     return v;
   }
 
@@ -203,7 +185,7 @@ iframe{
   function show(data){
     if(hideTimer){ clearTimeout(hideTimer); hideTimer=null; }
     mediaEl.innerHTML='';
-    mediaEl.appendChild(buildMedia(data.url));
+    mediaEl.appendChild(buildMedia(data.url, data.portrait));
     requestAnimationFrame(function(){wrap.classList.add('visible');});
     if(showInfo){
       infoUser.textContent='@'+data.username;

@@ -61,6 +61,7 @@ export function createGreenScreenCommand(deps: CommandDependencies, commandName:
 
       let videoUrl: string;
       let playDuration = deps.config.playback.durationSeconds;
+      let portrait: boolean | undefined;
 
       if (URL_RE.test(firstArg)) {
         // ── URL mode ────────────────────────────────────────────────────────
@@ -70,19 +71,35 @@ export function createGreenScreenCommand(deps: CommandDependencies, commandName:
           return;
         }
 
-        videoUrl = await resolveMediaUrl(firstArg);
-
-        if (deps.youtubeDurationValidator) {
-          const durationCheck = await deps.youtubeDurationValidator.check(firstArg);
-          if (!durationCheck.allowed) {
-            if (durationCheck.reason === "video_not_found") {
-              await context.reply(`@${context.user.username} Vidéo introuvable.`);
-            } else {
-              await context.reply(
-                `@${context.user.username} Vidéo trop longue (${durationCheck.durationSeconds ?? "?"}s).`
-              );
-            }
+        if (/tiktok\.com/i.test(firstArg)) {
+          if (!deps.tiktokResolve) {
+            await context.reply(`@${context.user.username} Résolution TikTok non configurée.`);
             return;
+          }
+          if (feedback) await context.reply(`@${context.user.username} Résolution TikTok en cours...`);
+          const resolved = await deps.tiktokResolve(firstArg);
+          if (!resolved) {
+            await context.reply(`@${context.user.username} Impossible de résoudre cette URL TikTok.`);
+            return;
+          }
+          videoUrl = resolved.url;
+          playDuration = resolved.durationSeconds || playDuration;
+          portrait = resolved.portrait;
+        } else {
+          videoUrl = await resolveMediaUrl(firstArg);
+
+          if (deps.youtubeDurationValidator) {
+            const durationCheck = await deps.youtubeDurationValidator.check(firstArg);
+            if (!durationCheck.allowed) {
+              if (durationCheck.reason === "video_not_found") {
+                await context.reply(`@${context.user.username} Vidéo introuvable.`);
+              } else {
+                await context.reply(
+                  `@${context.user.username} Vidéo trop longue (${durationCheck.durationSeconds ?? "?"}s).`
+                );
+              }
+              return;
+            }
           }
         }
       } else {
@@ -113,20 +130,24 @@ export function createGreenScreenCommand(deps: CommandDependencies, commandName:
           );
         } else {
           // ── Video search (TikTok preferred, YouTube fallback) ──────────
-          const searcher = deps.tiktokSearch ?? deps.youtubeSearch;
-          if (!searcher) {
+          if (!deps.tiktokSearch && !deps.youtubeSearch) {
             await context.reply(`@${context.user.username} Recherche vidéo non configurée.`);
             return;
           }
           const query = mainArgs.join(" ");
           if (feedback) await context.reply(`@${context.user.username} Recherche en cours...`);
-          const searchResult = await searcher(query, deps.config.validation.maxDurationSeconds);
+          const maxDuration = deps.config.validation.maxDurationSeconds;
+          let searchResult = deps.tiktokSearch ? await deps.tiktokSearch(query, maxDuration) : null;
+          if (!searchResult && deps.youtubeSearch) {
+            searchResult = await deps.youtubeSearch(query, maxDuration);
+          }
           if (!searchResult) {
             if (feedback) await context.reply(`@${context.user.username} Aucune vidéo trouvée pour "${query}".`);
             return;
           }
           videoUrl = searchResult.url;
           playDuration = searchResult.durationSeconds;
+          portrait = searchResult.portrait;
           deps.logger.info(
             { username: context.user.username, query, url: videoUrl, title: searchResult.title, durationSeconds: playDuration },
             "Video search result found"
@@ -142,6 +163,7 @@ export function createGreenScreenCommand(deps: CommandDependencies, commandName:
             durationSeconds: playDuration,
             username: context.user.username,
             caption,
+            portrait,
             userReply: context.reply
           },
           context.reply
@@ -154,6 +176,7 @@ export function createGreenScreenCommand(deps: CommandDependencies, commandName:
         durationSeconds: playDuration,
         username: context.user.username,
         caption,
+        portrait,
         reply: context.reply
       });
 

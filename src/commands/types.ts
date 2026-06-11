@@ -35,12 +35,13 @@ export interface CommandDependencies {
   blacklistService: IBlacklistService;
   historyService: IHistoryService;
   youtubeDurationValidator?: { check: (url: string) => Promise<DurationCheckResult> };
-  youtubeSearch?: (query: string, maxDurationSeconds: number) => Promise<{ url: string; title: string; durationSeconds: number } | null>;
-  tiktokSearch?: (query: string, maxDurationSeconds: number) => Promise<{ url: string; title: string; durationSeconds: number } | null>;
+  youtubeSearch?: (query: string, maxDurationSeconds: number) => Promise<{ url: string; title: string; durationSeconds: number; portrait?: boolean } | null>;
+  tiktokSearch?: (query: string, maxDurationSeconds: number) => Promise<{ url: string; title: string; durationSeconds: number; portrait?: boolean } | null>;
+  tiktokResolve?: (url: string) => Promise<{ url: string; durationSeconds: number; portrait: boolean } | null>;
   gifSearch?: (query: string) => Promise<{ url: string; title: string } | null>;
   approvalService?: {
     config: { enabled: boolean };
-    submit: (item: { url: string; durationSeconds: number; username: string; caption?: string; userReply: (msg: string) => Promise<void> }, channelNotify: (msg: string) => Promise<void>) => Promise<void>;
+    submit: (item: { url: string; durationSeconds: number; username: string; caption?: string; portrait?: boolean; userReply: (msg: string) => Promise<void> }, channelNotify: (msg: string) => Promise<void>) => Promise<void>;
   };
   adminService?: AdminService;
   config: {

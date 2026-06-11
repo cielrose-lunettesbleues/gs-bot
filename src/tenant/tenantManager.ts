@@ -17,7 +17,7 @@ import { TwitchBotManager } from "../twitch/twitchBotManager";
 import { MockObsSourceController } from "../obs/mockObsSourceController";
 import { createRuntimeState } from "../state/runtimeState";
 import { searchShortVideo } from "../media/youtubeSearch";
-import { searchTiktokVideo } from "../media/tiktokSearch";
+import { sociavaultSearch, sociavaultResolve } from "../media/sociavaultClient";
 import { searchGif } from "../media/klipySearch";
 
 // The mutable runtime config that all tenant services share via reference
@@ -77,7 +77,8 @@ export class TenantManager {
     private readonly db: Database,
     private readonly logger: Logger,
     private readonly youtubeApiKey?: string,
-    private readonly klipyApiKey?: string
+    private readonly klipyApiKey?: string,
+    private readonly sociavaultApiKey?: string
   ) {}
 
   getOrCreate(userId: number): TenantServices {
@@ -120,7 +121,12 @@ export class TenantManager {
       blacklistService,
       historyService,
       youtubeDurationValidator: undefined,
-      tiktokSearch: (query: string, maxDuration: number) => searchTiktokVideo(query, maxDuration),
+      tiktokSearch: this.sociavaultApiKey
+        ? (query: string, maxDuration: number) => sociavaultSearch(query, maxDuration, this.sociavaultApiKey!)
+        : undefined,
+      tiktokResolve: this.sociavaultApiKey
+        ? (url: string) => sociavaultResolve(url, this.sociavaultApiKey!)
+        : undefined,
       youtubeSearch: this.youtubeApiKey
         ? (query: string, maxDuration: number) => searchShortVideo(query, maxDuration, this.youtubeApiKey!)
         : undefined,
