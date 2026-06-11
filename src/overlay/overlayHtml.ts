@@ -34,7 +34,16 @@ video,img{
   border:none;
   pointer-events:none;
 }
-/* Shorts: centred 9:16 column, transparent sides */
+/*
+ * Shorts: centred 9:16 column. YouTube always renders internally in 16:9,
+ * pillarboxing the portrait video — so the sides can never be truly empty.
+ * Fix: blurred + darkened thumbnail fills the 16:9 canvas (same as TikTok/Reels).
+ */
+.yt-short-bg{
+  position:absolute;inset:-5%;
+  background-size:cover;background-position:center;
+  filter:blur(24px) brightness(.4);
+}
 .yt-short-inner{
   position:absolute;
   top:0;bottom:0;height:100%;
@@ -146,15 +155,20 @@ iframe{
         +'&enablejsapi=1&origin='+encodeURIComponent(location.origin)
         +'&iv_load_policy=3&disablekb=1&loop=1&playlist='+id;
       f.allow='autoplay; fullscreen';
+      var w=document.createElement('div');
+      w.className='yt-wrap';
       if(isShort){
+        var bg=document.createElement('div');
+        bg.className='yt-short-bg';
+        bg.style.backgroundImage='url(https://img.youtube.com/vi/'+id+'/maxresdefault.jpg)';
+        w.appendChild(bg);
         var inner=document.createElement('div');
         inner.className='yt-short-inner';
         inner.appendChild(f);
-        return inner;
+        w.appendChild(inner);
+      } else {
+        w.appendChild(f);
       }
-      var w=document.createElement('div');
-      w.className='yt-wrap';
-      w.appendChild(f);
       return w;
     }
     var tk=tkId(url);

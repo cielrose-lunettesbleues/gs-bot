@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS tenant_configs (
   queue_max_size             INTEGER NOT NULL DEFAULT 3,
   duration_seconds           INTEGER NOT NULL DEFAULT 30,
   chat_feedback              INTEGER NOT NULL DEFAULT 1,
-  allowed_domains            TEXT    NOT NULL DEFAULT 'youtube.com,youtu.be,streamable.com,tenor.com,giphy.com',
+  allowed_domains            TEXT    NOT NULL DEFAULT 'youtube.com,youtu.be,streamable.com,tenor.com,giphy.com,klipy.com,tiktok.com',
   allow_direct_files         INTEGER NOT NULL DEFAULT 1,
   allowed_file_extensions    TEXT    NOT NULL DEFAULT '.mp4,.webm,.mov',
   max_video_duration_seconds INTEGER NOT NULL DEFAULT 0
@@ -65,10 +65,17 @@ CREATE TABLE IF NOT EXISTS blacklist (
 );
 `;
 
+const MIGRATIONS = [
+  // Add klipy.com and tiktok.com to existing tenant rows that predate these domains
+  `UPDATE tenant_configs SET allowed_domains = allowed_domains || ',klipy.com'  WHERE allowed_domains NOT LIKE '%klipy.com%'`,
+  `UPDATE tenant_configs SET allowed_domains = allowed_domains || ',tiktok.com' WHERE allowed_domains NOT LIKE '%tiktok.com%'`,
+];
+
 export function openDatabase(dataDir: string): Database {
   fs.mkdirSync(dataDir, { recursive: true });
   const db = new BetterSqlite3(path.join(dataDir, "gs.sqlite"));
   db.exec(SCHEMA);
+  for (const sql of MIGRATIONS) db.prepare(sql).run();
   return db;
 }
 
