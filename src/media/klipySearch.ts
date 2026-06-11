@@ -8,32 +8,26 @@ export interface KlipySearchResult {
 export async function searchGif(query: string, apiKey: string): Promise<KlipySearchResult | null> {
   const params = new URLSearchParams({ q: query, per_page: "1" });
   const res = await fetch(`${KLIPY_API}/${encodeURIComponent(apiKey)}/gifs/search?${params}`);
+  if (!res.ok) return null;
 
-  const bodyText = await res.text();
-  if (!res.ok) {
-    console.error("[klipySearch] HTTP", res.status, bodyText);
-    return null;
-  }
+  const data = (await res.json()) as {
+    result?: boolean;
+    data?: {
+      data?: Array<{
+        title?: string;
+        file?: {
+          hd?: { gif?: { url?: string } };
+          sd?: { gif?: { url?: string } };
+        };
+      }>;
+    };
+  };
 
-  let data: unknown;
-  try {
-    data = JSON.parse(bodyText);
-  } catch {
-    console.error("[klipySearch] JSON parse error:", bodyText);
-    return null;
-  }
-
-  console.log("[klipySearch] response:", JSON.stringify(data).slice(0, 300));
-
-  const item = Array.isArray(data) ? data[0] : undefined;
+  const item = data.data?.data?.[0];
   if (!item) return null;
 
-  const url = (item as { src?: string; proxy_src?: string }).src
-    ?? (item as { src?: string; proxy_src?: string }).proxy_src;
+  const url = item.file?.hd?.gif?.url ?? item.file?.sd?.gif?.url;
   if (!url) return null;
 
-  return {
-    url,
-    title: (item as { title?: string }).title || query
-  };
+  return { url, title: item.title || query };
 }
