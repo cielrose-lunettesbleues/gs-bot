@@ -128,16 +128,15 @@ iframe{
         +'&enablejsapi=1&origin='+encodeURIComponent(location.origin)
         +'&iv_load_policy=3&disablekb=1&loop=1&playlist='+id;
       f.allow='autoplay; fullscreen';
-      var w=document.createElement('div');
-      w.className='yt-wrap';
       if(isShort){
         var inner=document.createElement('div');
         inner.className='yt-short-inner';
         inner.appendChild(f);
-        w.appendChild(inner);
-      } else {
-        w.appendChild(f);
+        return inner;
       }
+      var w=document.createElement('div');
+      w.className='yt-wrap';
+      w.appendChild(f);
       return w;
     }
     if(/\\.(gif|png|jpg|jpeg|webp)(\\?.*)?$/i.test(url)){
