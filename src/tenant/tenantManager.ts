@@ -121,9 +121,7 @@ export class TenantManager {
       blacklistService,
       historyService,
       youtubeDurationValidator: undefined,
-      tiktokSearch: this.sociavaultApiKey
-        ? (query: string, maxDuration: number) => sociavaultSearch(query, maxDuration, this.sociavaultApiKey!, this.logger)
-        : undefined,
+      tiktokSearch: undefined,
       tiktokResolve: this.sociavaultApiKey
         ? (url: string) => sociavaultResolve(url, this.sociavaultApiKey!, this.logger)
         : undefined,

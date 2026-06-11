@@ -129,28 +129,14 @@ export function createGreenScreenCommand(deps: CommandDependencies, commandName:
             "Tenor GIF search result found"
           );
         } else {
-          // ── Video search (TikTok preferred, YouTube fallback) ──────────
-          if (!deps.tiktokSearch && !deps.youtubeSearch) {
+          // ── Video search via YouTube ───────────────────────────────────
+          if (!deps.youtubeSearch) {
             await context.reply(`@${context.user.username} Recherche vidéo non configurée.`);
             return;
           }
           const query = mainArgs.join(" ");
           if (feedback) await context.reply(`@${context.user.username} Recherche en cours...`);
-          const maxDuration = deps.config.validation.maxDurationSeconds;
-          let searchResult = null;
-          let searchSource = "none";
-          if (deps.tiktokSearch) {
-            searchResult = await deps.tiktokSearch(query, maxDuration);
-            if (searchResult) {
-              searchSource = "tiktok";
-            } else {
-              deps.logger.warn({ username: context.user.username, query }, "TikTok search returned null, falling back to YouTube");
-            }
-          }
-          if (!searchResult && deps.youtubeSearch) {
-            searchResult = await deps.youtubeSearch(query, maxDuration);
-            if (searchResult) searchSource = "youtube";
-          }
+          const searchResult = await deps.youtubeSearch(query, deps.config.validation.maxDurationSeconds);
           if (!searchResult) {
             if (feedback) await context.reply(`@${context.user.username} Aucune vidéo trouvée pour "${query}".`);
             return;
@@ -159,7 +145,7 @@ export function createGreenScreenCommand(deps: CommandDependencies, commandName:
           playDuration = searchResult.durationSeconds;
           portrait = searchResult.portrait;
           deps.logger.info(
-            { username: context.user.username, query, url: videoUrl, title: searchResult.title, durationSeconds: playDuration, source: searchSource },
+            { username: context.user.username, query, url: videoUrl, title: searchResult.title, durationSeconds: playDuration },
             "Video search result found"
           );
         }
