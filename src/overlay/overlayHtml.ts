@@ -10,6 +10,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:transparent}
   position:absolute;inset:0;
   opacity:0;transition:opacity .4s ease;
   display:flex;align-items:center;justify-content:center;
+  background:transparent;
 }
 #wrap.visible{opacity:1}
 video,img{
@@ -23,6 +24,7 @@ video,img{
 .yt-wrap{
   position:absolute;inset:0;
   overflow:hidden;
+  background:transparent;
 }
 /* iframe 12% oversized so the chrome (title bar, borders) is cropped */
 .yt-wrap iframe{

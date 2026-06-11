@@ -27,9 +27,11 @@ export function createGreenScreenCommand(deps: CommandDependencies, commandName:
       }
       const mainArgs = mainInput ? mainInput.split(/\s+/) : [];
 
+      const feedback = deps.config.playback.chatFeedback !== false;
+
       const firstArg = mainArgs[0];
       if (!firstArg) {
-        await context.reply(`@${context.user.username} Usage : ${commandName} <url> ou ${commandName} <mots clés> [| texte]`);
+        if (feedback) await context.reply(`@${context.user.username} Usage : ${commandName} <url> ou ${commandName} <mots clés> [| texte]`);
         return;
       }
 
@@ -98,10 +100,10 @@ export function createGreenScreenCommand(deps: CommandDependencies, commandName:
             await context.reply(`@${context.user.username} Usage : ${commandName} gif <mots clés>`);
             return;
           }
-          await context.reply(`@${context.user.username} Recherche GIF en cours...`);
+          if (feedback) await context.reply(`@${context.user.username} Recherche GIF en cours...`);
           const gifResult = await deps.gifSearch(gifQuery);
           if (!gifResult) {
-            await context.reply(`@${context.user.username} Aucun GIF trouvé pour "${gifQuery}".`);
+            if (feedback) await context.reply(`@${context.user.username} Aucun GIF trouvé pour "${gifQuery}".`);
             return;
           }
           videoUrl = gifResult.url;
@@ -116,10 +118,10 @@ export function createGreenScreenCommand(deps: CommandDependencies, commandName:
             return;
           }
           const query = mainArgs.join(" ");
-          await context.reply(`@${context.user.username} Recherche YouTube en cours...`);
+          if (feedback) await context.reply(`@${context.user.username} Recherche YouTube en cours...`);
           const searchResult = await deps.youtubeSearch(query, deps.config.validation.maxDurationSeconds);
           if (!searchResult) {
-            await context.reply(`@${context.user.username} Aucune vidéo courte trouvée pour "${query}".`);
+            if (feedback) await context.reply(`@${context.user.username} Aucune vidéo courte trouvée pour "${query}".`);
             return;
           }
           videoUrl = searchResult.url;
@@ -154,33 +156,27 @@ export function createGreenScreenCommand(deps: CommandDependencies, commandName:
         reply: context.reply
       });
 
-      const feedback = deps.config.playback.chatFeedback !== false;
-
-      switch (result.status) {
-        case "playing":
-          if (feedback) {
-            await context.reply(
-              `@${context.user.username} En cours (${playDuration}s).`
-            );
-          }
-          break;
-        case "queued":
-          await context.reply(
-            `@${context.user.username} En attente (position ${result.position}).`
-          );
-          break;
-        case "replaced":
-          if (feedback) {
+      if (feedback) {
+        switch (result.status) {
+          case "playing":
+            await context.reply(`@${context.user.username} En cours (${playDuration}s).`);
+            break;
+          case "queued":
+            await context.reply(`@${context.user.username} En attente (position ${result.position}).`);
+            break;
+          case "replaced":
             await context.reply(`@${context.user.username} URL remplacée.`);
-          }
-          break;
-        case "dropped":
-          if (result.reason === "full") {
-            await context.reply(`@${context.user.username} File d'attente pleine.`);
-          } else {
-            await context.reply(`@${context.user.username} Commande en cours, réessayez plus tard.`);
-          }
-          return;
+            break;
+          case "dropped":
+            await context.reply(
+              result.reason === "full"
+                ? `@${context.user.username} File d'attente pleine.`
+                : `@${context.user.username} Commande en cours, réessayez plus tard.`
+            );
+            return;
+        }
+      } else if (result.status === "dropped") {
+        return;
       }
 
       deps.historyService.record({
