@@ -10,18 +10,13 @@ export async function searchGif(query: string, apiKey: string): Promise<KlipySea
   const res = await fetch(`${KLIPY_API}/${encodeURIComponent(apiKey)}/gifs/search?${params}`);
   if (!res.ok) return null;
 
-  const data = (await res.json()) as {
-    result?: boolean;
-    data?: {
-      data?: Array<{
-        title?: string;
-        src?: string;
-        proxy_src?: string;
-      }>;
-    };
-  };
+  const data = (await res.json()) as Array<{
+    title?: string;
+    src?: string;
+    proxy_src?: string;
+  }>;
 
-  const item = data.data?.data?.[0];
+  const item = Array.isArray(data) ? data[0] : undefined;
   if (!item) return null;
 
   const url = item.src ?? item.proxy_src;
