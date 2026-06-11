@@ -22,8 +22,9 @@ export async function searchShortVideo(
     part: "id",
     type: "video",
     videoDuration: "short",
+    order: "viewCount",
     q: query,
-    maxResults: "10",
+    maxResults: "25",
     key: apiKey
   });
 

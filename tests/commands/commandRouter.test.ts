@@ -9,7 +9,7 @@ describe("CommandRouter", () => {
     await router.route({
       channel: "#test",
       rawMessage: "!gs https://x",
-      user: { username: "u", isMod: false, isSubscriber: false },
+      user: { username: "u", isMod: false, isBroadcaster: false, isSubscriber: false },
       reply: async () => undefined
     });
 

@@ -175,6 +175,13 @@ input:checked+.slider:before{transform:translateX(18px)}
         <span class="slider"></span>
       </label>
     </div>
+    <div class="row">
+      <span class="row-label">Messages chat</span>
+      <label class="toggle" id="tog-chat-feedback">
+        <input type="checkbox" id="cfg-chat-feedback" onchange="patchConfig('chatFeedback',this.checked,this)">
+        <span class="slider"></span>
+      </label>
+    </div>
   </div>
 
   <!-- ACTIONS -->
@@ -278,6 +285,7 @@ input:checked+.slider:before{transform:translateX(18px)}
       setNumVal('cfg-cooldown-secs', cfg.cooldown.seconds);
       setNumVal('cfg-duration', cfg.playback ? cfg.playback.durationSeconds : null);
       setCheck('cfg-approval', cfg.approval.enabled);
+      setCheck('cfg-chat-feedback', cfg.playback ? cfg.playback.chatFeedback !== false : true);
 
       var q = st.queue;
       document.getElementById('queue-badge').innerHTML = q.busy

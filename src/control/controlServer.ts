@@ -22,6 +22,7 @@ interface MutableRuntimeConfig {
 interface SimulatedUser {
   username: string;
   isMod: boolean;
+  isBroadcaster: boolean;
   isSubscriber: boolean;
 }
 
@@ -246,13 +247,14 @@ export function createControlServer(
       const username = String(body.username ?? "testuser").replace(/\s/g, "").slice(0, 25) || "testuser";
       const message = String(body.message ?? "").trim();
       const isMod = body.isMod === true;
+      const isBroadcaster = body.isBroadcaster === true;
       const isSubscriber = body.isSubscriber === true;
 
       if (!message) { respondJson(res, 400, { ok: false, error: "message_required" }); return; }
 
       const replies: string[] = [];
       const context = {
-        user: { username, isMod, isSubscriber },
+        user: { username, isMod, isBroadcaster, isSubscriber },
         channel: "dashboard",
         rawMessage: message,
         reply: async (text: string) => { replies.push(text); }

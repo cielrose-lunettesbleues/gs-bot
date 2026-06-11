@@ -3,7 +3,7 @@ import { PermissionService } from "../../src/permissions/permissionService";
 
 describe("PermissionService", () => {
   const service = new PermissionService();
-  const user = { username: "u", isMod: false, isSubscriber: false };
+  const user = { username: "u", isMod: false, isBroadcaster: false, isSubscriber: false };
 
   it("denies when subOnly enabled and user not sub", () => {
     const result = service.canUseGreenScreen(user, { subOnly: true, modOnly: false });

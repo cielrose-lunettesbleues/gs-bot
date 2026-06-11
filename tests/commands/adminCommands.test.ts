@@ -6,7 +6,7 @@ function makeContext(overrides: Partial<CommandContext["user"]> = {}): CommandCo
   return {
     channel: "#test",
     rawMessage: "",
-    user: { username: "testmod", isMod: true, isSubscriber: false, ...overrides },
+    user: { username: "testmod", isMod: true, isBroadcaster: false, isSubscriber: false, ...overrides },
     reply: vi.fn(async () => undefined)
   };
 }

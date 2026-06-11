@@ -1,6 +1,7 @@
 export interface TwitchUser {
   username: string;
   isMod: boolean;
+  isBroadcaster: boolean;
   isSubscriber: boolean;
 }
 

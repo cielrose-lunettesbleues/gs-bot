@@ -230,7 +230,7 @@ export async function createApp(config: ServerConfig, logger: Logger) {
         access: cfg.access,
         cooldown: { enabled: cfg.cooldown.enabled, seconds: cfg.cooldown.seconds },
         approval: { enabled: cfg.approval.enabled },
-        playback: { durationSeconds: cfg.playback.durationSeconds }
+        playback: { durationSeconds: cfg.playback.durationSeconds, chatFeedback: cfg.playback.chatFeedback }
       },
       queue: tenant.queue.getState(),
       approval: { pendingCount: pending.length, pending },
@@ -264,6 +264,7 @@ export async function createApp(config: ServerConfig, logger: Logger) {
     if (typeof body.durationSeconds === "number" && body.durationSeconds >= 1) {
       patch.duration_seconds = Math.floor(body.durationSeconds);
     }
+    if (typeof body.chatFeedback === "boolean") patch.chat_feedback = body.chatFeedback ? 1 : 0;
     tenantManager.persistConfig(user.id, patch);
     logger.info({ userId: user.id, patch }, "Config updated");
     return c.json({ ok: true });
@@ -312,7 +313,7 @@ export async function createApp(config: ServerConfig, logger: Logger) {
 
     const replies: string[] = [];
     await tenant.router.route({
-      user: { username, isMod, isSubscriber },
+      user: { username, isMod, isBroadcaster: false, isSubscriber },
       channel: user.twitchLogin,
       rawMessage: message,
       reply: async (text) => { replies.push(text); }

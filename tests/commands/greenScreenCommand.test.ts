@@ -34,7 +34,7 @@ function makeDeps() {
 const modCtx = (username = "u", isSubscriber = true) => ({
   channel: "#c",
   rawMessage: "!gs https://youtube.com/watch?v=1",
-  user: { username, isMod: false, isSubscriber },
+  user: { username, isMod: false, isBroadcaster: false, isSubscriber },
   reply: vi.fn(async () => undefined)
 });
 
@@ -44,7 +44,7 @@ describe("greenScreenCommand", () => {
     const command = createGreenScreenCommand(deps, "!gs");
     const reply = vi.fn(async () => undefined);
     await command.execute(
-      { channel: "#c", rawMessage: "!gs", user: { username: "u", isMod: false, isSubscriber: false }, reply },
+      { channel: "#c", rawMessage: "!gs", user: { username: "u", isMod: false, isBroadcaster: false, isSubscriber: false }, reply },
       []
     );
     expect(reply).toHaveBeenCalled();

@@ -17,6 +17,7 @@ export function bindTwitchMessageHandler(
     const user: TwitchUser = {
       username: tags.username ?? "unknown",
       isMod: Boolean(tags.mod),
+      isBroadcaster: Boolean(tags.badges?.broadcaster),
       isSubscriber: Boolean(tags.subscriber)
     };
 
