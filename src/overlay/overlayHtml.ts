@@ -16,6 +16,7 @@ video,img{
   position:absolute;inset:0;
   width:100%;height:100%;
   object-fit:contain;
+  background:transparent;
   border:none;
 }
 /* YouTube wrapper: overflow:hidden clips the player chrome */
