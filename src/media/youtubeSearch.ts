@@ -23,7 +23,7 @@ async function searchIds(query: string, order: "relevance" | "viewCount", apiKey
     regionCode: "FR",
     relevanceLanguage: "fr",
     order,
-    q: query,
+    q: `${query} ref meme fr`,
     maxResults: "25",
     key: apiKey
   });
