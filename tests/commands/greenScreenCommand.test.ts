@@ -25,7 +25,7 @@ function makeDeps() {
       access: { subOnly: true, modOnly: false },
       cooldown: { enabled: true, seconds: 60 },
       playback: { durationSeconds: 15, chatFeedback: true },
-      validation: { allowedDomains: ["youtube.com"], allowDirectFiles: true, allowedFileExtensions: [".mp4"] }
+      validation: { allowedDomains: ["youtube.com"], allowDirectFiles: true, allowedFileExtensions: [".mp4"], maxDurationSeconds: 0 }
     },
     logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
   };

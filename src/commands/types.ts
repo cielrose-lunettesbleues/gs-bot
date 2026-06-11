@@ -50,6 +50,7 @@ export interface CommandDependencies {
       allowedDomains: string[];
       allowDirectFiles: boolean;
       allowedFileExtensions: string[];
+      maxDurationSeconds: number;
     };
   };
   logger: {

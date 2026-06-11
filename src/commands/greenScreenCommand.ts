@@ -117,7 +117,7 @@ export function createGreenScreenCommand(deps: CommandDependencies, commandName:
           }
           const query = mainArgs.join(" ");
           await context.reply(`@${context.user.username} Recherche YouTube en cours...`);
-          const searchResult = await deps.youtubeSearch(query, deps.config.playback.durationSeconds);
+          const searchResult = await deps.youtubeSearch(query, deps.config.validation.maxDurationSeconds);
           if (!searchResult) {
             await context.reply(`@${context.user.username} Aucune vidéo courte trouvée pour "${query}".`);
             return;
