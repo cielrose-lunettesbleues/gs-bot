@@ -24,12 +24,10 @@ export async function searchShortVideo(
   const searchParams = new URLSearchParams({
     part: "id",
     type: "video",
-    videoDuration: "short",
     videoEmbeddable: "true",
-    safeSearch: "none",
     order: "relevance",
     q: query,
-    maxResults: "25",
+    maxResults: "50",
     key: apiKey
   });
 
