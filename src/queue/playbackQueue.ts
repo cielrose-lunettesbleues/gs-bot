@@ -9,6 +9,7 @@ export interface PlaybackItem {
   url: string;
   durationSeconds: number;
   username: string;
+  caption?: string;
   reply: (message: string) => Promise<void>;
 }
 
@@ -19,7 +20,7 @@ export type EnqueueResult =
   | { status: "dropped"; reason: "busy" | "full" };
 
 export type PlaybackEvent =
-  | { type: "start"; url: string; durationSeconds: number; username: string }
+  | { type: "start"; url: string; durationSeconds: number; username: string; caption?: string }
   | { type: "stop" };
 
 interface ObsOps {
@@ -86,7 +87,7 @@ export class PlaybackQueue {
     try {
       await this.obsController.setSourceUrl(item.url);
       await this.obsController.showSource();
-      this.onEvent?.({ type: "start", url: item.url, durationSeconds: item.durationSeconds, username: item.username });
+      this.onEvent?.({ type: "start", url: item.url, durationSeconds: item.durationSeconds, username: item.username, caption: item.caption });
       this.logger.info(
         { username: item.username, url: item.url, durationSeconds: item.durationSeconds },
         "Playback started"

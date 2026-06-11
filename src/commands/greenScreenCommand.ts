@@ -13,9 +13,23 @@ export function createGreenScreenCommand(deps: CommandDependencies, commandName:
         return;
       }
 
-      const firstArg = args[0];
+      // Split on first "|" to extract optional meme caption
+      const rawInput = args.join(" ");
+      const pipeIdx = rawInput.indexOf("|");
+      let mainInput: string;
+      let caption: string | undefined;
+      if (pipeIdx !== -1) {
+        mainInput = rawInput.slice(0, pipeIdx).trim();
+        const captionRaw = rawInput.slice(pipeIdx + 1).trim();
+        caption = captionRaw || undefined;
+      } else {
+        mainInput = rawInput;
+      }
+      const mainArgs = mainInput ? mainInput.split(/\s+/) : [];
+
+      const firstArg = mainArgs[0];
       if (!firstArg) {
-        await context.reply(`@${context.user.username} Usage : ${commandName} <url> ou ${commandName} <mots clés>`);
+        await context.reply(`@${context.user.username} Usage : ${commandName} <url> ou ${commandName} <mots clés> [| texte]`);
         return;
       }
 
@@ -79,7 +93,7 @@ export function createGreenScreenCommand(deps: CommandDependencies, commandName:
             await context.reply(`@${context.user.username} Recherche GIF non configurée (clé Tenor manquante).`);
             return;
           }
-          const gifQuery = args.filter((a) => a.toLowerCase() !== "gif").join(" ").trim();
+          const gifQuery = mainArgs.filter((a) => a.toLowerCase() !== "gif").join(" ").trim();
           if (!gifQuery) {
             await context.reply(`@${context.user.username} Usage : ${commandName} gif <mots clés>`);
             return;
@@ -101,7 +115,7 @@ export function createGreenScreenCommand(deps: CommandDependencies, commandName:
             await context.reply(`@${context.user.username} Recherche YouTube non configurée (clé API manquante).`);
             return;
           }
-          const query = args.join(" ");
+          const query = mainArgs.join(" ");
           await context.reply(`@${context.user.username} Recherche YouTube en cours...`);
           const searchResult = await deps.youtubeSearch(query, deps.config.playback.durationSeconds);
           if (!searchResult) {
@@ -124,6 +138,7 @@ export function createGreenScreenCommand(deps: CommandDependencies, commandName:
             url: videoUrl,
             durationSeconds: playDuration,
             username: context.user.username,
+            caption,
             userReply: context.reply
           },
           context.reply
@@ -135,6 +150,7 @@ export function createGreenScreenCommand(deps: CommandDependencies, commandName:
         url: videoUrl,
         durationSeconds: playDuration,
         username: context.user.username,
+        caption,
         reply: context.reply
       });
 

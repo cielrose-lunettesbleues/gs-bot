@@ -9,6 +9,7 @@ interface PendingRequest {
   username: string;
   url: string;
   durationSeconds: number;
+  caption?: string;
   userReply: (msg: string) => Promise<void>;
   timeoutHandle: NodeJS.Timeout;
 }
@@ -40,7 +41,7 @@ export class ApprovalService {
   }
 
   public async submit(
-    item: { url: string; durationSeconds: number; username: string; userReply: (msg: string) => Promise<void> },
+    item: { url: string; durationSeconds: number; username: string; caption?: string; userReply: (msg: string) => Promise<void> },
     channelNotify: (msg: string) => Promise<void>
   ): Promise<void> {
     const key = item.username.toLowerCase();
@@ -84,6 +85,7 @@ export class ApprovalService {
       url: req.url,
       durationSeconds: req.durationSeconds,
       username: req.username,
+      caption: req.caption,
       reply: req.userReply
     });
 

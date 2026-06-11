@@ -60,6 +60,26 @@ iframe{
   pointer-events:none;
 }
 #info.visible{opacity:1}
+#caption{
+  position:absolute;bottom:24px;left:0;right:0;
+  text-align:center;
+  font-family:Impact,'Arial Narrow',Arial,sans-serif;
+  font-weight:bold;
+  font-size:clamp(24px,6vw,72px);
+  color:#fff;
+  text-transform:uppercase;
+  text-shadow:
+    -3px -3px 0 #000, 3px -3px 0 #000,
+    -3px  3px 0 #000, 3px  3px 0 #000,
+    -3px  0   0 #000, 3px  0   0 #000,
+     0   -3px 0 #000, 0    3px 0 #000;
+  padding:0 32px;
+  opacity:0;transition:opacity .4s;
+  pointer-events:none;
+  word-break:break-word;
+  line-height:1.1;
+}
+#caption.visible{opacity:1}
 </style>
 </head>
 <body>
@@ -67,6 +87,7 @@ iframe{
   <div id="media"></div>
 </div>
 <div id="info"><span id="info-user"></span></div>
+<div id="caption"></div>
 
 <script>
 (function(){
@@ -74,6 +95,7 @@ iframe{
   var mediaEl = document.getElementById('media');
   var info = document.getElementById('info');
   var infoUser = document.getElementById('info-user');
+  var captionEl = document.getElementById('caption');
 
   // URL params: ?info=1 to show the username bar
   var showInfo = new URLSearchParams(location.search).get('info') === '1';
@@ -139,6 +161,10 @@ iframe{
       infoUser.textContent='@'+data.username;
       info.classList.add('visible');
     }
+    if(data.caption){
+      captionEl.textContent=data.caption;
+      captionEl.classList.add('visible');
+    }
     // Client-side fallback timer for YouTube and GIFs (no native 'ended' event)
     if(data.durationSeconds && !(/\\.(mp4|webm|mov)(\\?.*)?$/i.test(data.url))){
       hideTimer=setTimeout(hide, Math.max(data.durationSeconds*1000-500, 500));
@@ -149,7 +175,8 @@ iframe{
     if(hideTimer){ clearTimeout(hideTimer); hideTimer=null; }
     wrap.classList.remove('visible');
     info.classList.remove('visible');
-    setTimeout(function(){mediaEl.innerHTML='';},500);
+    captionEl.classList.remove('visible');
+    setTimeout(function(){mediaEl.innerHTML='';captionEl.textContent='';},500);
   }
 
   function connect(){
