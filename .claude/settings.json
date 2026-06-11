@@ -16,7 +16,8 @@
       "WebFetch(domain:zuplo.com)",
       "WebFetch(domain:dev.to)",
       "WebFetch(domain:docs.fluxer.app)",
-      "WebFetch(domain:klipy.com)"
+      "WebFetch(domain:klipy.com)",
+      "Bash(npx vitest *)"
     ]
   }
 }

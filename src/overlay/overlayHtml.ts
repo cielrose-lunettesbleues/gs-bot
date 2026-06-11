@@ -49,6 +49,19 @@ video,img{
   border:none;
   pointer-events:none;
 }
+/* TikTok: same 9:16 column, no chrome crop */
+.tk-short-inner{
+  position:absolute;
+  top:0;bottom:0;height:100%;
+  width:calc(100vh * 9 / 16);
+  left:50%;transform:translateX(-50%);
+  overflow:hidden;
+}
+.tk-short-inner iframe{
+  position:absolute;inset:0;
+  width:100%;height:100%;
+  border:none;pointer-events:none;
+}
 iframe{
   position:absolute;inset:0;
   width:100%;height:100%;
@@ -108,6 +121,11 @@ iframe{
     return m ? m[1] : null;
   }
 
+  function tkId(url){
+    var m = url.match(/tiktok\\.com\\/@[^/]+\\/video\\/(\\d+)/) || url.match(/tiktok\\.com\\/v\\/(\\d+)/);
+    return m ? m[1] : null;
+  }
+
   // Listen for YouTube state changes (enablejsapi=1 sends postMessage to parent)
   // info === 0 means ended
   window.addEventListener('message', function(ev){
@@ -138,6 +156,16 @@ iframe{
       w.className='yt-wrap';
       w.appendChild(f);
       return w;
+    }
+    var tk=tkId(url);
+    if(tk){
+      var f2=document.createElement('iframe');
+      f2.src='https://www.tiktok.com/embed/v2/'+tk;
+      f2.allow='autoplay; fullscreen';
+      var c=document.createElement('div');
+      c.className='tk-short-inner';
+      c.appendChild(f2);
+      return c;
     }
     if(/\\.(gif|png|jpg|jpeg|webp)(\\?.*)?$/i.test(url)){
       var i=document.createElement('img');

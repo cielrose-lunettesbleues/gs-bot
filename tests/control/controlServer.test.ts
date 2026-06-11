@@ -370,7 +370,7 @@ describe("controlServer", () => {
     expect(body.replies).toEqual(["!gs processed for alice"]);
     expect(deps.router.route).toHaveBeenCalledWith(
       expect.objectContaining({
-        user: { username: "alice", isMod: true, isSubscriber: false },
+        user: { username: "alice", isMod: true, isBroadcaster: false, isSubscriber: false },
         channel: "dashboard",
         rawMessage: "!gs https://youtu.be/abc"
       })
