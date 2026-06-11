@@ -9,7 +9,13 @@
       "Bash(Select-Object -First 30)",
       "Bash(Format-Table FullName)",
       "Bash(grep -iE \"readme|\\\\.md$\")",
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "WebSearch",
+      "WebFetch(domain:docs.klipy.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:zuplo.com)",
+      "WebFetch(domain:dev.to)",
+      "WebFetch(domain:docs.fluxer.app)"
     ]
   }
 }

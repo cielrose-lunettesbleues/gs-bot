@@ -17,7 +17,7 @@ import { TwitchBotManager } from "../twitch/twitchBotManager";
 import { MockObsSourceController } from "../obs/mockObsSourceController";
 import { createRuntimeState } from "../state/runtimeState";
 import { searchShortVideo } from "../media/youtubeSearch";
-import { searchGif } from "../media/tenorSearch";
+import { searchGif } from "../media/klipySearch";
 
 // The mutable runtime config that all tenant services share via reference
 export interface TenantRuntimeConfig {
@@ -76,7 +76,7 @@ export class TenantManager {
     private readonly db: Database,
     private readonly logger: Logger,
     private readonly youtubeApiKey?: string,
-    private readonly giphyApiKey?: string
+    private readonly klipyApiKey?: string
   ) {}
 
   getOrCreate(userId: number): TenantServices {
@@ -122,8 +122,8 @@ export class TenantManager {
       youtubeSearch: this.youtubeApiKey
         ? (query: string, maxDuration: number) => searchShortVideo(query, maxDuration, this.youtubeApiKey!)
         : undefined,
-      gifSearch: this.giphyApiKey
-        ? (query: string) => searchGif(query, this.giphyApiKey!)
+      gifSearch: this.klipyApiKey
+        ? (query: string) => searchGif(query, this.klipyApiKey!)
         : undefined,
       approvalService,
       adminService,
