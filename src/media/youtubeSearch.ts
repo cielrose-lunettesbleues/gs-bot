@@ -68,6 +68,7 @@ export async function searchShortVideo(
       statistics: { viewCount?: string };
       snippet: {
         title: string;
+        publishedAt: string;
         thumbnails?: {
           high?: { width: number; height: number };
           default?: { width: number; height: number };
@@ -77,6 +78,15 @@ export async function searchShortVideo(
   };
 
   const allItems = videosData.items ?? [];
+  const now = Date.now();
+
+  // Views per day since publication — rewards viral/recent clips, penalises old tutorials
+  function viewVelocity(item: typeof allItems[0]): number {
+    const views = Number(item.statistics.viewCount ?? 0);
+    const published = new Date(item.snippet.publishedAt).getTime();
+    const daysOld = Math.max(1, (now - published) / 86_400_000);
+    return views / daysOld;
+  }
 
   function buildResult(item: typeof allItems[0], duration: number): YoutubeSearchResult {
     const thumb = item.snippet.thumbnails?.high ?? item.snippet.thumbnails?.default;
@@ -90,22 +100,18 @@ export async function searchShortVideo(
     };
   }
 
-  // First pass: candidates within duration limit, sorted by view count
+  // First pass: candidates within duration limit, sorted by view velocity
   const candidates = allItems
     .map((item) => ({ item, duration: parseDuration(item.contentDetails.duration) }))
     .filter(({ duration }) => duration > 0 && duration <= maxDurationSeconds)
-    .sort((a, b) => {
-      const va = Number(a.item.statistics.viewCount ?? 0);
-      const vb = Number(b.item.statistics.viewCount ?? 0);
-      return vb - va;
-    });
+    .sort((a, b) => viewVelocity(b.item) - viewVelocity(a.item));
 
   if (candidates.length > 0) {
     const { item, duration } = candidates[0];
     return buildResult(item, duration);
   }
 
-  // Fallback: no clip within duration — take the most-viewed Short (portrait)
+  // Fallback: no clip within duration — take the highest-velocity Short (portrait)
   const shortFallbacks = allItems
     .map((item) => ({ item, duration: parseDuration(item.contentDetails.duration) }))
     .filter(({ item, duration }) => {
@@ -113,11 +119,7 @@ export async function searchShortVideo(
       const thumb = item.snippet.thumbnails?.high ?? item.snippet.thumbnails?.default;
       return thumb ? thumb.height > thumb.width : false;
     })
-    .sort((a, b) => {
-      const va = Number(a.item.statistics.viewCount ?? 0);
-      const vb = Number(b.item.statistics.viewCount ?? 0);
-      return vb - va;
-    });
+    .sort((a, b) => viewVelocity(b.item) - viewVelocity(a.item));
 
   if (shortFallbacks.length > 0) {
     const { item, duration } = shortFallbacks[0];
