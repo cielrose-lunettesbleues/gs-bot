@@ -595,6 +595,29 @@ input:checked+.slider:before{transform:translateX(18px)}
     } catch(e) {}
   }
 
+  /* ── Voice panel helpers (no inline \'…\' to avoid TS template-literal escaping) ── */
+  function toggleVsPanel(btn) {
+    var el = document.getElementById(btn.dataset.sid);
+    if(el) el.style.display = el.style.display === 'none' ? 'grid' : 'none';
+  }
+  function updateSliderVal(input) {
+    var span = input.previousElementSibling.querySelector('span');
+    if(span) span.textContent = parseFloat(input.value).toFixed(2);
+  }
+  function doSaveVoiceSettings(btn) {
+    saveVoiceSettings(parseInt(btn.dataset.vid), btn.dataset.sid);
+  }
+  function doDeleteVoice(btn) {
+    deleteTtsVoice(parseInt(btn.dataset.vid), btn.dataset.label || '?');
+  }
+
+  function vsSlider(id, label, val, min, max, step) {
+    return '<div class="vs-row">'
+      + '<div class="vs-label">'+esc(label)+' <span>'+val.toFixed(2)+'</span></div>'
+      + '<input type="range" id="'+id+'" min="'+min+'" max="'+max+'" step="'+step+'" value="'+val+'" oninput="updateSliderVal(this)">'
+      + '</div>';
+  }
+
   function renderVoices(voices) {
     var el = document.getElementById('tts-voice-list');
     if(!voices || voices.length === 0) {
@@ -617,28 +640,19 @@ input:checked+.slider:before{transform:translateX(18px)}
             + '<div class="voice-item-label">'+esc(v.label)+(v.isDefault ? ' <span class="voice-default-badge">défaut</span>' : '')+'</div>'
             + '<div class="voice-item-meta">ID: '+esc(v.voiceId)+' · Alias: '+esc(aliases)+'</div>'
             + '</div>'
-            + '<button class="btn btn-sm" style="font-size:11px;padding:2px 7px" onclick="document.getElementById(\''+sid+'\').style.display=document.getElementById(\''+sid+'\').style.display===\'none\'?\'grid\':\'none\'">⚙</button>'
-            + '<button class="btn btn-danger btn-sm" onclick="deleteTtsVoice('+id+",\""+esc(v.label)+"\")"+'>✕</button>'
+            + '<button class="btn btn-sm" style="font-size:11px;padding:2px 7px" data-sid="'+sid+'" onclick="toggleVsPanel(this)">⚙</button>'
+            + '<button class="btn btn-danger btn-sm" data-vid="'+id+'" data-label="'+esc(v.label)+'" onclick="doDeleteVoice(this)">✕</button>'
             + '</div>'
             + '<div id="'+sid+'" style="display:none;grid-template-columns:1fr 1fr;gap:6px 14px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">'
             + vsSlider(sid+'-stab','Stability',stab,0,1,0.05)
             + vsSlider(sid+'-sim','Similarity boost',sim,0,1,0.05)
             + vsSlider(sid+'-sty','Style',sty,0,1,0.05)
             + vsSlider(sid+'-spd','Speed',spd,0.5,2,0.05)
-            + '<label class="vs-check" style="grid-column:1/-1"><input type="checkbox" id="'+sid+'-boost"'+(boost?' checked':'')+"> Speaker boost</label>"
-            + '<button class="btn btn-accent full" style="grid-column:1/-1;margin-top:4px" onclick="saveVoiceSettings('+id+',\''+sid+'\')">Sauvegarder</button>'
+            + '<label class="vs-check" style="grid-column:1/-1"><input type="checkbox" id="'+sid+'-boost"'+(boost?' checked':'')+'>Speaker boost</label>'
+            + '<button class="btn btn-accent full" style="grid-column:1/-1;margin-top:4px" data-sid="'+sid+'" data-vid="'+id+'" onclick="doSaveVoiceSettings(this)">Sauvegarder</button>'
             + '</div>'
             + '</div>';
         }).join('')
-      + '</div>';
-  }
-
-  function vsSlider(id, label, val, min, max, step) {
-    var valId = id+'-val';
-    return '<div class="vs-row">'
-      + '<div class="vs-label">'+esc(label)+' <span id="'+valId+'">'+val.toFixed(2)+'</span></div>'
-      + '<input type="range" id="'+id+'" min="'+min+'" max="'+max+'" step="'+step+'" value="'+val+'"'
-      + ' oninput="document.getElementById(\''+valId+'\').textContent=parseFloat(this.value).toFixed(2)">'
       + '</div>';
   }
 
