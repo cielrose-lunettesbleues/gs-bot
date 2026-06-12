@@ -106,6 +106,26 @@ input:checked+.slider:before{transform:translateX(18px)}
 #toast.err{border-color:var(--red);color:var(--red)}
 
 .empty{color:var(--muted);font-size:13px;text-align:center;padding:12px 0}
+
+/* ── TTS ── */
+.tts-key-row{display:flex;gap:6px;align-items:center}
+.tts-key-row input{flex:1;background:#111827;border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 9px;font-size:13px;min-width:0}
+.tts-key-row input:focus{outline:2px solid var(--accent);border-color:transparent}
+.voice-list{display:flex;flex-direction:column;gap:6px}
+.voice-item{display:flex;align-items:center;gap:8px;background:#111827;border:1px solid var(--border);border-radius:6px;padding:7px 10px}
+.voice-item-info{flex:1;min-width:0}
+.voice-item-label{font-weight:600;font-size:13px}
+.voice-item-meta{font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.voice-default-badge{font-size:10px;background:var(--accent);color:#fff;padding:1px 6px;border-radius:3px;flex-shrink:0}
+.voice-add-form{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.voice-add-form input{background:#111827;border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 9px;font-size:12px}
+.voice-add-form input:focus{outline:2px solid var(--accent);border-color:transparent}
+.voice-add-form input::placeholder{color:#6b7280}
+.voice-add-form .full{grid-column:1/-1}
+.voice-add-form label.check-row{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);cursor:pointer;grid-column:1/-1}
+.api-key-status{font-size:11px;padding:2px 8px;border-radius:4px;font-weight:600}
+.api-key-status.set{background:#064e3b;color:#6ee7b7}
+.api-key-status.unset{background:#450a0a;color:#fca5a5}
 </style>
 </head>
 <body>
@@ -213,6 +233,60 @@ input:checked+.slider:before{transform:translateX(18px)}
     </div>
   </div>
 
+  <!-- TTS -->
+  <div class="panel col-full" id="tts-panel">
+    <div class="panel-title" style="display:flex;align-items:center;justify-content:space-between">
+      <span>Text-To-Speech (ElevenLabs)</span>
+      <label class="toggle" id="tog-tts-enabled" style="margin:0">
+        <input type="checkbox" id="cfg-tts-enabled" onchange="patchTtsConfig('ttsEnabled',this.checked,this)">
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <div class="row">
+      <span class="row-label">Clé API ElevenLabs</span>
+      <span id="tts-api-key-status" class="api-key-status unset">Non configurée</span>
+    </div>
+    <div class="tts-key-row">
+      <input type="password" id="tts-api-key-input" placeholder="sk_xxxxxxxxxxxxxxxx" autocomplete="off">
+      <button class="btn btn-accent btn-sm" onclick="saveTtsApiKey()">Sauvegarder</button>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div class="num-row">
+        <label for="cfg-tts-maxlength" style="font-size:12px;color:var(--muted)">Longueur max (caract.)</label>
+        <input class="num-input" type="number" id="cfg-tts-maxlength" min="10" max="1000"
+          onchange="patchTtsConfig('ttsMaxLength',+this.value,this)">
+      </div>
+      <div class="num-row">
+        <label for="cfg-tts-volume" style="font-size:12px;color:var(--muted)">Volume (0–1)</label>
+        <input class="num-input" type="number" id="cfg-tts-volume" min="0" max="1" step="0.1"
+          onchange="patchTtsConfig('ttsVolume',+this.value,this)">
+      </div>
+    </div>
+
+    <div class="panel-title" style="margin-top:4px">Voix configurées</div>
+    <div id="tts-voice-list"><p class="empty">Aucune voix configurée</p></div>
+
+    <details style="margin-top:4px">
+      <summary style="cursor:pointer;font-size:13px;color:var(--accent);user-select:none">+ Ajouter une voix</summary>
+      <div style="margin-top:10px">
+        <div class="voice-add-form">
+          <input id="va-label" placeholder="Label (ex: Césaire)" maxlength="60">
+          <input id="va-voice-id" placeholder="Voice ID ElevenLabs" maxlength="120">
+          <input id="va-aliases" placeholder="Alias (ex: cez, cesaire)" class="full" maxlength="200">
+          <label class="check-row">
+            <input type="checkbox" id="va-default"> Voix par défaut
+          </label>
+          <button class="btn btn-accent full" onclick="addTtsVoice()" style="grid-column:1/-1">Ajouter la voix</button>
+        </div>
+        <p style="font-size:11px;color:var(--muted);margin-top:6px">
+          Le Voice ID se trouve dans ton compte ElevenLabs → Voices → clic sur une voix → colonne ID.
+        </p>
+      </div>
+    </details>
+  </div>
+
   <!-- SIMULATEUR -->
   <div class="panel col-full">
     <div class="panel-title">Simulateur de chat</div>
@@ -286,6 +360,17 @@ input:checked+.slider:before{transform:translateX(18px)}
       setNumVal('cfg-duration', cfg.playback ? cfg.playback.durationSeconds : null);
       setCheck('cfg-approval', cfg.approval.enabled);
       setCheck('cfg-chat-feedback', cfg.playback ? cfg.playback.chatFeedback !== false : true);
+
+      if(cfg.tts) {
+        setCheck('cfg-tts-enabled', cfg.tts.enabled);
+        setNumVal('cfg-tts-maxlength', cfg.tts.maxLength);
+        setNumVal('cfg-tts-volume', cfg.tts.volume);
+        var keyStatus = document.getElementById('tts-api-key-status');
+        if(keyStatus) {
+          keyStatus.textContent = cfg.tts.apiKeySet ? 'Configurée ✓' : 'Non configurée';
+          keyStatus.className = 'api-key-status ' + (cfg.tts.apiKeySet ? 'set' : 'unset');
+        }
+      }
 
       var q = st.queue;
       document.getElementById('queue-badge').innerHTML = q.busy
@@ -441,6 +526,97 @@ input:checked+.slider:before{transform:translateX(18px)}
     }).catch(function(){
       toast('Impossible de copier','err');
     });
+  };
+
+  /* ── TTS config ── */
+  window.patchTtsConfig = async function(key, val, el) {
+    var tog = el ? el.closest('.toggle') : null;
+    if(tog) tog.classList.add('loading');
+    if(el && el.tagName === 'INPUT' && el.type === 'number') el.disabled = true;
+    try {
+      await api('PATCH', '/api/tts/config', {[key]: val});
+      toast('TTS sauvegardé ✓', 'ok');
+    } catch(e) {
+      toast('Erreur lors de la sauvegarde', 'err');
+      refresh();
+    } finally {
+      if(tog) tog.classList.remove('loading');
+      if(el && el.tagName === 'INPUT' && el.type === 'number') el.disabled = false;
+    }
+  };
+
+  window.saveTtsApiKey = async function() {
+    var val = document.getElementById('tts-api-key-input').value.trim();
+    if(!val) { toast('Clé vide', 'err'); return; }
+    try {
+      await api('PATCH', '/api/tts/config', { ttsApiKey: val });
+      document.getElementById('tts-api-key-input').value = '';
+      toast('Clé API sauvegardée ✓', 'ok');
+      refresh();
+    } catch(e) { toast('Erreur lors de la sauvegarde', 'err'); }
+  };
+
+  /* ── TTS voices ── */
+  async function loadVoices() {
+    try {
+      var data = await api('GET', '/api/tts/voices');
+      renderVoices(data.voices);
+    } catch(e) {}
+  }
+
+  function renderVoices(voices) {
+    var el = document.getElementById('tts-voice-list');
+    if(!voices || voices.length === 0) {
+      el.innerHTML = '<p class="empty">Aucune voix configurée</p>';
+      return;
+    }
+    el.innerHTML = '<div class="voice-list">'
+      + voices.map(function(v){
+          var aliases = v.aliases && v.aliases.length ? v.aliases.join(', ') : '—';
+          return '<div class="voice-item">'
+            + '<div class="voice-item-info">'
+            + '<div class="voice-item-label">'+esc(v.label)+(v.isDefault ? ' <span class="voice-default-badge">défaut</span>' : '')+'</div>'
+            + '<div class="voice-item-meta">ID: '+esc(v.voiceId)+' · Alias: '+esc(aliases)+'</div>'
+            + '</div>'
+            + '<button class="btn btn-danger btn-sm" onclick="deleteTtsVoice('+v.id+',\\''+esc(v.label)+'\\')">✕</button>'
+            + '</div>';
+        }).join('')
+      + '</div>';
+  }
+
+  window.addTtsVoice = async function() {
+    var label = document.getElementById('va-label').value.trim();
+    var voiceId = document.getElementById('va-voice-id').value.trim();
+    var aliasesRaw = document.getElementById('va-aliases').value.trim();
+    var isDefault = document.getElementById('va-default').checked;
+    if(!label || !voiceId) { toast('Label et Voice ID requis', 'err'); return; }
+    var aliases = aliasesRaw ? aliasesRaw.split(',').map(function(a){ return a.trim(); }).filter(Boolean) : [];
+    try {
+      await api('POST', '/api/tts/voices', { label:label, voiceId:voiceId, aliases:aliases, isDefault:isDefault, provider:'elevenlabs' });
+      document.getElementById('va-label').value = '';
+      document.getElementById('va-voice-id').value = '';
+      document.getElementById('va-aliases').value = '';
+      document.getElementById('va-default').checked = false;
+      toast('Voix ajoutée ✓', 'ok');
+      loadVoices();
+    } catch(e) { toast('Erreur lors de l\'ajout', 'err'); }
+  };
+
+  window.deleteTtsVoice = async function(id, label) {
+    if(!confirm('Supprimer la voix "'+label+'" ?')) return;
+    try {
+      await api('DELETE', '/api/tts/voices/'+id);
+      toast('Voix supprimée', 'ok');
+      loadVoices();
+    } catch(e) { toast('Erreur', 'err'); }
+  };
+
+  /* ── Patch refresh() to also update TTS fields ── */
+  var _origRefresh = refresh;
+  refresh = async function() {
+    var p = _origRefresh();
+    loadVoices();
+    return p;
   };
 
   refresh();

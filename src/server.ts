@@ -250,7 +250,14 @@ export async function createApp(config: ServerConfig, logger: Logger) {
         access: cfg.access,
         cooldown: { enabled: cfg.cooldown.enabled, seconds: cfg.cooldown.seconds },
         approval: { enabled: cfg.approval.enabled },
-        playback: { durationSeconds: cfg.playback.durationSeconds, chatFeedback: cfg.playback.chatFeedback }
+        playback: { durationSeconds: cfg.playback.durationSeconds, chatFeedback: cfg.playback.chatFeedback },
+        tts: {
+          enabled: cfg.tts.enabled,
+          provider: cfg.tts.provider,
+          apiKeySet: cfg.tts.apiKey.length > 0,
+          volume: cfg.tts.volume,
+          maxLength: cfg.tts.maxLength
+        }
       },
       queue: tenant.queue.getState(),
       approval: { pendingCount: pending.length, pending },
