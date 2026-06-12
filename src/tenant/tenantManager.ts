@@ -4,6 +4,7 @@ import { getTenantConfig, updateTenantConfig, getUserById, type DbTenantConfig }
 import { AdminService, createAdminCommands } from "../commands/adminCommands";
 import { createEmergencyStopCommand } from "../commands/emergencyStopCommand";
 import { createGreenScreenCommand } from "../commands/greenScreenCommand";
+import { createTtsCommand } from "../commands/ttsCommand";
 import { CommandRouter } from "../commands/commandRouter";
 import { ApprovalService } from "../approval/approvalService";
 import { BlacklistService } from "../blacklist/blacklistService";
@@ -20,6 +21,7 @@ import { searchShortVideo } from "../media/youtubeSearch";
 import { sociavaultSearch, sociavaultResolve } from "../media/sociavaultClient";
 import { searchGif } from "../media/klipySearch";
 import { TtsService, type ITtsService } from "../tts/ttsService";
+import type { TtsPlaybackEvent } from "../queue/playbackQueue";
 
 // The mutable runtime config that all tenant services share via reference
 export interface TenantRuntimeConfig {
@@ -159,12 +161,14 @@ export class TenantManager {
       adminService,
       ttsService,
       channelLogin,
+      broadcastOverlay: (event: TtsPlaybackEvent) => overlayBroadcaster.broadcast(event),
       config: runtimeConfig,
       logger: this.logger
     };
 
     const router = new CommandRouter([
-      createGreenScreenCommand(commandDeps, runtimeConfig.commands.gs, ["!tts"]),
+      createGreenScreenCommand(commandDeps, runtimeConfig.commands.gs),
+      createTtsCommand(commandDeps, "!tts"),
       createEmergencyStopCommand(commandDeps, runtimeConfig.commands.stop),
       ...createAdminCommands()
     ]);
