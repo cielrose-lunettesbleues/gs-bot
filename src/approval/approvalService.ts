@@ -1,4 +1,4 @@
-import type { PlaybackItem, EnqueueResult } from "../queue/playbackQueue";
+import type { PlaybackItem, EnqueueResult, TtsPlaybackEvent } from "../queue/playbackQueue";
 
 export interface ApprovalConfig {
   enabled: boolean;
@@ -11,6 +11,7 @@ interface PendingRequest {
   durationSeconds: number;
   caption?: string;
   portrait?: boolean;
+  ttsGenerate?: () => Promise<TtsPlaybackEvent | null>;
   userReply: (msg: string) => Promise<void>;
   timeoutHandle: NodeJS.Timeout;
 }
@@ -42,7 +43,7 @@ export class ApprovalService {
   }
 
   public async submit(
-    item: { url: string; durationSeconds: number; username: string; caption?: string; portrait?: boolean; userReply: (msg: string) => Promise<void> },
+    item: { url: string; durationSeconds: number; username: string; caption?: string; portrait?: boolean; ttsGenerate?: () => Promise<TtsPlaybackEvent | null>; userReply: (msg: string) => Promise<void> },
     channelNotify: (msg: string) => Promise<void>
   ): Promise<void> {
     const key = item.username.toLowerCase();
@@ -88,6 +89,7 @@ export class ApprovalService {
       username: req.username,
       caption: req.caption,
       portrait: req.portrait,
+      ttsGenerate: req.ttsGenerate,
       reply: req.userReply
     });
 

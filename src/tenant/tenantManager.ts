@@ -19,6 +19,8 @@ import { createRuntimeState } from "../state/runtimeState";
 import { searchShortVideo } from "../media/youtubeSearch";
 import { sociavaultSearch, sociavaultResolve } from "../media/sociavaultClient";
 import { searchGif } from "../media/klipySearch";
+import { TtsService, NullTtsService, type ITtsService } from "../tts/ttsService";
+import { ElevenLabsProvider } from "../tts/elevenLabsProvider";
 
 // The mutable runtime config that all tenant services share via reference
 export interface TenantRuntimeConfig {
@@ -34,6 +36,14 @@ export interface TenantRuntimeConfig {
     maxDurationSeconds: number;
   };
   commands: { gs: string; stop: string };
+  tts: {
+    enabled: boolean;
+    provider: string;
+    apiKey: string;
+    volume: number;
+    maxLength: number;
+    cooldownSeconds: number;
+  };
 }
 
 export interface TenantServices {
@@ -46,6 +56,7 @@ export interface TenantServices {
   overlayBroadcaster: OverlayBroadcaster;
   twitchBotManager: TwitchBotManager;
   router: CommandRouter;
+  ttsService: ITtsService;
 }
 
 function dbConfigToRuntime(row: DbTenantConfig): TenantRuntimeConfig {
@@ -66,7 +77,15 @@ function dbConfigToRuntime(row: DbTenantConfig): TenantRuntimeConfig {
       allowedFileExtensions: row.allowed_file_extensions.split(",").map((e) => e.trim()).filter(Boolean),
       maxDurationSeconds: row.max_video_duration_seconds
     },
-    commands: { gs: "!gs", stop: "!gstop" }
+    commands: { gs: "!gs", stop: "!gstop" },
+    tts: {
+      enabled: Boolean(row.tts_enabled ?? 0),
+      provider: row.tts_provider ?? "elevenlabs",
+      apiKey: row.tts_api_key ?? "",
+      volume: row.tts_volume ?? 1.0,
+      maxLength: row.tts_max_length ?? 200,
+      cooldownSeconds: row.tts_cooldown_seconds ?? 0
+    }
   };
 }
 
@@ -113,6 +132,21 @@ export class TenantManager {
       logger: this.logger
     });
 
+    // Build TTS service for this tenant
+    const ttsProvider = runtimeConfig.tts.apiKey
+      ? new ElevenLabsProvider(runtimeConfig.tts.apiKey)
+      : null;
+    const ttsService: ITtsService = new TtsService(
+      this.db,
+      userId,
+      ttsProvider,
+      { enabled: runtimeConfig.tts.enabled, maxLength: runtimeConfig.tts.maxLength, volume: runtimeConfig.tts.volume },
+      this.logger
+    );
+
+    const dbUser = getUserById(this.db, userId);
+    const channelLogin = dbUser?.twitch_login ?? "";
+
     const commandDeps = {
       permissionService,
       cooldownService,
@@ -133,12 +167,14 @@ export class TenantManager {
         : undefined,
       approvalService,
       adminService,
+      ttsService,
+      channelLogin,
       config: runtimeConfig,
       logger: this.logger
     };
 
     const router = new CommandRouter([
-      createGreenScreenCommand(commandDeps, runtimeConfig.commands.gs),
+      createGreenScreenCommand(commandDeps, runtimeConfig.commands.gs, ["!tts"]),
       createEmergencyStopCommand(commandDeps, runtimeConfig.commands.stop),
       ...createAdminCommands()
     ]);
@@ -146,7 +182,6 @@ export class TenantManager {
     const twitchBotManager = new TwitchBotManager(router, this.logger);
 
     // Auto-reconnect on startup / after redeploy using stored credentials
-    const dbUser = getUserById(this.db, userId);
     if (dbUser?.access_token && dbUser?.twitch_login) {
       twitchBotManager.start({
         channel: dbUser.twitch_login,
@@ -164,7 +199,8 @@ export class TenantManager {
       historyService,
       overlayBroadcaster,
       twitchBotManager,
-      router
+      router,
+      ttsService
     };
 
     this.tenants.set(userId, services);
@@ -201,5 +237,6 @@ export class TenantManager {
     Object.assign(tenant.runtimeConfig.queue, updated.queue);
     Object.assign(tenant.runtimeConfig.playback, updated.playback);
     Object.assign(tenant.runtimeConfig.validation, updated.validation);
+    Object.assign(tenant.runtimeConfig.tts, updated.tts);
   }
 }

@@ -63,6 +63,19 @@ CREATE TABLE IF NOT EXISTS blacklist (
   blocked_username TEXT    NOT NULL,
   PRIMARY KEY (user_id, blocked_username)
 );
+
+CREATE TABLE IF NOT EXISTS tenant_tts_voices (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  label        TEXT    NOT NULL,
+  provider     TEXT    NOT NULL DEFAULT 'elevenlabs',
+  voice_id     TEXT    NOT NULL,
+  is_default   INTEGER NOT NULL DEFAULT 0,
+  aliases_json TEXT    NOT NULL DEFAULT '[]',
+  created_at   INTEGER NOT NULL DEFAULT (unixepoch())
+);
+
+CREATE INDEX IF NOT EXISTS idx_tts_voices_tenant ON tenant_tts_voices(tenant_id);
 `;
 
 const MIGRATIONS = [
@@ -71,11 +84,24 @@ const MIGRATIONS = [
   `UPDATE tenant_configs SET allowed_domains = allowed_domains || ',tiktok.com' WHERE allowed_domains NOT LIKE '%tiktok.com%'`,
 ];
 
+// ALTER TABLE migrations — idempotent (errors silently ignored)
+const COLUMN_MIGRATIONS = [
+  `ALTER TABLE tenant_configs ADD COLUMN tts_enabled INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE tenant_configs ADD COLUMN tts_provider TEXT NOT NULL DEFAULT 'elevenlabs'`,
+  `ALTER TABLE tenant_configs ADD COLUMN tts_api_key TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE tenant_configs ADD COLUMN tts_volume REAL NOT NULL DEFAULT 1.0`,
+  `ALTER TABLE tenant_configs ADD COLUMN tts_max_length INTEGER NOT NULL DEFAULT 200`,
+  `ALTER TABLE tenant_configs ADD COLUMN tts_cooldown_seconds INTEGER NOT NULL DEFAULT 0`,
+];
+
 export function openDatabase(dataDir: string): Database {
   fs.mkdirSync(dataDir, { recursive: true });
   const db = new BetterSqlite3(path.join(dataDir, "gs.sqlite"));
   db.exec(SCHEMA);
   for (const sql of MIGRATIONS) db.prepare(sql).run();
+  for (const sql of COLUMN_MIGRATIONS) {
+    try { db.prepare(sql).run(); } catch { /* column already exists */ }
+  }
   return db;
 }
 
@@ -175,6 +201,12 @@ export interface DbTenantConfig {
   allow_direct_files: number;
   allowed_file_extensions: string;
   max_video_duration_seconds: number;
+  tts_enabled: number;
+  tts_provider: string;
+  tts_api_key: string;
+  tts_volume: number;
+  tts_max_length: number;
+  tts_cooldown_seconds: number;
 }
 
 export function getTenantConfig(db: Database, userId: number): DbTenantConfig {
@@ -241,4 +273,42 @@ export function unblockUser(db: Database, userId: number, username: string): boo
 export function listBlocked(db: Database, userId: number): string[] {
   return (db.prepare("SELECT blocked_username FROM blacklist WHERE user_id=? ORDER BY blocked_username").all(userId) as
     Array<{ blocked_username: string }>).map((r) => r.blocked_username);
+}
+
+// ─── TTS Voices ───────────────────────────────────────────────────────────────
+
+export interface DbTtsVoice {
+  id: number;
+  tenant_id: number;
+  label: string;
+  provider: string;
+  voice_id: string;
+  is_default: number;
+  aliases_json: string;
+  created_at: number;
+}
+
+export function getTtsVoices(db: Database, tenantId: number): DbTtsVoice[] {
+  return db.prepare("SELECT * FROM tenant_tts_voices WHERE tenant_id=? ORDER BY id ASC")
+    .all(tenantId) as DbTtsVoice[];
+}
+
+export function insertTtsVoice(
+  db: Database,
+  tenantId: number,
+  voice: { label: string; provider: string; voice_id: string; is_default: boolean; aliases: string[] }
+): DbTtsVoice {
+  if (voice.is_default) {
+    db.prepare("UPDATE tenant_tts_voices SET is_default=0 WHERE tenant_id=?").run(tenantId);
+  }
+  const result = db.prepare(`
+    INSERT INTO tenant_tts_voices (tenant_id, label, provider, voice_id, is_default, aliases_json)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(tenantId, voice.label, voice.provider, voice.voice_id, voice.is_default ? 1 : 0, JSON.stringify(voice.aliases));
+  return db.prepare("SELECT * FROM tenant_tts_voices WHERE id=?").get(result.lastInsertRowid) as DbTtsVoice;
+}
+
+export function deleteTtsVoice(db: Database, id: number, tenantId: number): boolean {
+  const result = db.prepare("DELETE FROM tenant_tts_voices WHERE id=? AND tenant_id=?").run(id, tenantId);
+  return result.changes > 0;
 }

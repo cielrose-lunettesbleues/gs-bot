@@ -100,6 +100,25 @@ iframe{
   line-height:1.1;
 }
 #caption.visible{opacity:1}
+#tts-caption{
+  position:absolute;top:24px;left:0;right:0;
+  text-align:center;
+  font-family:'Arial Rounded MT Bold',Arial,sans-serif;
+  font-size:clamp(20px,4vw,52px);
+  color:#fff;
+  text-shadow:
+    -2px -2px 0 #000, 2px -2px 0 #000,
+    -2px  2px 0 #000, 2px  2px 0 #000;
+  padding:0 40px;
+  opacity:0;transition:opacity .4s;
+  pointer-events:none;
+  word-break:break-word;
+  line-height:1.2;
+  background:rgba(0,0,0,.45);
+  border-radius:8px;
+  margin:0 32px;
+}
+#tts-caption.visible{opacity:1}
 </style>
 </head>
 <body>
@@ -108,6 +127,7 @@ iframe{
 </div>
 <div id="info"><span id="info-user"></span></div>
 <div id="caption"></div>
+<div id="tts-caption"></div>
 
 <script>
 (function(){
@@ -116,6 +136,7 @@ iframe{
   var info = document.getElementById('info');
   var infoUser = document.getElementById('info-user');
   var captionEl = document.getElementById('caption');
+  var ttsCaptionEl = document.getElementById('tts-caption');
 
   // URL params: ?info=1 to show the username bar
   var showInfo = new URLSearchParams(location.search).get('info') === '1';
@@ -218,6 +239,30 @@ iframe{
     setTimeout(function(){mediaEl.innerHTML='';captionEl.textContent='';},500);
   }
 
+  var ttsHideTimer = null;
+  var ttsAudio = null;
+
+  function playTts(data){
+    // Stop any previous TTS
+    if(ttsHideTimer){ clearTimeout(ttsHideTimer); ttsHideTimer=null; }
+    if(ttsAudio){ ttsAudio.pause(); ttsAudio=null; }
+
+    ttsCaptionEl.textContent = data.text;
+    ttsCaptionEl.classList.add('visible');
+
+    ttsAudio = new Audio(data.audioUrl);
+    ttsAudio.volume = 1.0;
+    ttsAudio.play().catch(function(){});
+
+    var ms = Math.max((data.durationSeconds || 4) * 1000, 1000);
+    ttsHideTimer = setTimeout(function(){
+      ttsCaptionEl.classList.remove('visible');
+      setTimeout(function(){ ttsCaptionEl.textContent=''; },500);
+      ttsAudio = null;
+      ttsHideTimer = null;
+    }, ms);
+  }
+
   function connect(){
     var parts=location.pathname.split('/').filter(Boolean);
     var channel=parts[parts.length-1]||'';
@@ -226,6 +271,7 @@ iframe{
       var d=JSON.parse(ev.data);
       if(d.type==='start') show(d);
       else if(d.type==='stop') hide();
+      else if(d.type==='tts') playTts(d);
     };
     es.onerror=function(){
       es.close();

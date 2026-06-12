@@ -1,30 +1,52 @@
 import type { Command, CommandDependencies } from "./types";
+import type { TtsPlaybackEvent } from "../queue/playbackQueue";
 import { resolveMediaUrl } from "../media/urlResolver";
+
+function buildTtsGenerate(
+  deps: CommandDependencies,
+  caption: string | undefined,
+  voiceLabel: string | undefined,
+  rawChannel: string
+): (() => Promise<TtsPlaybackEvent | null>) | undefined {
+  if (!deps.ttsService?.isEnabled() || !caption) return undefined;
+  const channel = (deps.channelLogin ?? rawChannel.replace(/^#/, "")).toLowerCase();
+  const text = caption;
+  const voice = voiceLabel ?? "";
+  return async () => {
+    const result = await deps.ttsService!.synthesize(text, voice);
+    if (!result) return null;
+    return {
+      type: "tts" as const,
+      text,
+      audioUrl: `/tts/audio/${channel}/${result.audioId}`,
+      durationSeconds: result.durationSeconds
+    };
+  };
+}
 
 const URL_RE = /^https?:\/\//i;
 
-export function createGreenScreenCommand(deps: CommandDependencies, commandName: string): Command {
+export function createGreenScreenCommand(
+  deps: CommandDependencies,
+  commandName: string,
+  aliases: string[] = []
+): Command {
   return {
     name: commandName,
-    aliases: [],
+    aliases,
     async execute(context, args) {
       if (deps.adminService && args[0] && deps.adminService.isAdminKeyword(args[0])) {
         await deps.adminService.execute(context, args);
         return;
       }
 
-      // Split on first "|" to extract optional meme caption
+      // Split on "|" to extract: <media query> | <tts text> | <voice>
       const rawInput = args.join(" ");
-      const pipeIdx = rawInput.indexOf("|");
-      let mainInput: string;
-      let caption: string | undefined;
-      if (pipeIdx !== -1) {
-        mainInput = rawInput.slice(0, pipeIdx).trim();
-        const captionRaw = rawInput.slice(pipeIdx + 1).trim();
-        caption = captionRaw || undefined;
-      } else {
-        mainInput = rawInput;
-      }
+      const pipeParts = rawInput.split("|").map((s) => s.trim());
+      const mainInput = pipeParts[0] ?? "";
+      const caption = pipeParts[1] || undefined;
+      const voiceLabel = pipeParts[2] || undefined;
+
       const mainArgs = mainInput ? mainInput.split(/\s+/) : [];
 
       const feedback = deps.config.playback.chatFeedback !== false;
@@ -151,6 +173,9 @@ export function createGreenScreenCommand(deps: CommandDependencies, commandName:
         }
       }
 
+      // ── Build TTS generator (called at actual play time) ─────────────────
+      const ttsGenerate = buildTtsGenerate(deps, caption, voiceLabel, context.channel);
+
       // ── Approval / enqueue ───────────────────────────────────────────────
       if (deps.approvalService?.config.enabled && !context.user.isMod) {
         await deps.approvalService.submit(
@@ -160,6 +185,7 @@ export function createGreenScreenCommand(deps: CommandDependencies, commandName:
             username: context.user.username,
             caption,
             portrait,
+            ttsGenerate,
             userReply: context.reply
           },
           context.reply
@@ -173,7 +199,8 @@ export function createGreenScreenCommand(deps: CommandDependencies, commandName:
         username: context.user.username,
         caption,
         portrait,
-        reply: context.reply
+        reply: context.reply,
+        ttsGenerate
       });
 
       if (feedback) {

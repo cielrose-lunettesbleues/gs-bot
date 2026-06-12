@@ -8,7 +8,10 @@ import {
   purgeExpiredSessions,
   createSession,
   deleteSession,
-  getUserByLogin
+  getUserByLogin,
+  getTtsVoices,
+  insertTtsVoice,
+  deleteTtsVoice
 } from "./db/database";
 import {
   buildAuthUrl,
@@ -208,6 +211,23 @@ export async function createApp(config: ServerConfig, logger: Logger) {
     });
   });
 
+  // ─── TTS audio (no auth — OBS Browser Source fetches these) ─────────────
+
+  app.get("/tts/audio/:channel/:id", (c) => {
+    const channel = c.req.param("channel").toLowerCase();
+    const id = c.req.param("id");
+    const dbUser = getUserByLogin(db, channel);
+    if (!dbUser) return c.body(null, 404);
+    const tenant = tenantManager.get(dbUser.id);
+    if (!tenant) return c.body(null, 404);
+    const audio = tenant.ttsService.getAudio(id);
+    if (!audio) return c.body(null, 404);
+    return c.body(new Uint8Array(audio.buffer), 200, {
+      "Content-Type": audio.mimeType,
+      "Cache-Control": "no-store"
+    });
+  });
+
   // ─── API — all require session auth ──────────────────────────────────────
 
   const api = new Hono();
@@ -319,6 +339,67 @@ export async function createApp(config: ServerConfig, logger: Logger) {
       reply: async (text) => { replies.push(text); }
     });
     return c.json({ ok: true, replies });
+  });
+
+  // ─── TTS config API ────────────────────────────────────────────────────────
+
+  api.patch("/tts/config", async (c) => {
+    const user = requireAuth(c)!;
+    const body = await c.req.json<Record<string, unknown>>();
+    const patch: Record<string, unknown> = {};
+    if (typeof body.ttsEnabled === "boolean") patch.tts_enabled = body.ttsEnabled ? 1 : 0;
+    if (typeof body.ttsApiKey === "string") patch.tts_api_key = body.ttsApiKey.trim();
+    if (typeof body.ttsVolume === "number" && body.ttsVolume >= 0 && body.ttsVolume <= 2) {
+      patch.tts_volume = body.ttsVolume;
+    }
+    if (typeof body.ttsMaxLength === "number" && body.ttsMaxLength >= 1) {
+      patch.tts_max_length = Math.floor(body.ttsMaxLength);
+    }
+    if (typeof body.ttsCooldownSeconds === "number" && body.ttsCooldownSeconds >= 0) {
+      patch.tts_cooldown_seconds = Math.floor(body.ttsCooldownSeconds);
+    }
+    tenantManager.persistConfig(user.id, patch);
+    logger.info({ userId: user.id }, "TTS config updated");
+    return c.json({ ok: true });
+  });
+
+  // ─── TTS voices API ────────────────────────────────────────────────────────
+
+  api.get("/tts/voices", (c) => {
+    const user = requireAuth(c)!;
+    const voices = getTtsVoices(db, user.id).map((v) => ({
+      id: v.id,
+      label: v.label,
+      provider: v.provider,
+      voiceId: v.voice_id,
+      isDefault: Boolean(v.is_default),
+      aliases: JSON.parse(v.aliases_json) as string[]
+    }));
+    return c.json({ voices });
+  });
+
+  api.post("/tts/voices", async (c) => {
+    const user = requireAuth(c)!;
+    const body = await c.req.json<Record<string, unknown>>();
+    const label = String(body.label ?? "").trim();
+    const voiceId = String(body.voiceId ?? "").trim();
+    const provider = String(body.provider ?? "elevenlabs").trim();
+    const isDefault = body.isDefault === true;
+    const aliases = Array.isArray(body.aliases)
+      ? (body.aliases as unknown[]).filter((a) => typeof a === "string").map((a) => String(a).trim())
+      : [];
+    if (!label || !voiceId) return c.json({ ok: false, error: "label and voiceId required" }, 400);
+    const voice = insertTtsVoice(db, user.id, { label, provider, voice_id: voiceId, is_default: isDefault, aliases });
+    logger.info({ userId: user.id, voiceId: voice.id }, "TTS voice added");
+    return c.json({ ok: true, voice: { id: voice.id, label: voice.label } }, 201);
+  });
+
+  api.delete("/tts/voices/:id", (c) => {
+    const user = requireAuth(c)!;
+    const id = parseInt(c.req.param("id"), 10);
+    if (isNaN(id)) return c.json({ ok: false, error: "invalid_id" }, 400);
+    const ok = deleteTtsVoice(db, id, user.id);
+    return c.json({ ok }, ok ? 200 : 404);
   });
 
   app.route("/api", api);

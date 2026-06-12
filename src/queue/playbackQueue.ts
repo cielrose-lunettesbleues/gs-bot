@@ -12,6 +12,8 @@ export interface PlaybackItem {
   caption?: string;
   portrait?: boolean;
   reply: (message: string) => Promise<void>;
+  /** Optional async callback that generates a TTS event at actual play time. */
+  ttsGenerate?: () => Promise<TtsPlaybackEvent | null>;
 }
 
 export type EnqueueResult =
@@ -20,9 +22,17 @@ export type EnqueueResult =
   | { status: "replaced" }
   | { status: "dropped"; reason: "busy" | "full" };
 
+export interface TtsPlaybackEvent {
+  type: "tts";
+  text: string;
+  audioUrl: string;
+  durationSeconds: number;
+}
+
 export type PlaybackEvent =
   | { type: "start"; url: string; durationSeconds: number; username: string; caption?: string; portrait?: boolean }
-  | { type: "stop" };
+  | { type: "stop" }
+  | TtsPlaybackEvent;
 
 interface ObsOps {
   setSourceUrl(url: string): Promise<void>;
@@ -89,6 +99,14 @@ export class PlaybackQueue {
       await this.obsController.setSourceUrl(item.url);
       await this.obsController.showSource();
       this.onEvent?.({ type: "start", url: item.url, durationSeconds: item.durationSeconds, username: item.username, caption: item.caption, portrait: item.portrait });
+
+      // Fire TTS generation non-blocking — broadcast when ready
+      if (item.ttsGenerate) {
+        item.ttsGenerate().then((ttsEvent) => {
+          if (ttsEvent) this.onEvent?.(ttsEvent);
+        }).catch(() => undefined);
+      }
+
       this.logger.info(
         { username: item.username, url: item.url, durationSeconds: item.durationSeconds },
         "Playback started"

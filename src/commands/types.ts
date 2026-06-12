@@ -2,6 +2,7 @@ import type { IBlacklistService } from "../blacklist/blacklistService";
 import type { IHistoryService } from "../history/historyService";
 import type { PlaybackItem, EnqueueResult } from "../queue/playbackQueue";
 import type { CommandContext } from "../twitch/twitchTypes";
+import type { ITtsService } from "../tts/ttsService";
 
 export type { PlaybackItem, EnqueueResult };
 
@@ -41,9 +42,12 @@ export interface CommandDependencies {
   gifSearch?: (query: string) => Promise<{ url: string; title: string } | null>;
   approvalService?: {
     config: { enabled: boolean };
-    submit: (item: { url: string; durationSeconds: number; username: string; caption?: string; portrait?: boolean; userReply: (msg: string) => Promise<void> }, channelNotify: (msg: string) => Promise<void>) => Promise<void>;
+    submit: (item: { url: string; durationSeconds: number; username: string; caption?: string; portrait?: boolean; ttsGenerate?: () => Promise<import("../queue/playbackQueue").TtsPlaybackEvent | null>; userReply: (msg: string) => Promise<void> }, channelNotify: (msg: string) => Promise<void>) => Promise<void>;
   };
   adminService?: AdminService;
+  ttsService?: ITtsService;
+  /** Twitch channel login (without #) for building TTS audio URLs. */
+  channelLogin?: string;
   config: {
     access: { subOnly: boolean; modOnly: boolean };
     cooldown: { enabled: boolean; seconds: number; perUserEnabled?: boolean; perUserSeconds?: number };
