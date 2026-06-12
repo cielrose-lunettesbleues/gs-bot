@@ -11,13 +11,6 @@ export function createTtsCommand(deps: CommandDependencies, commandName: string)
         return;
       }
 
-      if (!deps.ttsService?.isEnabled()) {
-        if (deps.config.playback.chatFeedback) {
-          await context.reply(`@${context.user.username} TTS non disponible.`);
-        }
-        return;
-      }
-
       const rawInput = args.join(" ");
       const pipes = rawInput.split("|").map((s) => s.trim());
       const text = pipes[0];
@@ -29,20 +22,20 @@ export function createTtsCommand(deps: CommandDependencies, commandName: string)
       }
 
       const channel = (deps.channelLogin ?? context.channel.replace(/^#/, "")).toLowerCase();
-      const result = await deps.ttsService.synthesize(text, voiceLabel);
 
-      if (!result) {
-        if (deps.config.playback.chatFeedback) {
-          await context.reply(`@${context.user.username} TTS indisponible.`);
-        }
+      // No TTS service or service disabled/unconfigured → show text caption only
+      if (!deps.ttsService?.isEnabled()) {
+        deps.broadcastOverlay?.({ type: "tts", text, audioUrl: "", durationSeconds: 4 });
         return;
       }
+
+      const result = await deps.ttsService.synthesize(text, voiceLabel);
 
       const ttsEvent: TtsPlaybackEvent = {
         type: "tts",
         text,
-        audioUrl: `/tts/audio/${channel}/${result.audioId}`,
-        durationSeconds: result.durationSeconds
+        audioUrl: result ? `/tts/audio/${channel}/${result.audioId}` : "",
+        durationSeconds: result?.durationSeconds ?? 4
       };
 
       deps.broadcastOverlay?.(ttsEvent);

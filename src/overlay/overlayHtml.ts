@@ -250,9 +250,11 @@ iframe{
     ttsCaptionEl.textContent = data.text;
     ttsCaptionEl.classList.add('visible');
 
-    ttsAudio = new Audio(data.audioUrl);
-    ttsAudio.volume = 1.0;
-    ttsAudio.play().catch(function(){});
+    if(data.audioUrl){
+      ttsAudio = new Audio(data.audioUrl);
+      ttsAudio.volume = 1.0;
+      ttsAudio.play().catch(function(){});
+    }
 
     var ms = Math.max((data.durationSeconds || 4) * 1000, 1000);
     ttsHideTimer = setTimeout(function(){
