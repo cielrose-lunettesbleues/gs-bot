@@ -65,14 +65,19 @@ CREATE TABLE IF NOT EXISTS blacklist (
 );
 
 CREATE TABLE IF NOT EXISTS tenant_tts_voices (
-  id           INTEGER PRIMARY KEY AUTOINCREMENT,
-  tenant_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  label        TEXT    NOT NULL,
-  provider     TEXT    NOT NULL DEFAULT 'elevenlabs',
-  voice_id     TEXT    NOT NULL,
-  is_default   INTEGER NOT NULL DEFAULT 0,
-  aliases_json TEXT    NOT NULL DEFAULT '[]',
-  created_at   INTEGER NOT NULL DEFAULT (unixepoch())
+  id                INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  label             TEXT    NOT NULL,
+  provider          TEXT    NOT NULL DEFAULT 'elevenlabs',
+  voice_id          TEXT    NOT NULL,
+  is_default        INTEGER NOT NULL DEFAULT 0,
+  aliases_json      TEXT    NOT NULL DEFAULT '[]',
+  stability         REAL    NOT NULL DEFAULT 0.5,
+  similarity_boost  REAL    NOT NULL DEFAULT 0.75,
+  style             REAL    NOT NULL DEFAULT 0.0,
+  use_speaker_boost INTEGER NOT NULL DEFAULT 1,
+  speed             REAL    NOT NULL DEFAULT 1.0,
+  created_at        INTEGER NOT NULL DEFAULT (unixepoch())
 );
 
 CREATE INDEX IF NOT EXISTS idx_tts_voices_tenant ON tenant_tts_voices(tenant_id);
@@ -92,6 +97,11 @@ const COLUMN_MIGRATIONS = [
   `ALTER TABLE tenant_configs ADD COLUMN tts_volume REAL NOT NULL DEFAULT 1.0`,
   `ALTER TABLE tenant_configs ADD COLUMN tts_max_length INTEGER NOT NULL DEFAULT 200`,
   `ALTER TABLE tenant_configs ADD COLUMN tts_cooldown_seconds INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE tenant_tts_voices ADD COLUMN stability REAL NOT NULL DEFAULT 0.5`,
+  `ALTER TABLE tenant_tts_voices ADD COLUMN similarity_boost REAL NOT NULL DEFAULT 0.75`,
+  `ALTER TABLE tenant_tts_voices ADD COLUMN style REAL NOT NULL DEFAULT 0.0`,
+  `ALTER TABLE tenant_tts_voices ADD COLUMN use_speaker_boost INTEGER NOT NULL DEFAULT 1`,
+  `ALTER TABLE tenant_tts_voices ADD COLUMN speed REAL NOT NULL DEFAULT 1.0`,
 ];
 
 export function openDatabase(dataDir: string): Database {
@@ -285,6 +295,11 @@ export interface DbTtsVoice {
   voice_id: string;
   is_default: number;
   aliases_json: string;
+  stability: number;
+  similarity_boost: number;
+  style: number;
+  use_speaker_boost: number;
+  speed: number;
   created_at: number;
 }
 
@@ -296,16 +311,62 @@ export function getTtsVoices(db: Database, tenantId: number): DbTtsVoice[] {
 export function insertTtsVoice(
   db: Database,
   tenantId: number,
-  voice: { label: string; provider: string; voice_id: string; is_default: boolean; aliases: string[] }
+  voice: {
+    label: string;
+    provider: string;
+    voice_id: string;
+    is_default: boolean;
+    aliases: string[];
+    stability?: number;
+    similarity_boost?: number;
+    style?: number;
+    use_speaker_boost?: boolean;
+    speed?: number;
+  }
 ): DbTtsVoice {
   if (voice.is_default) {
     db.prepare("UPDATE tenant_tts_voices SET is_default=0 WHERE tenant_id=?").run(tenantId);
   }
   const result = db.prepare(`
-    INSERT INTO tenant_tts_voices (tenant_id, label, provider, voice_id, is_default, aliases_json)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(tenantId, voice.label, voice.provider, voice.voice_id, voice.is_default ? 1 : 0, JSON.stringify(voice.aliases));
+    INSERT INTO tenant_tts_voices
+      (tenant_id, label, provider, voice_id, is_default, aliases_json,
+       stability, similarity_boost, style, use_speaker_boost, speed)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    tenantId, voice.label, voice.provider, voice.voice_id, voice.is_default ? 1 : 0,
+    JSON.stringify(voice.aliases),
+    voice.stability ?? 0.5,
+    voice.similarity_boost ?? 0.75,
+    voice.style ?? 0.0,
+    (voice.use_speaker_boost ?? true) ? 1 : 0,
+    voice.speed ?? 1.0
+  );
   return db.prepare("SELECT * FROM tenant_tts_voices WHERE id=?").get(result.lastInsertRowid) as DbTtsVoice;
+}
+
+export function updateTtsVoiceSettings(
+  db: Database,
+  id: number,
+  tenantId: number,
+  settings: {
+    stability?: number;
+    similarity_boost?: number;
+    style?: number;
+    use_speaker_boost?: boolean;
+    speed?: number;
+  }
+): boolean {
+  const fields: string[] = [];
+  const values: unknown[] = [];
+  if (settings.stability !== undefined) { fields.push("stability=?"); values.push(settings.stability); }
+  if (settings.similarity_boost !== undefined) { fields.push("similarity_boost=?"); values.push(settings.similarity_boost); }
+  if (settings.style !== undefined) { fields.push("style=?"); values.push(settings.style); }
+  if (settings.use_speaker_boost !== undefined) { fields.push("use_speaker_boost=?"); values.push(settings.use_speaker_boost ? 1 : 0); }
+  if (settings.speed !== undefined) { fields.push("speed=?"); values.push(settings.speed); }
+  if (fields.length === 0) return false;
+  values.push(id, tenantId);
+  const result = db.prepare(`UPDATE tenant_tts_voices SET ${fields.join(",")} WHERE id=? AND tenant_id=?`).run(...values);
+  return result.changes > 0;
 }
 
 export function deleteTtsVoice(db: Database, id: number, tenantId: number): boolean {

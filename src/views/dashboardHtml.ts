@@ -123,6 +123,12 @@ input:checked+.slider:before{transform:translateX(18px)}
 .voice-add-form input::placeholder{color:#6b7280}
 .voice-add-form .full{grid-column:1/-1}
 .voice-add-form label.check-row{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);cursor:pointer;grid-column:1/-1}
+.voice-settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;margin-top:8px;grid-column:1/-1}
+.vs-row{display:flex;flex-direction:column;gap:3px}
+.vs-label{font-size:11px;color:var(--muted);display:flex;justify-content:space-between}
+.vs-label span{color:var(--text);font-weight:600}
+.vs-row input[type=range]{width:100%;accent-color:var(--accent)}
+.vs-check{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);cursor:pointer}
 .api-key-status{font-size:11px;padding:2px 8px;border-radius:4px;font-weight:600}
 .api-key-status.set{background:#064e3b;color:#6ee7b7}
 .api-key-status.unset{background:#450a0a;color:#fca5a5}
@@ -278,7 +284,32 @@ input:checked+.slider:before{transform:translateX(18px)}
           <label class="check-row">
             <input type="checkbox" id="va-default"> Voix par défaut
           </label>
-          <button class="btn btn-accent full" onclick="addTtsVoice()" style="grid-column:1/-1">Ajouter la voix</button>
+          <div class="voice-settings-grid">
+            <div class="vs-row">
+              <div class="vs-label">Stability <span id="va-stab-val">0.50</span></div>
+              <input type="range" id="va-stability" min="0" max="1" step="0.05" value="0.5"
+                oninput="document.getElementById('va-stab-val').textContent=parseFloat(this.value).toFixed(2)">
+            </div>
+            <div class="vs-row">
+              <div class="vs-label">Similarity boost <span id="va-sim-val">0.75</span></div>
+              <input type="range" id="va-similarity" min="0" max="1" step="0.05" value="0.75"
+                oninput="document.getElementById('va-sim-val').textContent=parseFloat(this.value).toFixed(2)">
+            </div>
+            <div class="vs-row">
+              <div class="vs-label">Style <span id="va-style-val">0.00</span></div>
+              <input type="range" id="va-style" min="0" max="1" step="0.05" value="0"
+                oninput="document.getElementById('va-style-val').textContent=parseFloat(this.value).toFixed(2)">
+            </div>
+            <div class="vs-row">
+              <div class="vs-label">Speed <span id="va-speed-val">1.00</span></div>
+              <input type="range" id="va-speed" min="0.5" max="2" step="0.05" value="1"
+                oninput="document.getElementById('va-speed-val').textContent=parseFloat(this.value).toFixed(2)">
+            </div>
+            <label class="vs-check" style="grid-column:1/-1">
+              <input type="checkbox" id="va-speaker-boost" checked> Speaker boost
+            </label>
+          </div>
+          <button class="btn btn-accent full" onclick="addTtsVoice()" style="grid-column:1/-1;margin-top:4px">Ajouter la voix</button>
         </div>
         <p style="font-size:11px;color:var(--muted);margin-top:6px">
           Le Voice ID se trouve dans ton compte ElevenLabs → Voices → clic sur une voix → colonne ID.
@@ -572,17 +603,59 @@ input:checked+.slider:before{transform:translateX(18px)}
     }
     el.innerHTML = '<div class="voice-list">'
       + voices.map(function(v){
+          var id = v.id;
           var aliases = v.aliases && v.aliases.length ? v.aliases.join(', ') : '—';
-          return '<div class="voice-item">'
+          var stab = typeof v.stability === 'number' ? v.stability : 0.5;
+          var sim  = typeof v.similarityBoost === 'number' ? v.similarityBoost : 0.75;
+          var sty  = typeof v.style === 'number' ? v.style : 0.0;
+          var spd  = typeof v.speed === 'number' ? v.speed : 1.0;
+          var boost = v.useSpeakerBoost !== false;
+          var sid = 'vs-'+id;
+          return '<div class="voice-item" style="flex-direction:column;align-items:stretch">'
+            + '<div style="display:flex;align-items:center;gap:8px">'
             + '<div class="voice-item-info">'
             + '<div class="voice-item-label">'+esc(v.label)+(v.isDefault ? ' <span class="voice-default-badge">défaut</span>' : '')+'</div>'
             + '<div class="voice-item-meta">ID: '+esc(v.voiceId)+' · Alias: '+esc(aliases)+'</div>'
             + '</div>'
-            + '<button class="btn btn-danger btn-sm" onclick="deleteTtsVoice('+v.id+',\\''+esc(v.label)+'\\')">✕</button>'
+            + '<button class="btn btn-sm" style="font-size:11px;padding:2px 7px" onclick="document.getElementById(\''+sid+'\').style.display=document.getElementById(\''+sid+'\').style.display===\'none\'?\'grid\':\'none\'">⚙</button>'
+            + '<button class="btn btn-danger btn-sm" onclick="deleteTtsVoice('+id+",\""+esc(v.label)+"\")"+'>✕</button>'
+            + '</div>'
+            + '<div id="'+sid+'" style="display:none;grid-template-columns:1fr 1fr;gap:6px 14px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">'
+            + vsSlider(sid+'-stab','Stability',stab,0,1,0.05)
+            + vsSlider(sid+'-sim','Similarity boost',sim,0,1,0.05)
+            + vsSlider(sid+'-sty','Style',sty,0,1,0.05)
+            + vsSlider(sid+'-spd','Speed',spd,0.5,2,0.05)
+            + '<label class="vs-check" style="grid-column:1/-1"><input type="checkbox" id="'+sid+'-boost"'+(boost?' checked':'')+"> Speaker boost</label>"
+            + '<button class="btn btn-accent full" style="grid-column:1/-1;margin-top:4px" onclick="saveVoiceSettings('+id+',\''+sid+'\')">Sauvegarder</button>'
+            + '</div>'
             + '</div>';
         }).join('')
       + '</div>';
   }
+
+  function vsSlider(id, label, val, min, max, step) {
+    var valId = id+'-val';
+    return '<div class="vs-row">'
+      + '<div class="vs-label">'+esc(label)+' <span id="'+valId+'">'+val.toFixed(2)+'</span></div>'
+      + '<input type="range" id="'+id+'" min="'+min+'" max="'+max+'" step="'+step+'" value="'+val+'"'
+      + ' oninput="document.getElementById(\''+valId+'\').textContent=parseFloat(this.value).toFixed(2)">'
+      + '</div>';
+  }
+
+  window.saveVoiceSettings = async function(voiceId, sid) {
+    var stability = parseFloat(document.getElementById(sid+'-stab').value);
+    var similarityBoost = parseFloat(document.getElementById(sid+'-sim').value);
+    var style = parseFloat(document.getElementById(sid+'-sty').value);
+    var speed = parseFloat(document.getElementById(sid+'-spd').value);
+    var useSpeakerBoost = document.getElementById(sid+'-boost').checked;
+    try {
+      var result = await api('PATCH', '/api/tts/voices/'+voiceId, {stability:stability, similarityBoost:similarityBoost, style:style, speed:speed, useSpeakerBoost:useSpeakerBoost});
+      if(!result.ok) { toast('Erreur : voix introuvable', 'err'); return; }
+      toast('Settings sauvegardés ✓', 'ok');
+      document.getElementById(sid).style.display = 'none';
+      loadVoices();
+    } catch(e) { toast('Erreur lors de la sauvegarde', 'err'); }
+  };
 
   window.addTtsVoice = async function() {
     var label = document.getElementById('va-label').value.trim();
@@ -591,12 +664,29 @@ input:checked+.slider:before{transform:translateX(18px)}
     var isDefault = document.getElementById('va-default').checked;
     if(!label || !voiceId) { toast('Label et Voice ID requis', 'err'); return; }
     var aliases = aliasesRaw ? aliasesRaw.split(',').map(function(a){ return a.trim(); }).filter(Boolean) : [];
+    var stability = parseFloat(document.getElementById('va-stability').value);
+    var similarityBoost = parseFloat(document.getElementById('va-similarity').value);
+    var style = parseFloat(document.getElementById('va-style').value);
+    var speed = parseFloat(document.getElementById('va-speed').value);
+    var useSpeakerBoost = document.getElementById('va-speaker-boost').checked;
     try {
-      await api('POST', '/api/tts/voices', { label:label, voiceId:voiceId, aliases:aliases, isDefault:isDefault, provider:'elevenlabs' });
+      await api('POST', '/api/tts/voices', {
+        label:label, voiceId:voiceId, aliases:aliases, isDefault:isDefault, provider:'elevenlabs',
+        stability:stability, similarityBoost:similarityBoost, style:style, speed:speed, useSpeakerBoost:useSpeakerBoost
+      });
       document.getElementById('va-label').value = '';
       document.getElementById('va-voice-id').value = '';
       document.getElementById('va-aliases').value = '';
       document.getElementById('va-default').checked = false;
+      document.getElementById('va-stability').value = '0.5';
+      document.getElementById('va-stab-val').textContent = '0.50';
+      document.getElementById('va-similarity').value = '0.75';
+      document.getElementById('va-sim-val').textContent = '0.75';
+      document.getElementById('va-style').value = '0';
+      document.getElementById('va-style-val').textContent = '0.00';
+      document.getElementById('va-speed').value = '1';
+      document.getElementById('va-speed-val').textContent = '1.00';
+      document.getElementById('va-speaker-boost').checked = true;
       toast('Voix ajoutée ✓', 'ok');
       loadVoices();
     } catch(e) { toast("Erreur lors de l'ajout", 'err'); }

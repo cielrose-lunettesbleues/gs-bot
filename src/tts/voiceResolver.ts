@@ -1,3 +1,11 @@
+export interface TtsVoiceSettings {
+  stability: number;
+  similarityBoost: number;
+  style: number;
+  useSpeakerBoost: boolean;
+  speed: number;
+}
+
 export interface TtsVoice {
   id: number;
   tenantId: number;
@@ -6,6 +14,7 @@ export interface TtsVoice {
   voiceId: string;
   isDefault: boolean;
   aliases: string[];
+  settings: TtsVoiceSettings;
 }
 
 /** Normalize a string for comparison: lowercase, strip accents, strip non-alphanumeric. */

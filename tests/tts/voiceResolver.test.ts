@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { resolveVoice, normalizeVoiceLabel, type TtsVoice } from "../../src/tts/voiceResolver";
 
+const DEFAULT_SETTINGS = { stability: 0.5, similarityBoost: 0.75, style: 0.0, useSpeakerBoost: true, speed: 1.0 };
+
 function makeVoice(overrides: Partial<TtsVoice> & { label: string; voiceId: string }): TtsVoice {
   return {
     id: 1,
@@ -8,6 +10,7 @@ function makeVoice(overrides: Partial<TtsVoice> & { label: string; voiceId: stri
     provider: "elevenlabs",
     isDefault: false,
     aliases: [],
+    settings: DEFAULT_SETTINGS,
     ...overrides
   };
 }

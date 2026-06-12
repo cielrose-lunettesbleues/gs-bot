@@ -1,11 +1,12 @@
 import type { Database } from "../db/database";
 import { getTtsVoices } from "../db/database";
-import { ElevenLabsProvider, type ITtsProvider } from "./elevenLabsProvider";
+import { ElevenLabsProvider, type ITtsProvider, type ElevenLabsError } from "./elevenLabsProvider";
 import { resolveVoice, type TtsVoice } from "./voiceResolver";
 
 export interface TtsSynthResult {
   audioId: string;
   durationSeconds: number;
+  errorMessage?: string;
 }
 
 export interface ITtsService {
@@ -69,7 +70,14 @@ export class TtsService implements ITtsService {
       provider: row.provider,
       voiceId: row.voice_id,
       isDefault: Boolean(row.is_default),
-      aliases: JSON.parse(row.aliases_json) as string[]
+      aliases: JSON.parse(row.aliases_json) as string[],
+      settings: {
+        stability: row.stability ?? 0.5,
+        similarityBoost: row.similarity_boost ?? 0.75,
+        style: row.style ?? 0.0,
+        useSpeakerBoost: Boolean(row.use_speaker_boost ?? 1),
+        speed: row.speed ?? 1.0
+      }
     }));
   }
 
@@ -88,15 +96,17 @@ export class TtsService implements ITtsService {
 
     let result: { audioBuffer: Buffer; mimeType: string } | null;
     try {
-      result = await provider.synthesize(truncated, voice.voiceId);
+      result = await provider.synthesize(truncated, voice.voiceId, voice.settings);
     } catch (err) {
       this.logger.error({ err, tenantId: this.tenantId }, "TTS synthesis failed");
       return null;
     }
 
     if (!result) {
-      this.logger.warn({ tenantId: this.tenantId, voiceLabel }, "TTS provider returned null");
-      return null;
+      const err: ElevenLabsError | null = provider instanceof ElevenLabsProvider ? provider.lastError : null;
+      const msg = err?.message ?? "Erreur de synthèse TTS inconnue";
+      this.logger.warn({ tenantId: this.tenantId, voiceLabel, error: msg }, "TTS provider returned null");
+      return { audioId: "", durationSeconds: 0, errorMessage: msg };
     }
 
     const audioId = crypto.randomUUID();

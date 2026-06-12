@@ -11,6 +11,7 @@ import {
   getUserByLogin,
   getTtsVoices,
   insertTtsVoice,
+  updateTtsVoiceSettings,
   deleteTtsVoice
 } from "./db/database";
 import {
@@ -380,7 +381,12 @@ export async function createApp(config: ServerConfig, logger: Logger) {
       provider: v.provider,
       voiceId: v.voice_id,
       isDefault: Boolean(v.is_default),
-      aliases: JSON.parse(v.aliases_json) as string[]
+      aliases: JSON.parse(v.aliases_json) as string[],
+      stability: v.stability ?? 0.5,
+      similarityBoost: v.similarity_boost ?? 0.75,
+      style: v.style ?? 0.0,
+      useSpeakerBoost: Boolean(v.use_speaker_boost ?? 1),
+      speed: v.speed ?? 1.0
     }));
     return c.json({ voices });
   });
@@ -395,10 +401,40 @@ export async function createApp(config: ServerConfig, logger: Logger) {
     const aliases = Array.isArray(body.aliases)
       ? (body.aliases as unknown[]).filter((a) => typeof a === "string").map((a) => String(a).trim())
       : [];
+    const clamp = (v: unknown, min: number, max: number, def: number) =>
+      typeof v === "number" && isFinite(v) ? Math.min(max, Math.max(min, v)) : def;
+    const stability = clamp(body.stability, 0, 1, 0.5);
+    const similarityBoost = clamp(body.similarityBoost, 0, 1, 0.75);
+    const style = clamp(body.style, 0, 1, 0.0);
+    const useSpeakerBoost = body.useSpeakerBoost !== false;
+    const speed = clamp(body.speed, 0.5, 2.0, 1.0);
     if (!label || !voiceId) return c.json({ ok: false, error: "label and voiceId required" }, 400);
-    const voice = insertTtsVoice(db, user.id, { label, provider, voice_id: voiceId, is_default: isDefault, aliases });
+    const voice = insertTtsVoice(db, user.id, {
+      label, provider, voice_id: voiceId, is_default: isDefault, aliases,
+      stability, similarity_boost: similarityBoost, style, use_speaker_boost: useSpeakerBoost, speed
+    });
     logger.info({ userId: user.id, voiceId: voice.id }, "TTS voice added");
     return c.json({ ok: true, voice: { id: voice.id, label: voice.label } }, 201);
+  });
+
+  api.patch("/tts/voices/:id", async (c) => {
+    const user = requireAuth(c)!;
+    const id = parseInt(c.req.param("id"), 10);
+    if (isNaN(id)) return c.json({ ok: false, error: "invalid_id" }, 400);
+    const body = await c.req.json<Record<string, unknown>>();
+    const clamp = (v: unknown, min: number, max: number) =>
+      typeof v === "number" && isFinite(v) ? Math.min(max, Math.max(min, v)) : undefined;
+    const settings = {
+      stability: clamp(body.stability, 0, 1),
+      similarity_boost: clamp(body.similarityBoost, 0, 1),
+      style: clamp(body.style, 0, 1),
+      use_speaker_boost: typeof body.useSpeakerBoost === "boolean" ? body.useSpeakerBoost : undefined,
+      speed: clamp(body.speed, 0.5, 2.0)
+    };
+    const ok = updateTtsVoiceSettings(db, id, user.id, settings);
+    if (!ok) return c.json({ ok: false, error: "not_found" }, 404);
+    logger.info({ userId: user.id, voiceId: id }, "TTS voice settings updated");
+    return c.json({ ok: true });
   });
 
   api.delete("/tts/voices/:id", (c) => {

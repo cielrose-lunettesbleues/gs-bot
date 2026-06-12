@@ -121,11 +121,13 @@ describe("TtsService.synthesize", () => {
     expect(audio?.mimeType).toBe("audio/mpeg");
   });
 
-  it("returns null when provider fails", async () => {
+  it("returns errorMessage when provider fails", async () => {
     insertTtsVoice(db, TENANT_ID, { label: "Err", provider: "elevenlabs", voice_id: "v-err", is_default: true, aliases: [] });
     const fail: ITtsProvider = { synthesize: async () => null };
     const svc = new TtsService(db, TENANT_ID, makeLiveConfig(), logger, () => fail);
-    expect(await svc.synthesize("boom", "err")).toBeNull();
+    const result = await svc.synthesize("boom", "err");
+    expect(result).not.toBeNull();
+    expect(result!.errorMessage).toBeTruthy();
   });
 
   it("uses current apiKey after live config update", async () => {

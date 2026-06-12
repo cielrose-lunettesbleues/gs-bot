@@ -23,13 +23,20 @@ export function createTtsCommand(deps: CommandDependencies, commandName: string)
 
       const channel = (deps.channelLogin ?? context.channel.replace(/^#/, "")).toLowerCase();
 
-      // No TTS service or service disabled/unconfigured → show text caption only
+      // TTS not configured — show caption only (no audio)
       if (!deps.ttsService?.isEnabled()) {
         deps.broadcastOverlay?.({ type: "tts", text, audioUrl: "", durationSeconds: 4 });
         return;
       }
 
       const result = await deps.ttsService.synthesize(text, voiceLabel);
+
+      // ElevenLabs returned an error — reply with the reason so the testeur shows it
+      if (result?.errorMessage) {
+        await context.reply(`@${context.user.username} TTS erreur : ${result.errorMessage}`);
+        deps.broadcastOverlay?.({ type: "tts", text, audioUrl: "", durationSeconds: 4 });
+        return;
+      }
 
       const ttsEvent: TtsPlaybackEvent = {
         type: "tts",
