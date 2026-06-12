@@ -22,7 +22,10 @@
       "WebFetch(domain:www.tikwm.com)",
       "WebFetch(domain:sociavault.com)",
       "WebFetch(domain:docs.sociavault.com)",
-      "Bash(npm test *)"
+      "Bash(npm test *)",
+      "Bash(git stash *)",
+      "Bash(git checkout *)",
+      "PowerShell(cd \"c:\\\\Users\\\\untho\\\\Documents\\\\GitHub\\\\gs-bot\"; npx tsc --noEmit 2>&1; Write-Host \"Exit: $LASTEXITCODE\")"
     ]
   }
 }

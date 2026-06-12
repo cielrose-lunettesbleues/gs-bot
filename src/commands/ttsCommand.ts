@@ -21,11 +21,12 @@ export function createTtsCommand(deps: CommandDependencies, commandName: string)
         return;
       }
 
-      const channel = (deps.channelLogin ?? context.channel.replace(/^#/, "")).toLowerCase();
+      const channel = (deps.channelLogin || context.channel.replace(/^#/, "")).toLowerCase();
+      const volume = deps.config.tts?.volume ?? 1.0;
 
       // TTS not configured — show caption only (no audio)
       if (!deps.ttsService?.isEnabled()) {
-        deps.broadcastOverlay?.({ type: "tts", text, audioUrl: "", durationSeconds: 4 });
+        deps.broadcastOverlay?.({ type: "tts", text, audioUrl: "", durationSeconds: 4, volume });
         return;
       }
 
@@ -34,7 +35,7 @@ export function createTtsCommand(deps: CommandDependencies, commandName: string)
       // ElevenLabs returned an error — reply with the reason so the testeur shows it
       if (result?.errorMessage) {
         await context.reply(`@${context.user.username} TTS erreur : ${result.errorMessage}`);
-        deps.broadcastOverlay?.({ type: "tts", text, audioUrl: "", durationSeconds: 4 });
+        deps.broadcastOverlay?.({ type: "tts", text, audioUrl: "", durationSeconds: 4, volume });
         return;
       }
 
@@ -42,7 +43,8 @@ export function createTtsCommand(deps: CommandDependencies, commandName: string)
         type: "tts",
         text,
         audioUrl: result ? `/tts/audio/${channel}/${result.audioId}` : "",
-        durationSeconds: result?.durationSeconds ?? 4
+        durationSeconds: result?.durationSeconds ?? 4,
+        volume
       };
 
       deps.broadcastOverlay?.(ttsEvent);

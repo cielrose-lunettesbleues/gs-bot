@@ -242,6 +242,13 @@ iframe{
   var ttsHideTimer = null;
   var ttsAudio = null;
 
+  function hideTtsCaption(){
+    ttsCaptionEl.classList.remove('visible');
+    setTimeout(function(){ ttsCaptionEl.textContent=''; },500);
+    ttsAudio = null;
+    ttsHideTimer = null;
+  }
+
   function playTts(data){
     // Stop any previous TTS
     if(ttsHideTimer){ clearTimeout(ttsHideTimer); ttsHideTimer=null; }
@@ -250,19 +257,21 @@ iframe{
     ttsCaptionEl.textContent = data.text;
     ttsCaptionEl.classList.add('visible');
 
+    // Fallback timer in case audio fails or URL is empty
+    var fallbackMs = Math.max((data.durationSeconds || 4) * 1000 + 1500, 2000);
+    ttsHideTimer = setTimeout(hideTtsCaption, fallbackMs);
+
     if(data.audioUrl){
       ttsAudio = new Audio(data.audioUrl);
-      ttsAudio.volume = 1.0;
-      ttsAudio.play().catch(function(){});
+      ttsAudio.volume = typeof data.volume === 'number' ? data.volume : 1.0;
+      ttsAudio.addEventListener('ended', function(){
+        if(ttsHideTimer){ clearTimeout(ttsHideTimer); ttsHideTimer=null; }
+        hideTtsCaption();
+      });
+      ttsAudio.play().catch(function(){
+        // Autoplay blocked or load failed — fallback timer already running
+      });
     }
-
-    var ms = Math.max((data.durationSeconds || 4) * 1000, 1000);
-    ttsHideTimer = setTimeout(function(){
-      ttsCaptionEl.classList.remove('visible');
-      setTimeout(function(){ ttsCaptionEl.textContent=''; },500);
-      ttsAudio = null;
-      ttsHideTimer = null;
-    }, ms);
   }
 
   function connect(){
@@ -270,10 +279,13 @@ iframe{
     var channel=parts[parts.length-1]||'';
     var es=new EventSource('/overlay/'+channel+'/events');
     es.onmessage=function(ev){
-      var d=JSON.parse(ev.data);
-      if(d.type==='start') show(d);
-      else if(d.type==='stop') hide();
-      else if(d.type==='tts') playTts(d);
+      if(!ev.data) return;
+      try {
+        var d=JSON.parse(ev.data);
+        if(d.type==='start') show(d);
+        else if(d.type==='stop') hide();
+        else if(d.type==='tts') playTts(d);
+      } catch(e){}
     };
     es.onerror=function(){
       es.close();

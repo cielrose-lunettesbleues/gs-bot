@@ -60,6 +60,7 @@ export interface CommandDependencies {
       allowedFileExtensions: string[];
       maxDurationSeconds: number;
     };
+    tts?: { volume: number };
   };
   logger: {
     info: (payload: Record<string, unknown>, message: string) => void;

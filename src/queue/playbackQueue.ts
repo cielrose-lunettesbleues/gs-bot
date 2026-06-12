@@ -27,6 +27,7 @@ export interface TtsPlaybackEvent {
   text: string;
   audioUrl: string;
   durationSeconds: number;
+  volume?: number;
 }
 
 export type PlaybackEvent =
