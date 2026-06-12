@@ -19,8 +19,7 @@ import { createRuntimeState } from "../state/runtimeState";
 import { searchShortVideo } from "../media/youtubeSearch";
 import { sociavaultSearch, sociavaultResolve } from "../media/sociavaultClient";
 import { searchGif } from "../media/klipySearch";
-import { TtsService, NullTtsService, type ITtsService } from "../tts/ttsService";
-import { ElevenLabsProvider } from "../tts/elevenLabsProvider";
+import { TtsService, type ITtsService } from "../tts/ttsService";
 
 // The mutable runtime config that all tenant services share via reference
 export interface TenantRuntimeConfig {
@@ -132,17 +131,8 @@ export class TenantManager {
       logger: this.logger
     });
 
-    // Build TTS service for this tenant
-    const ttsProvider = runtimeConfig.tts.apiKey
-      ? new ElevenLabsProvider(runtimeConfig.tts.apiKey)
-      : null;
-    const ttsService: ITtsService = new TtsService(
-      this.db,
-      userId,
-      ttsProvider,
-      { enabled: runtimeConfig.tts.enabled, maxLength: runtimeConfig.tts.maxLength, volume: runtimeConfig.tts.volume },
-      this.logger
-    );
+    // liveConfig is the same object mutated by persistConfig — TtsService always reads the latest key/settings
+    const ttsService: ITtsService = new TtsService(this.db, userId, runtimeConfig.tts, this.logger);
 
     const dbUser = getUserById(this.db, userId);
     const channelLogin = dbUser?.twitch_login ?? "";

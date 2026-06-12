@@ -599,7 +599,7 @@ input:checked+.slider:before{transform:translateX(18px)}
       document.getElementById('va-default').checked = false;
       toast('Voix ajoutée ✓', 'ok');
       loadVoices();
-    } catch(e) { toast('Erreur lors de l\'ajout', 'err'); }
+    } catch(e) { toast("Erreur lors de l'ajout", 'err'); }
   };
 
   window.deleteTtsVoice = async function(id, label) {
@@ -611,15 +611,8 @@ input:checked+.slider:before{transform:translateX(18px)}
     } catch(e) { toast('Erreur', 'err'); }
   };
 
-  /* ── Patch refresh() to also update TTS fields ── */
-  var _origRefresh = refresh;
-  refresh = async function() {
-    var p = _origRefresh();
-    loadVoices();
-    return p;
-  };
-
   refresh();
+  loadVoices();
   setInterval(refresh, 5000);
 })();
 </script>

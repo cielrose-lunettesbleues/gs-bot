@@ -1,6 +1,6 @@
 import type { Database } from "../db/database";
 import { getTtsVoices } from "../db/database";
-import type { ITtsProvider } from "./elevenLabsProvider";
+import { ElevenLabsProvider, type ITtsProvider } from "./elevenLabsProvider";
 import { resolveVoice, type TtsVoice } from "./voiceResolver";
 
 export interface TtsSynthResult {
@@ -21,8 +21,10 @@ interface AudioEntry {
   expiresAt: number;
 }
 
-interface TtsConfig {
+// Mutable reference — shared with runtimeConfig.tts, mutated by persistConfig
+export interface TtsLiveConfig {
   enabled: boolean;
+  apiKey: string;
   maxLength: number;
   volume: number;
 }
@@ -33,8 +35,7 @@ interface TtsLogger {
   error(payload: Record<string, unknown>, msg: string): void;
 }
 
-const AUDIO_TTL_MS = 5 * 60 * 1000; // 5 minutes
-// Rough estimate: 128 kbps MP3 → 16 000 bytes/s
+const AUDIO_TTL_MS = 5 * 60 * 1000;
 const BYTES_PER_SECOND = 16_000;
 
 export class TtsService implements ITtsService {
@@ -43,13 +44,21 @@ export class TtsService implements ITtsService {
   constructor(
     private readonly db: Database,
     private readonly tenantId: number,
-    private readonly provider: ITtsProvider | null,
-    private readonly config: TtsConfig,
-    private readonly logger: TtsLogger
+    /**
+     * Live reference to runtimeConfig.tts — mutated in-place by persistConfig.
+     * TtsService reads it on every call so API key changes take effect immediately.
+     */
+    private readonly liveConfig: TtsLiveConfig,
+    private readonly logger: TtsLogger,
+    /**
+     * Provider factory — injected for testing, defaults to ElevenLabs.
+     * Called per synthesis with the current API key, so key updates are hot.
+     */
+    private readonly providerFactory: (apiKey: string) => ITtsProvider = (key) => new ElevenLabsProvider(key)
   ) {}
 
   isEnabled(): boolean {
-    return this.config.enabled && this.provider !== null;
+    return this.liveConfig.enabled && this.liveConfig.apiKey.length > 0;
   }
 
   getVoices(): TtsVoice[] {
@@ -65,7 +74,7 @@ export class TtsService implements ITtsService {
   }
 
   async synthesize(text: string, voiceLabel: string): Promise<TtsSynthResult | null> {
-    if (!this.isEnabled() || !this.provider) return null;
+    if (!this.isEnabled()) return null;
 
     const voices = this.getVoices();
     const voice = resolveVoice(voiceLabel, voices);
@@ -74,11 +83,12 @@ export class TtsService implements ITtsService {
       return null;
     }
 
-    const truncated = text.slice(0, this.config.maxLength);
+    const truncated = text.slice(0, this.liveConfig.maxLength);
+    const provider = this.providerFactory(this.liveConfig.apiKey);
 
     let result: { audioBuffer: Buffer; mimeType: string } | null;
     try {
-      result = await this.provider.synthesize(truncated, voice.voiceId);
+      result = await provider.synthesize(truncated, voice.voiceId);
     } catch (err) {
       this.logger.error({ err, tenantId: this.tenantId }, "TTS synthesis failed");
       return null;
@@ -95,7 +105,6 @@ export class TtsService implements ITtsService {
     this.evictExpired();
 
     const durationSeconds = Math.max(1, Math.ceil(result.audioBuffer.length / BYTES_PER_SECOND));
-
     this.logger.info(
       { tenantId: this.tenantId, voice: voice.label, bytes: result.audioBuffer.length, durationSeconds },
       "TTS audio generated"
@@ -121,7 +130,7 @@ export class TtsService implements ITtsService {
   }
 }
 
-/** No-op TTS service used when TTS is not configured for a tenant. */
+/** No-op TTS service used as a safe default before config is loaded. */
 export class NullTtsService implements ITtsService {
   isEnabled(): boolean { return false; }
   getVoices(): TtsVoice[] { return []; }
