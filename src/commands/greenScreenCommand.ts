@@ -9,7 +9,7 @@ function buildTtsGenerate(
   rawChannel: string
 ): (() => Promise<TtsPlaybackEvent | null>) | undefined {
   if (!deps.ttsService?.isEnabled() || !caption) return undefined;
-  const channel = (deps.channelLogin ?? rawChannel.replace(/^#/, "")).toLowerCase();
+  const channel = (deps.channelLogin || rawChannel.replace(/^#/, "")).toLowerCase();
   const text = caption;
   const voice = voiceLabel ?? "";
   return async () => {

@@ -191,6 +191,13 @@ iframe{
       c.appendChild(f);
       return c;
     }
+    // Tenor/Giphy page URL — server-side resolution failed, embed as iframe fallback
+    if(/tenor\\.com\\/view\\//i.test(url) || /giphy\\.com\\/gifs\\//i.test(url)){
+      var f=document.createElement('iframe');
+      f.src=url;
+      f.allow='autoplay; fullscreen';
+      return f;
+    }
     if(/\\.(gif|png|jpg|jpeg|webp)(\\?.*)?$/i.test(url)){
       var i=document.createElement('img');
       i.src=url;
@@ -245,14 +252,22 @@ iframe{
   function hideTtsCaption(){
     ttsCaptionEl.classList.remove('visible');
     setTimeout(function(){ ttsCaptionEl.textContent=''; },500);
-    ttsAudio = null;
+    if(ttsAudio){
+      ttsAudio.pause();
+      if(ttsAudio.parentNode) ttsAudio.parentNode.removeChild(ttsAudio);
+      ttsAudio = null;
+    }
     ttsHideTimer = null;
   }
 
   function playTts(data){
     // Stop any previous TTS
     if(ttsHideTimer){ clearTimeout(ttsHideTimer); ttsHideTimer=null; }
-    if(ttsAudio){ ttsAudio.pause(); ttsAudio=null; }
+    if(ttsAudio){
+      ttsAudio.pause();
+      if(ttsAudio.parentNode) ttsAudio.parentNode.removeChild(ttsAudio);
+      ttsAudio = null;
+    }
 
     ttsCaptionEl.textContent = data.text;
     ttsCaptionEl.classList.add('visible');
@@ -262,14 +277,20 @@ iframe{
     ttsHideTimer = setTimeout(hideTtsCaption, fallbackMs);
 
     if(data.audioUrl){
-      ttsAudio = new Audio(data.audioUrl);
+      // Append to DOM so OBS browser source captures the audio
+      ttsAudio = document.createElement('audio');
+      ttsAudio.src = data.audioUrl;
       ttsAudio.volume = typeof data.volume === 'number' ? data.volume : 1.0;
       ttsAudio.addEventListener('ended', function(){
         if(ttsHideTimer){ clearTimeout(ttsHideTimer); ttsHideTimer=null; }
         hideTtsCaption();
       });
-      ttsAudio.play().catch(function(){
-        // Autoplay blocked or load failed — fallback timer already running
+      ttsAudio.addEventListener('error', function(e){
+        console.error('[TTS] audio load error', e);
+      });
+      document.body.appendChild(ttsAudio);
+      ttsAudio.play().catch(function(e){
+        console.error('[TTS] audio play blocked', e);
       });
     }
   }
@@ -282,10 +303,10 @@ iframe{
       if(!ev.data) return;
       try {
         var d=JSON.parse(ev.data);
-        if(d.type==='start') show(d);
-        else if(d.type==='stop') hide();
+        if(d.type==='start'){ console.log('[overlay] start', d.url); show(d); }
+        else if(d.type==='stop'){ console.log('[overlay] stop'); hide(); }
         else if(d.type==='tts') playTts(d);
-      } catch(e){}
+      } catch(e){ console.error('[overlay] event error', e); }
     };
     es.onerror=function(){
       es.close();
