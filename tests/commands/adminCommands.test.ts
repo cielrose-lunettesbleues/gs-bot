@@ -59,6 +59,17 @@ describe("AdminService — permission check", () => {
 });
 
 describe("AdminService — subonly", () => {
+  it("persists subOnly through the shared config path when available", async () => {
+    const deps = makeDeps();
+    const persistRuntimeConfig = vi.fn((patch: { sub_only?: number }) => {
+      deps.runtimeConfig.access.subOnly = patch.sub_only === 1;
+    });
+    const service = new AdminService({ ...deps, persistRuntimeConfig });
+    await service.execute(makeContext(), ["subonly", "off"]);
+    expect(persistRuntimeConfig).toHaveBeenCalledWith({ sub_only: 0 });
+    expect(deps.runtimeConfig.access.subOnly).toBe(false);
+  });
+
   it("enables subOnly", async () => {
     const deps = makeDeps();
     deps.runtimeConfig.access.subOnly = false;
@@ -102,6 +113,17 @@ describe("AdminService — modonly", () => {
 });
 
 describe("AdminService — cooldown", () => {
+  it("persists cooldown duration through the shared config path when available", async () => {
+    const deps = makeDeps();
+    const persistRuntimeConfig = vi.fn((patch: { cooldown_seconds?: number }) => {
+      if (typeof patch.cooldown_seconds === "number") deps.runtimeConfig.cooldown.seconds = patch.cooldown_seconds;
+    });
+    const service = new AdminService({ ...deps, persistRuntimeConfig });
+    await service.execute(makeContext(), ["cooldown", "120"]);
+    expect(persistRuntimeConfig).toHaveBeenCalledWith({ cooldown_seconds: 120 });
+    expect(deps.runtimeConfig.cooldown.seconds).toBe(120);
+  });
+
   it("disables cooldown", async () => {
     const deps = makeDeps();
     const ctx = makeContext();

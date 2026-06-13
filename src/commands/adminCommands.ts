@@ -1,6 +1,7 @@
 import type { ApprovalService } from "../approval/approvalService";
 import type { IBlacklistService } from "../blacklist/blacklistService";
 import type { IHistoryService } from "../history/historyService";
+import type { TenantAdminConfigPatch } from "../tenant/configPatches";
 import type { CommandContext } from "../twitch/twitchTypes";
 import type { Command } from "./types";
 
@@ -24,6 +25,7 @@ interface MutableRuntimeConfig {
 
 interface AdminDeps {
   runtimeConfig: MutableRuntimeConfig;
+  persistRuntimeConfig?: (patch: TenantAdminConfigPatch) => void;
   cooldownService: { reset: (username?: string) => void };
   blacklistService: IBlacklistService;
   historyService: IHistoryService;
@@ -36,6 +38,14 @@ interface AdminDeps {
 
 export class AdminService {
   constructor(private readonly deps: AdminDeps) {}
+
+  private updateConfig(patch: TenantAdminConfigPatch, applyLocal: () => void): void {
+    if (this.deps.persistRuntimeConfig) {
+      this.deps.persistRuntimeConfig(patch);
+      return;
+    }
+    applyLocal();
+  }
 
   public isAdminKeyword(token: string): boolean {
     return ADMIN_KEYWORDS.has(token.toLowerCase());
@@ -92,27 +102,44 @@ export class AdminService {
       await context.reply(`@${context.user.username} Usage: !gs ${label} on|off`);
       return;
     }
-    this.deps.runtimeConfig.access[key] = val === "on";
-    await context.reply(
-      `@${context.user.username} ${label} ${val === "on" ? "activé" : "désactivé"}.`
+    const enabled = val === "on";
+    this.updateConfig(
+      key === "subOnly" ? { sub_only: enabled ? 1 : 0 } : { mod_only: enabled ? 1 : 0 },
+      () => {
+        this.deps.runtimeConfig.access[key] = enabled;
+      }
     );
-    this.deps.logger.info({ key, value: val === "on" }, `Admin: ${label} changed`);
+    await context.reply(
+      `@${context.user.username} ${label} ${enabled ? "activé" : "désactivé"}.`
+    );
+    this.deps.logger.info({ key, value: enabled }, `Admin: ${label} changed`);
   }
 
   private async handleCooldown(context: CommandContext, rest: string[]): Promise<void> {
     const val = rest[0]?.toLowerCase();
     if (val === "on" || val === "off") {
-      this.deps.runtimeConfig.cooldown.enabled = val === "on";
+      const enabled = val === "on";
+      this.updateConfig(
+        { cooldown_enabled: enabled ? 1 : 0 },
+        () => {
+          this.deps.runtimeConfig.cooldown.enabled = enabled;
+        }
+      );
       await context.reply(
-        `@${context.user.username} Cooldown ${val === "on" ? "activé" : "désactivé"}.`
+        `@${context.user.username} Cooldown ${enabled ? "activé" : "désactivé"}.`
       );
     } else {
       const seconds = parseInt(val ?? "", 10);
-      if (isNaN(seconds) || seconds < 0) {
+      if (isNaN(seconds) || seconds < 0 || seconds > 3600) {
         await context.reply(`@${context.user.username} Usage: !gs cooldown on|off|<secondes>`);
         return;
       }
-      this.deps.runtimeConfig.cooldown.seconds = seconds;
+      this.updateConfig(
+        { cooldown_seconds: seconds },
+        () => {
+          this.deps.runtimeConfig.cooldown.seconds = seconds;
+        }
+      );
       await context.reply(`@${context.user.username} Cooldown réglé à ${seconds}s.`);
     }
     this.deps.logger.info({ cooldown: this.deps.runtimeConfig.cooldown }, "Admin: cooldown changed");

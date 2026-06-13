@@ -20,10 +20,10 @@ Twitch Chat Command → Bot Validation → PlaybackQueue → OverlayBroadcaster 
 
 ```bash
 npm run dev   # → src/server.ts (mode SaaS multi-tenant, port 4317 par défaut)
-npm test      # → vitest (129 tests)
+npm test      # → vitest
 ```
 
-`src/app.ts` (ancien mode standalone) est exclu de la compilation tsconfig.
+L'ancien mode standalone et les modules legacy principaux ont été supprimés du repo actif. Le build TypeScript principal correspond désormais au mode SaaS uniquement.
 
 ### Stack
 
@@ -65,10 +65,11 @@ vitest        — tests unitaires
 - Historique des lectures récentes
 - File d'approbations en attente
 - Refresh automatique toutes les 5s via `/api/status`
+- Panneau runtime avec observabilité du tenant: résidence mémoire, raisons d'activité, TTL dashboard, état bot/overlay
 
 ### OBS Browser Source
 
-- URL : `http://host/overlay/:channel`
+- URL : `http://host/overlay/:channel?token=...`
 - Fond transparent, 1920×1080
 - Reçoit les events via SSE (`GET /overlay/:channel/events`)
 - Event `{ type: "start", url, durationSeconds }` → affiche le média
@@ -87,13 +88,25 @@ src/
     oauthHandler.ts           — OAuth Twitch (exchange, refresh, fetchUserInfo, sessions)
     sessionMiddleware.ts      — middleware Hono session + helpers cookie
   tenant/
-    tenantManager.ts          — crée/cache les services isolés par userId
+    tenantManager.ts          — orchestration lifecycle + cache tenant
+    createTenantServices.ts   — factory du runtime tenant
+    runtimeConfig.ts          — mapping DB -> config runtime
+    configPatches.ts          — patchs typés de config tenant
+    liveStatusPoller.ts       — polling live Twitch (3 min)
   db/
     database.ts               — schéma SQLite + fonctions CRUD (users, sessions, tenant_configs, history, blacklist)
+  web/
+    routes/
+      publicRoutes.ts         — setup, auth, dashboard, overlay, TTS public
+      apiRoutes.ts            — routes `/api/*`
+    requestValidation.ts      — schémas Zod et parsing JSON
+    apiContracts.ts           — contrats typés de réponses API
+    publicTokens.ts           — URL overlay publique + setup token
   views/
     setupHtml.ts              — wizard premier lancement
     loginHtml.ts              — page connexion Twitch
-    dashboardHtml.ts          — dashboard multi-tenant (HTML/CSS/JS inline)
+    dashboardHtml.ts          — structure HTML/CSS du dashboard
+    dashboardClientScript.ts  — logique client du dashboard
   overlay/
     overlayHtml.ts            — page OBS Browser Source (SSE client)
     overlayBroadcaster.ts     — diffuse les events PlaybackEvent aux clients SSE
@@ -189,6 +202,7 @@ queue_mode (queue|replace|drop), queue_max_size
 duration_seconds
 allowed_domains, allow_direct_files, allowed_file_extensions
 max_video_duration_seconds
+overlay_token
 ```
 
 Modifiable en live via `PATCH /api/config` depuis le dashboard.
@@ -204,6 +218,8 @@ Toutes les routes `/api/*` requièrent une session valide (cookie `gs_session`).
 | GET | `/api/status` | État complet du tenant |
 | GET | `/api/history?n=30` | Historique de lecture |
 | PATCH | `/api/config` | Modification config à chaud |
+| GET | `/api/tts/voices` | Voix TTS du tenant |
+| POST | `/api/overlay/rotate-token` | Régénère l'URL OBS publique |
 | POST | `/api/queue/stop` | Stop d'urgence |
 | POST | `/api/cooldown/reset` | Reset cooldown |
 | POST | `/api/approve/:username` | Approbation mod |
@@ -215,8 +231,9 @@ Toutes les routes `/api/*` requièrent une session valide (cookie `gs_session`).
 ## Overlay SSE
 
 ```txt
-GET /overlay/:channel         → HTML OBS Browser Source
-GET /overlay/:channel/events  → SSE stream (sans auth, OBS ne gère pas les cookies)
+GET /overlay/:channel?token=...         → HTML OBS Browser Source
+GET /overlay/:channel/events?token=...  → SSE stream protégé par token public
+GET /tts/audio/:channel/:id?token=...   → audio TTS protégé par le même token public tenant
 ```
 
 Events envoyés :
@@ -256,9 +273,19 @@ Chaque streamer a ses propres services. Pas de partage d'état global entre tena
 
 `oauthConfig` est un objet muté en place après `/setup`. Les middlewares qui le capturent par référence voient les changements sans restart.
 
+### 2.b. Config runtime tenant mutable par référence
+
+`TenantRuntimeConfig` est partagé entre les services d'un tenant. `tenantManager.persistConfig()` persiste en DB puis propage les nouvelles valeurs en mémoire.
+
 ### 3. Bot IRC non-bloquant
 
 `twitchBotManager.start()` est fire-and-forget dans le callback OAuth. L'utilisateur atteint toujours le dashboard même si le bot ne peut pas se connecter à IRC.
+
+### 3.b. Lifecycle tenant piloté par activité
+
+- ouverture dashboard → activation immédiate
+- polling Twitch live toutes les 3 minutes → activation si le streamer est live
+- arrêt si plus de dashboard actif, plus de live, et plus de lecture en cours
 
 ### 4. OBS sans WebSocket
 
@@ -273,6 +300,12 @@ tmi.js → twitchMessageHandler → CommandRouter → GreenScreenCommand → Pla
 ### 6. Interfaces pour les services testables
 
 `IBlacklistService` et `IHistoryService` permettent les mocks dans les tests sans dépendance SQLite.
+
+### 7. Contrats d'entrée/sortie centralisés
+
+- les payloads d'entrée web passent par `src/web/requestValidation.ts`
+- les patchs de config passent par `src/tenant/configPatches.ts`
+- les payloads de sortie API passent par `src/web/apiContracts.ts`
 
 ---
 
@@ -295,15 +328,15 @@ tmi.js → twitchMessageHandler → CommandRouter → GreenScreenCommand → Pla
 ## Tests
 
 ```bash
-npm test    # 129 tests, ~3s
+npm test
 ```
 
-Couverture :
+Couverture principale actuelle :
 - `permissionService`, `cooldownService`, `urlValidator`
 - `commandRouter`, `greenScreenCommand`, `adminCommands`, `stopAction`
 - `playbackQueue`, `approvalService`, `overlayBroadcaster`
 - `blacklistService`, `historyService` (avec SQLite réel en mémoire)
-- `controlServer` (serveur de contrôle legacy)
+- `publicRoutes`, `apiRoutes` (tests d'intégration SaaS ciblés, sans SQLite native)
 - `twitchEventSubClient`, `youtubeDurationValidator`
 
 ### Règles de test
@@ -316,16 +349,20 @@ Couverture :
 
 ## Guidelines pour agents IA
 
-1. Le point d'entrée est `src/server.ts`. Ne pas modifier `src/app.ts` (exclu de la compilation).
+1. Le point d'entrée est `src/server.ts`. Le mode standalone legacy a été supprimé du repo actif.
 2. Toute nouvelle feature utilisateur doit être au niveau tenant (ajouter dans `TenantManager`, services isolés).
 3. Les routes API (`/api/*`) requièrent `requireAuth(c)` — ne jamais bypasser.
-4. L'overlay (`/overlay/*`) est sans auth — OBS ne gère pas les cookies.
+4. L'overlay (`/overlay/*`) reste sans cookie de session, mais il est protégé par un token public par tenant.
 5. Ne pas `await` de connexions réseau dans le callback OAuth — utiliser fire-and-forget avec `.catch()` logué.
 6. Les mutations de config doivent passer par `tenantManager.persistConfig()` (persiste en DB + met à jour la référence mémoire).
 7. Ajouter les interfaces `I*` pour tout nouveau service qui a besoin d'être mocké.
 8. Ne pas hardcoder de secrets. Ne pas logger de tokens ou secrets OAuth.
 9. Utiliser `openDatabase(testDir)` dans les tests qui touchent SQLite.
-10. Après toute modification, vérifier : `npx tsc --noEmit && npm test`.
+10. Après toute modification, vérifier au minimum : `npx tsc --noEmit` puis les tests ciblés sur la zone modifiée. Utiliser `npm test` si l'environnement SQLite natif est sain.
+
+11. Dernière étape de tout refacto important : mettre à jour `README.md`, `AGENTS.md` et `docs/session-2026-06-10.md` pour qu'un autre agent puisse reprendre sans deviner l'état réel du repo.
+
+12. Si une documentation ou un commentaire mentionne un compteur figé de tests ou un état historique, le corriger avant de clore la session pour éviter qu'un prochain agent reparte avec une fausse base.
 
 ---
 
@@ -349,6 +386,11 @@ Couverture :
 - [x] Config persistée sans restart (`data/server-config.json`)
 - [x] Architecture multi-tenant (isolation par userId)
 - [x] Simulateur de chat depuis le dashboard
+- [x] URLs OBS/TTS publiques protégées et rotatables par tenant
+- [x] Lifecycle tenant piloté par dashboard/live/queue
+- [x] Observabilité runtime exposée dans `/api/status` et le dashboard
+- [x] Routes SaaS découpées (`publicRoutes`, `apiRoutes`)
+- [x] Contrats d'entrée/sortie API mieux typés
 
 ## Features futures
 
@@ -359,7 +401,8 @@ Couverture :
 - [ ] Déploiement Docker
 - [ ] Filtrage NSFW/spam
 - [ ] Profils de sources multiples
-- [ ] Stream Deck plugin (base existante dans `streamdeck-plugin/`)
+- [ ] Stream Deck plugin (base existante dans `streamdeck-plugin/`, à réaligner si ce sous-projet doit être conservé)
+- [ ] Passe finale de handoff documentation après la fin complète du refacto
 
 ---
 

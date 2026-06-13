@@ -44,14 +44,14 @@ export function getCookie(c: Context, name: string): string | undefined {
   return undefined;
 }
 
-export function setSessionCookie(c: Context, sessionId: string, ttlSeconds = 2592000): void {
+export function setSessionCookie(c: Context, sessionId: string, secure: boolean, ttlSeconds = 2592000): void {
   const expires = new Date(Date.now() + ttlSeconds * 1000).toUTCString();
   c.header(
     "Set-Cookie",
-    `${SESSION_COOKIE}=${encodeURIComponent(sessionId)}; HttpOnly; SameSite=Lax; Path=/; Expires=${expires}`
+    `${SESSION_COOKIE}=${encodeURIComponent(sessionId)}; HttpOnly; SameSite=Lax; Path=/; Expires=${expires}${secure ? "; Secure" : ""}`
   );
 }
 
-export function clearSessionCookie(c: Context): void {
-  c.header("Set-Cookie", `${SESSION_COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0`);
+export function clearSessionCookie(c: Context, secure: boolean): void {
+  c.header("Set-Cookie", `${SESSION_COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${secure ? "; Secure" : ""}`);
 }

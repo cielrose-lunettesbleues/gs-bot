@@ -17,7 +17,8 @@ const schema = z.object({
   TWITCH_REDIRECT_URI: z.string().default(""),
   GS_YOUTUBE_API_KEY: z.string().default(""),
   GS_KLIPY_API_KEY: z.string().default(""),
-  GS_SOCIAVAULT_API_KEY: z.string().default("")
+  GS_SOCIAVAULT_API_KEY: z.string().default(""),
+  GS_SETUP_TOKEN: z.string().default("")
 });
 
 export interface ServerConfig {
@@ -28,6 +29,7 @@ export interface ServerConfig {
   youtubeApiKey: string;
   klipyApiKey: string;
   sociavaultApiKey: string;
+  setupToken: string;
   twitch: {
     clientId: string;
     clientSecret: string;
@@ -84,6 +86,7 @@ export function loadServerConfig(): ServerConfig {
     youtubeApiKey: env.GS_YOUTUBE_API_KEY,
     klipyApiKey: env.GS_KLIPY_API_KEY,
     sociavaultApiKey: env.GS_SOCIAVAULT_API_KEY,
+    setupToken: env.GS_SETUP_TOKEN,
     twitch: {
       clientId: env.TWITCH_CLIENT_ID,
       clientSecret: env.TWITCH_CLIENT_SECRET,

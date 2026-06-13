@@ -82,6 +82,7 @@ h1{font-size:22px;font-weight:700;text-align:center}
 <script>
 (function(){
   var redirectUri = window.location.origin + '/auth/twitch/callback';
+  var setupToken = new URLSearchParams(window.location.search).get('token') || '';
   document.getElementById('redirect-hint').textContent = redirectUri;
   document.getElementById('redirect-uri').value = redirectUri;
 
@@ -108,7 +109,7 @@ h1{font-size:22px;font-weight:700;text-align:center}
       var res = await fetch('/setup', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({clientId, clientSecret, redirectUri: redirectUriVal})
+        body: JSON.stringify({clientId, clientSecret, redirectUri: redirectUriVal, setupToken: setupToken || undefined})
       });
       var data = await res.json();
       if (data.ok) {

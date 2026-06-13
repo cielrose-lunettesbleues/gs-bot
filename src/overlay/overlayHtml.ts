@@ -298,7 +298,8 @@ iframe{
   function connect(){
     var parts=location.pathname.split('/').filter(Boolean);
     var channel=parts[parts.length-1]||'';
-    var es=new EventSource('/overlay/'+channel+'/events');
+    var search = location.search || '';
+    var es=new EventSource('/overlay/'+channel+'/events'+search);
     es.onmessage=function(ev){
       if(!ev.data) return;
       try {

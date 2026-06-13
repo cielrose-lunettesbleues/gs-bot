@@ -18,7 +18,9 @@ function buildTtsGenerate(
     return {
       type: "tts" as const,
       text,
-      audioUrl: `/tts/audio/${channel}/${result.audioId}`,
+      audioUrl: deps.createTtsAudioPath
+        ? deps.createTtsAudioPath(channel, result.audioId)
+        : `/tts/audio/${channel}/${result.audioId}`,
       durationSeconds: result.durationSeconds
     };
   };

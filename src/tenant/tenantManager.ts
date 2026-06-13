@@ -1,51 +1,18 @@
 import type { Logger } from "pino";
 import type { Database } from "../db/database";
-import { getTenantConfig, updateTenantConfig, getUserById, type DbTenantConfig } from "../db/database";
-import { AdminService, createAdminCommands } from "../commands/adminCommands";
-import { createEmergencyStopCommand } from "../commands/emergencyStopCommand";
-import { createGreenScreenCommand } from "../commands/greenScreenCommand";
-import { createTtsCommand } from "../commands/ttsCommand";
+import { getTenantConfig, rotateOverlayToken, updateTenantConfig, getUserById } from "../db/database";
 import { CommandRouter } from "../commands/commandRouter";
 import { ApprovalService } from "../approval/approvalService";
 import { BlacklistService } from "../blacklist/blacklistService";
 import { HistoryService } from "../history/historyService";
 import { CooldownService } from "../cooldown/cooldownService";
-import { PermissionService } from "../permissions/permissionService";
-import { UrlValidator } from "../validation/urlValidator";
 import { OverlayBroadcaster } from "../overlay/overlayBroadcaster";
 import { PlaybackQueue } from "../queue/playbackQueue";
 import { TwitchBotManager } from "../twitch/twitchBotManager";
-import { MockObsSourceController } from "../obs/mockObsSourceController";
-import { createRuntimeState } from "../state/runtimeState";
-import { searchShortVideo } from "../media/youtubeSearch";
-import { sociavaultSearch, sociavaultResolve } from "../media/sociavaultClient";
-import { searchGif } from "../media/klipySearch";
-import { TtsService, type ITtsService } from "../tts/ttsService";
-import type { TtsPlaybackEvent } from "../queue/playbackQueue";
-
-// The mutable runtime config that all tenant services share via reference
-export interface TenantRuntimeConfig {
-  access: { subOnly: boolean; modOnly: boolean };
-  cooldown: { enabled: boolean; seconds: number; perUserEnabled: boolean; perUserSeconds: number };
-  approval: { enabled: boolean; timeoutSeconds: number };
-  queue: { mode: "queue" | "replace" | "drop"; maxSize: number };
-  playback: { durationSeconds: number; chatFeedback: boolean };
-  validation: {
-    allowedDomains: string[];
-    allowDirectFiles: boolean;
-    allowedFileExtensions: string[];
-    maxDurationSeconds: number;
-  };
-  commands: { gs: string; stop: string };
-  tts: {
-    enabled: boolean;
-    provider: string;
-    apiKey: string;
-    volume: number;
-    maxLength: number;
-    cooldownSeconds: number;
-  };
-}
+import type { ITtsService } from "../tts/ttsService";
+import type { TenantConfigPatch } from "./configPatches";
+import { createTenantServices } from "./createTenantServices";
+import { applyRuntimeConfig, dbConfigToRuntime, type TenantRuntimeConfig } from "./runtimeConfig";
 
 export interface TenantServices {
   runtimeConfig: TenantRuntimeConfig;
@@ -60,38 +27,32 @@ export interface TenantServices {
   ttsService: ITtsService;
 }
 
-function dbConfigToRuntime(row: DbTenantConfig): TenantRuntimeConfig {
-  return {
-    access: { subOnly: Boolean(row.sub_only), modOnly: Boolean(row.mod_only) },
-    cooldown: {
-      enabled: Boolean(row.cooldown_enabled),
-      seconds: row.cooldown_seconds,
-      perUserEnabled: Boolean(row.cooldown_per_user),
-      perUserSeconds: row.cooldown_per_user_seconds
-    },
-    approval: { enabled: Boolean(row.approval_enabled), timeoutSeconds: row.approval_timeout_seconds },
-    queue: { mode: row.queue_mode as "queue" | "replace" | "drop", maxSize: row.queue_max_size },
-    playback: { durationSeconds: row.duration_seconds, chatFeedback: Boolean(row.chat_feedback) },
-    validation: {
-      allowedDomains: row.allowed_domains.split(",").map((d) => d.trim()).filter(Boolean),
-      allowDirectFiles: Boolean(row.allow_direct_files),
-      allowedFileExtensions: row.allowed_file_extensions.split(",").map((e) => e.trim()).filter(Boolean),
-      maxDurationSeconds: row.max_video_duration_seconds
-    },
-    commands: { gs: "!gs", stop: "!gstop" },
-    tts: {
-      enabled: Boolean(row.tts_enabled ?? 0),
-      provider: row.tts_provider ?? "elevenlabs",
-      apiKey: row.tts_api_key ?? "",
-      volume: row.tts_volume ?? 1.0,
-      maxLength: row.tts_max_length ?? 200,
-      cooldownSeconds: row.tts_cooldown_seconds ?? 0
-    }
-  };
+export interface TenantRuntimeState {
+  resident: boolean;
+  dashboardActive: boolean;
+  dashboardLastSeenAt: string | null;
+  dashboardExpiresAt: string | null;
+  live: boolean;
+  queueBusy: boolean;
+  overlayClients: number;
+  twitchConnected: boolean;
+  activeReasons: Array<"dashboard" | "live" | "queue_busy">;
+}
+
+interface TenantActivity {
+  dashboardLastSeenAt: number;
+  isLive: boolean;
+}
+
+const DASHBOARD_ACTIVE_TTL_MS = 10 * 60 * 1000;
+
+function toIsoOrNull(value: number): string | null {
+  return value > 0 ? new Date(value).toISOString() : null;
 }
 
 export class TenantManager {
   private readonly tenants = new Map<number, TenantServices>();
+  private readonly activity = new Map<number, TenantActivity>();
 
   constructor(
     private readonly db: Database,
@@ -107,97 +68,22 @@ export class TenantManager {
 
     const dbConfig = getTenantConfig(this.db, userId);
     const runtimeConfig = dbConfigToRuntime(dbConfig);
-
-    const overlayBroadcaster = new OverlayBroadcaster();
-    const obsController = new MockObsSourceController(createRuntimeState(), this.logger);
-
-    const queue = new PlaybackQueue(
-      obsController,
-      runtimeConfig.queue,
-      this.logger,
-      (event) => overlayBroadcaster.broadcast(event)
-    );
-
-    const permissionService = new PermissionService();
-    const cooldownService = new CooldownService();
-    const urlValidator = new UrlValidator();
-    const blacklistService = new BlacklistService(this.db, userId);
-    const historyService = new HistoryService(this.db, userId);
-    const approvalService = new ApprovalService({ queue, config: runtimeConfig.approval, logger: this.logger });
-    const adminService = new AdminService({
+    const dbUser = getUserById(this.db, userId);
+    const services = createTenantServices({
+      db: this.db,
+      userId,
+      dbUser,
+      logger: this.logger,
       runtimeConfig,
-      cooldownService,
-      blacklistService,
-      historyService,
-      approvalService,
-      logger: this.logger
+      persistRuntimeConfig: (patch) => this.persistConfig(userId, patch),
+      youtubeApiKey: this.youtubeApiKey,
+      klipyApiKey: this.klipyApiKey,
+      sociavaultApiKey: this.sociavaultApiKey
     });
 
-    // liveConfig is the same object mutated by persistConfig — TtsService always reads the latest key/settings
-    const ttsService: ITtsService = new TtsService(this.db, userId, runtimeConfig.tts, this.logger);
-
-    const dbUser = getUserById(this.db, userId);
-    const channelLogin = dbUser?.twitch_login ?? "";
-
-    const commandDeps = {
-      permissionService,
-      cooldownService,
-      urlValidator,
-      queue,
-      blacklistService,
-      historyService,
-      youtubeDurationValidator: undefined,
-      tiktokSearch: undefined,
-      tiktokResolve: this.sociavaultApiKey
-        ? (url: string) => sociavaultResolve(url, this.sociavaultApiKey!, this.logger)
-        : undefined,
-      youtubeSearch: this.youtubeApiKey
-        ? (query: string, maxDuration: number) => searchShortVideo(query, maxDuration, this.youtubeApiKey!)
-        : undefined,
-      gifSearch: this.klipyApiKey
-        ? (query: string) => searchGif(query, this.klipyApiKey!)
-        : undefined,
-      approvalService,
-      adminService,
-      ttsService,
-      channelLogin,
-      broadcastOverlay: (event: TtsPlaybackEvent) => overlayBroadcaster.broadcast(event),
-      config: runtimeConfig,
-      logger: this.logger
-    };
-
-    const router = new CommandRouter([
-      createGreenScreenCommand(commandDeps, runtimeConfig.commands.gs),
-      createTtsCommand(commandDeps, "!tts"),
-      createEmergencyStopCommand(commandDeps, runtimeConfig.commands.stop),
-      ...createAdminCommands()
-    ]);
-
-    const twitchBotManager = new TwitchBotManager(router, this.logger);
-
-    // Auto-reconnect on startup / after redeploy using stored credentials
-    if (dbUser?.access_token && dbUser?.twitch_login) {
-      twitchBotManager.start({
-        channel: dbUser.twitch_login,
-        botUsername: dbUser.twitch_login,
-        oauthToken: dbUser.access_token
-      }).catch((err) => this.logger.error({ err, userId }, "Failed to auto-start Twitch bot"));
-    }
-
-    const services: TenantServices = {
-      runtimeConfig,
-      queue,
-      cooldownService,
-      approvalService,
-      blacklistService,
-      historyService,
-      overlayBroadcaster,
-      twitchBotManager,
-      router,
-      ttsService
-    };
-
     this.tenants.set(userId, services);
+    const existingActivity = this.activity.get(userId);
+    this.activity.set(userId, existingActivity ?? { dashboardLastSeenAt: 0, isLive: false });
     this.logger.info({ userId }, "Tenant services created");
     return services;
   }
@@ -206,13 +92,99 @@ export class TenantManager {
     return this.tenants.get(userId);
   }
 
+  markDashboardActive(userId: number): TenantServices {
+    const tenant = this.getOrCreate(userId);
+    const activity = this.activity.get(userId) ?? { dashboardLastSeenAt: 0, isLive: false };
+    const wasActive = this.isDashboardActive(userId);
+    activity.dashboardLastSeenAt = Date.now();
+    this.activity.set(userId, activity);
+    if (!wasActive) {
+      this.logger.info({ userId }, "Tenant activated by dashboard activity");
+    }
+    return tenant;
+  }
+
+  clearDashboardActivity(userId: number): void {
+    const activity = this.activity.get(userId);
+    if (!activity) return;
+    activity.dashboardLastSeenAt = 0;
+    this.activity.set(userId, activity);
+    this.logger.info({ userId }, "Tenant dashboard activity cleared");
+  }
+
+  setLiveState(userId: number, isLive: boolean): void {
+    const activity = this.activity.get(userId) ?? { dashboardLastSeenAt: 0, isLive: false };
+    const wasLive = activity.isLive;
+    activity.isLive = isLive;
+    this.activity.set(userId, activity);
+
+    if (wasLive !== isLive) {
+      this.logger.info({ userId, live: isLive }, isLive ? "Tenant activated by live status" : "Tenant live status cleared");
+    }
+
+    if (isLive) {
+      this.getOrCreate(userId);
+      return;
+    }
+
+    void this.reconcileTenant(userId);
+  }
+
+  isDashboardActive(userId: number): boolean {
+    const activity = this.activity.get(userId);
+    if (!activity) return false;
+    return Date.now() - activity.dashboardLastSeenAt < DASHBOARD_ACTIVE_TTL_MS;
+  }
+
+  async reconcileTenant(userId: number): Promise<void> {
+    const tenant = this.tenants.get(userId);
+    if (!tenant) return;
+
+    const activity = this.activity.get(userId) ?? { dashboardLastSeenAt: 0, isLive: false };
+    if (activity.isLive || this.isDashboardActive(userId)) return;
+    if (tenant.queue.getState().busy) return;
+
+    await this.stop(userId);
+  }
+
+  getRuntimeState(userId: number): TenantRuntimeState {
+    const activity = this.activity.get(userId) ?? { dashboardLastSeenAt: 0, isLive: false };
+    const tenant = this.tenants.get(userId);
+    const dashboardActive = this.isDashboardActive(userId);
+    const queueBusy = tenant?.queue.getState().busy ?? false;
+    const activeReasons: Array<"dashboard" | "live" | "queue_busy"> = [];
+    if (dashboardActive) activeReasons.push("dashboard");
+    if (activity.isLive) activeReasons.push("live");
+    if (queueBusy) activeReasons.push("queue_busy");
+    const dashboardExpiresAt = activity.dashboardLastSeenAt > 0
+      ? activity.dashboardLastSeenAt + DASHBOARD_ACTIVE_TTL_MS
+      : 0;
+
+    return {
+      resident: Boolean(tenant),
+      dashboardActive,
+      dashboardLastSeenAt: toIsoOrNull(activity.dashboardLastSeenAt),
+      dashboardExpiresAt: toIsoOrNull(dashboardExpiresAt),
+      live: activity.isLive,
+      queueBusy,
+      overlayClients: tenant?.overlayBroadcaster.clientCount() ?? 0,
+      twitchConnected: tenant?.twitchBotManager.status().connected ?? false,
+      activeReasons
+    };
+  }
+
+  async reconcileAll(): Promise<void> {
+    await Promise.all([...this.tenants.keys()].map((userId) => this.reconcileTenant(userId)));
+  }
+
   async stop(userId: number): Promise<void> {
     const tenant = this.tenants.get(userId);
     if (!tenant) return;
+    const runtime = this.getRuntimeState(userId);
     await tenant.twitchBotManager.stop();
     await tenant.queue.stop();
     this.tenants.delete(userId);
-    this.logger.info({ userId }, "Tenant services stopped");
+    this.logger.info({ userId, previousRuntime: runtime }, "Tenant services stopped");
   }
 
   async stopAll(): Promise<void> {
@@ -220,17 +192,20 @@ export class TenantManager {
   }
 
   // Persist config change to DB and update in-memory reference
-  persistConfig(userId: number, patch: Partial<DbTenantConfig>): void {
+  persistConfig(userId: number, patch: TenantConfigPatch): void {
     updateTenantConfig(this.db, userId, patch);
     const tenant = this.tenants.get(userId);
     if (!tenant) return;
     const updated = dbConfigToRuntime(getTenantConfig(this.db, userId));
-    Object.assign(tenant.runtimeConfig.access, updated.access);
-    Object.assign(tenant.runtimeConfig.cooldown, updated.cooldown);
-    Object.assign(tenant.runtimeConfig.approval, updated.approval);
-    Object.assign(tenant.runtimeConfig.queue, updated.queue);
-    Object.assign(tenant.runtimeConfig.playback, updated.playback);
-    Object.assign(tenant.runtimeConfig.validation, updated.validation);
-    Object.assign(tenant.runtimeConfig.tts, updated.tts);
+    applyRuntimeConfig(tenant.runtimeConfig, updated);
+  }
+
+  rotateOverlayToken(userId: number): string {
+    const overlayToken = rotateOverlayToken(this.db, userId);
+    const tenant = this.tenants.get(userId);
+    if (tenant) {
+      tenant.runtimeConfig.publicAccess.overlayToken = overlayToken;
+    }
+    return overlayToken;
   }
 }

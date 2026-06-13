@@ -12,6 +12,7 @@ const SCOPES = "chat:read chat:edit channel:read:redemptions user:read:email";
 const TWITCH_TOKEN_URL = "https://id.twitch.tv/oauth2/token";
 const TWITCH_VALIDATE_URL = "https://id.twitch.tv/oauth2/validate";
 const TWITCH_USERS_URL = "https://api.twitch.tv/helix/users";
+const TWITCH_STREAMS_URL = "https://api.twitch.tv/helix/streams";
 
 export interface OAuthConfig {
   clientId: string;
@@ -29,6 +30,11 @@ export interface TwitchUserInfo {
   id: string;
   login: string;
   displayName: string;
+}
+
+export interface TwitchAppAccessToken {
+  accessToken: string;
+  expiresAt: number;
 }
 
 // ─── Auth URL ─────────────────────────────────────────────────────────────────
@@ -98,6 +104,24 @@ export async function refreshAccessToken(config: OAuthConfig, refreshToken: stri
   };
 }
 
+export async function getAppAccessToken(config: OAuthConfig): Promise<TwitchAppAccessToken> {
+  const res = await fetch(TWITCH_TOKEN_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: config.clientId,
+      client_secret: config.clientSecret,
+      grant_type: "client_credentials"
+    })
+  });
+  if (!res.ok) throw new Error(`App token request failed: ${res.status}`);
+  const data = await res.json() as { access_token: string; expires_in: number };
+  return {
+    accessToken: data.access_token,
+    expiresAt: Math.floor(Date.now() / 1000) + data.expires_in
+  };
+}
+
 // ─── Fetch user info ──────────────────────────────────────────────────────────
 
 export async function fetchUserInfo(accessToken: string, clientId: string): Promise<TwitchUserInfo> {
@@ -114,6 +138,33 @@ export async function fetchUserInfo(accessToken: string, clientId: string): Prom
   const user = data.data[0];
   if (!user) throw new Error("No user data from Twitch API");
   return { id: user.id, login: user.login, displayName: user.display_name };
+}
+
+export async function fetchLiveChannels(
+  clientId: string,
+  appAccessToken: string,
+  logins: string[]
+): Promise<Set<string>> {
+  if (logins.length === 0) return new Set<string>();
+
+  const params = new URLSearchParams();
+  for (const login of logins) {
+    params.append("user_login", login);
+  }
+
+  const res = await fetch(`${TWITCH_STREAMS_URL}?${params.toString()}`, {
+    headers: {
+      Authorization: `Bearer ${appAccessToken}`,
+      "Client-Id": clientId
+    }
+  });
+  if (!res.ok) throw new Error(`Helix /streams failed: ${res.status}`);
+
+  const data = await res.json() as {
+    data: Array<{ user_login: string }>;
+  };
+
+  return new Set(data.data.map((stream) => stream.user_login.toLowerCase()));
 }
 
 // ─── Validate token ───────────────────────────────────────────────────────────

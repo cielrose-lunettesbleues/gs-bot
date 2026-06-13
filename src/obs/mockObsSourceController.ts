@@ -1,9 +1,14 @@
 import type { Logger } from "pino";
 import type { RuntimeState } from "../state/runtimeState";
 import { clearExistingTimeout } from "../utils/timers";
-import type { IObsSourceController } from "./obsSourceController.interface";
 
-export class MockObsSourceController implements IObsSourceController {
+interface ObsSourceController {
+  showSource(): Promise<void>;
+  hideSource(): Promise<void>;
+  setSourceUrl(url: string): Promise<void>;
+}
+
+export class MockObsSourceController implements ObsSourceController {
   constructor(
     private readonly state: RuntimeState,
     private readonly logger: Logger

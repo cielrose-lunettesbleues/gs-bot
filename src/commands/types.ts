@@ -48,6 +48,8 @@ export interface CommandDependencies {
   ttsService?: ITtsService;
   /** Twitch channel login (without #) for building TTS audio URLs. */
   channelLogin?: string;
+  /** Build a signed public TTS audio path for OBS. */
+  createTtsAudioPath?: (channel: string, audioId: string) => string;
   /** Broadcast a TTS event directly to the overlay (without going through the playback queue). */
   broadcastOverlay?: (event: TtsPlaybackEvent) => void;
   config: {

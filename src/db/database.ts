@@ -1,4 +1,5 @@
 import BetterSqlite3 from "better-sqlite3";
+import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 
@@ -44,7 +45,8 @@ CREATE TABLE IF NOT EXISTS tenant_configs (
   allowed_domains            TEXT    NOT NULL DEFAULT 'youtube.com,youtu.be,streamable.com,tenor.com,giphy.com,klipy.com,tiktok.com',
   allow_direct_files         INTEGER NOT NULL DEFAULT 1,
   allowed_file_extensions    TEXT    NOT NULL DEFAULT '.mp4,.webm,.mov',
-  max_video_duration_seconds INTEGER NOT NULL DEFAULT 0
+  max_video_duration_seconds INTEGER NOT NULL DEFAULT 0,
+  overlay_token              TEXT    NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS history (
@@ -97,6 +99,7 @@ const COLUMN_MIGRATIONS = [
   `ALTER TABLE tenant_configs ADD COLUMN tts_volume REAL NOT NULL DEFAULT 1.0`,
   `ALTER TABLE tenant_configs ADD COLUMN tts_max_length INTEGER NOT NULL DEFAULT 200`,
   `ALTER TABLE tenant_configs ADD COLUMN tts_cooldown_seconds INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE tenant_configs ADD COLUMN overlay_token TEXT NOT NULL DEFAULT ''`,
   `ALTER TABLE tenant_tts_voices ADD COLUMN stability REAL NOT NULL DEFAULT 0.5`,
   `ALTER TABLE tenant_tts_voices ADD COLUMN similarity_boost REAL NOT NULL DEFAULT 0.75`,
   `ALTER TABLE tenant_tts_voices ADD COLUMN style REAL NOT NULL DEFAULT 0.0`,
@@ -153,6 +156,10 @@ export function getUserById(db: Database, id: number): DbUser | undefined {
 
 export function getUserByLogin(db: Database, login: string): DbUser | undefined {
   return db.prepare("SELECT * FROM users WHERE twitch_login = ?").get(login) as DbUser | undefined;
+}
+
+export function listUsers(db: Database): DbUser[] {
+  return db.prepare("SELECT * FROM users ORDER BY id ASC").all() as DbUser[];
 }
 
 export function updateUserTokens(
@@ -217,11 +224,28 @@ export interface DbTenantConfig {
   tts_volume: number;
   tts_max_length: number;
   tts_cooldown_seconds: number;
+  overlay_token: string;
+}
+
+function generateOverlayToken(): string {
+  return crypto.randomBytes(24).toString("hex");
 }
 
 export function getTenantConfig(db: Database, userId: number): DbTenantConfig {
   db.prepare("INSERT OR IGNORE INTO tenant_configs (user_id) VALUES (?)").run(userId);
+  const row = db.prepare("SELECT * FROM tenant_configs WHERE user_id=?").get(userId) as DbTenantConfig;
+  if (row.overlay_token) return row;
+
+  const overlayToken = generateOverlayToken();
+  db.prepare("UPDATE tenant_configs SET overlay_token=? WHERE user_id=?").run(overlayToken, userId);
   return db.prepare("SELECT * FROM tenant_configs WHERE user_id=?").get(userId) as DbTenantConfig;
+}
+
+export function rotateOverlayToken(db: Database, userId: number): string {
+  const overlayToken = generateOverlayToken();
+  db.prepare("INSERT OR IGNORE INTO tenant_configs (user_id) VALUES (?)").run(userId);
+  db.prepare("UPDATE tenant_configs SET overlay_token=? WHERE user_id=?").run(overlayToken, userId);
+  return overlayToken;
 }
 
 export function updateTenantConfig(db: Database, userId: number, patch: Partial<DbTenantConfig>): void {
