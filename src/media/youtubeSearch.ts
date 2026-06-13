@@ -1,6 +1,38 @@
 const SEARCH_API = "https://www.googleapis.com/youtube/v3/search";
 const VIDEOS_API = "https://www.googleapis.com/youtube/v3/videos";
 
+function normalize(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function queryTokens(query: string): string[] {
+  return normalize(query)
+    .split(" ")
+    .filter((token) => token.length >= 3);
+}
+
+function titleRelevanceScore(query: string, title: string): number {
+  const normalizedQuery = normalize(query);
+  const normalizedTitle = normalize(title);
+  if (!normalizedQuery || !normalizedTitle) return 0;
+
+  let score = 0;
+  if (normalizedTitle.includes(normalizedQuery)) score += 3;
+
+  const tokens = queryTokens(query);
+  for (const token of tokens) {
+    if (normalizedTitle.includes(token)) score += 1;
+  }
+
+  return score;
+}
+
 function parseDuration(iso: string): number {
   const m = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
   if (!m) return Infinity;
@@ -11,6 +43,12 @@ export interface YoutubeSearchResult {
   url: string;
   title: string;
   durationSeconds: number;
+}
+
+interface YoutubeCandidate extends YoutubeSearchResult {
+  isShort: boolean;
+  relevanceScore: number;
+  searchIndex: number;
 }
 
 export async function searchShortVideo(
@@ -64,57 +102,61 @@ export async function searchShortVideo(
 
   const items = videosData.items ?? [];
 
-  // First pass: first Short within the duration limit
-  for (const item of items) {
+  const candidates: YoutubeCandidate[] = items.flatMap((item, index) => {
     const duration = parseDuration(item.contentDetails.duration);
-    if (duration <= 0 || duration > durationCeiling) continue;
+    if (duration <= 0) return [];
     const thumb = item.snippet.thumbnails?.high ?? item.snippet.thumbnails?.default;
-    if (thumb && thumb.height > thumb.width) {
-      return {
-        url: `https://www.youtube.com/shorts/${item.id}`,
-        title: item.snippet.title,
-        durationSeconds: duration
-      };
-    }
+    const isShort = Boolean(thumb && thumb.height > thumb.width);
+    return [{
+      url: isShort
+        ? `https://www.youtube.com/shorts/${item.id}`
+        : `https://www.youtube.com/watch?v=${item.id}`,
+      title: item.snippet.title,
+      durationSeconds: duration,
+      isShort,
+      relevanceScore: titleRelevanceScore(query, item.snippet.title),
+      searchIndex: index
+    }];
+  });
+
+  if (!candidates.length) return null;
+
+  const withinDuration = candidates.filter((candidate) => candidate.durationSeconds <= durationCeiling);
+  const shortCandidates = withinDuration.filter((candidate) => candidate.isShort);
+  const landscapeCandidates = withinDuration.filter((candidate) => !candidate.isShort);
+
+  function sortCandidates(a: YoutubeCandidate, b: YoutubeCandidate): number {
+    if (b.relevanceScore !== a.relevanceScore) return b.relevanceScore - a.relevanceScore;
+    return a.searchIndex - b.searchIndex;
   }
 
-  // Fallback 1: no Short within duration — any Short regardless of duration
-  for (const item of items) {
-    const duration = parseDuration(item.contentDetails.duration);
-    if (duration <= 0) continue;
-    const thumb = item.snippet.thumbnails?.high ?? item.snippet.thumbnails?.default;
-    if (thumb && thumb.height > thumb.width) {
-      return {
-        url: `https://www.youtube.com/shorts/${item.id}`,
-        title: item.snippet.title,
-        durationSeconds: duration
-      };
+  const bestShort = [...shortCandidates].sort(sortCandidates)[0];
+  const bestLandscape = [...landscapeCandidates].sort(sortCandidates)[0];
+
+  if (bestShort && bestLandscape) {
+    if (bestShort.relevanceScore > 0 && bestShort.relevanceScore >= bestLandscape.relevanceScore) {
+      return { url: bestShort.url, title: bestShort.title, durationSeconds: bestShort.durationSeconds };
     }
+    return { url: bestLandscape.url, title: bestLandscape.title, durationSeconds: bestLandscape.durationSeconds };
   }
 
-  // Fallback 2: no Short at all — first landscape video within duration
-  for (const item of items) {
-    const duration = parseDuration(item.contentDetails.duration);
-    if (duration > 0 && duration <= durationCeiling) {
-      return {
-        url: `https://www.youtube.com/watch?v=${item.id}`,
-        title: item.snippet.title,
-        durationSeconds: duration
-      };
-    }
+  if (bestShort) {
+    return { url: bestShort.url, title: bestShort.title, durationSeconds: bestShort.durationSeconds };
   }
 
-  // Fallback 3: last resort — first landscape video regardless of duration
-  for (const item of items) {
-    const duration = parseDuration(item.contentDetails.duration);
-    if (duration > 0) {
-      return {
-        url: `https://www.youtube.com/watch?v=${item.id}`,
-        title: item.snippet.title,
-        durationSeconds: duration
-      };
-    }
+  if (bestLandscape) {
+    return { url: bestLandscape.url, title: bestLandscape.title, durationSeconds: bestLandscape.durationSeconds };
   }
 
-  return null;
+  const fallbackShort = candidates.find((candidate) => candidate.isShort);
+  if (fallbackShort) {
+    return { url: fallbackShort.url, title: fallbackShort.title, durationSeconds: fallbackShort.durationSeconds };
+  }
+
+  const fallbackLandscape = candidates[0];
+  return {
+    url: fallbackLandscape.url,
+    title: fallbackLandscape.title,
+    durationSeconds: fallbackLandscape.durationSeconds
+  };
 }

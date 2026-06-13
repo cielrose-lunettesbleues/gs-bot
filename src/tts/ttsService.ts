@@ -9,8 +9,14 @@ export interface TtsSynthResult {
   errorMessage?: string;
 }
 
+export interface TtsRuntimeStatus {
+  state: "disabled" | "no_api_key" | "no_voice_configured" | "ready" | "provider_error";
+  message?: string;
+}
+
 export interface ITtsService {
   isEnabled(): boolean;
+  getStatus(): TtsRuntimeStatus;
   getVoices(): TtsVoice[];
   synthesize(text: string, voiceLabel: string): Promise<TtsSynthResult | null>;
   getAudio(id: string): { buffer: Buffer; mimeType: string } | null;
@@ -41,6 +47,7 @@ const BYTES_PER_SECOND = 16_000;
 
 export class TtsService implements ITtsService {
   private readonly audioCache = new Map<string, AudioEntry>();
+  private lastProviderErrorMessage: string | null = null;
 
   constructor(
     private readonly db: Database,
@@ -60,6 +67,22 @@ export class TtsService implements ITtsService {
 
   isEnabled(): boolean {
     return this.liveConfig.enabled && this.liveConfig.apiKey.length > 0;
+  }
+
+  getStatus(): TtsRuntimeStatus {
+    if (!this.liveConfig.enabled) {
+      return { state: "disabled", message: "TTS désactivé" };
+    }
+    if (this.liveConfig.apiKey.length === 0) {
+      return { state: "no_api_key", message: "Clé API ElevenLabs absente" };
+    }
+    if (this.getVoices().length === 0) {
+      return { state: "no_voice_configured", message: "Aucune voix configurée" };
+    }
+    if (this.lastProviderErrorMessage) {
+      return { state: "provider_error", message: this.lastProviderErrorMessage };
+    }
+    return { state: "ready", message: "TTS prêt" };
   }
 
   getVoices(): TtsVoice[] {
@@ -87,6 +110,7 @@ export class TtsService implements ITtsService {
     const voices = this.getVoices();
     const voice = resolveVoice(voiceLabel, voices);
     if (!voice) {
+      this.lastProviderErrorMessage = null;
       this.logger.warn({ tenantId: this.tenantId }, "TTS: no voices configured");
       return null;
     }
@@ -98,6 +122,7 @@ export class TtsService implements ITtsService {
     try {
       result = await provider.synthesize(truncated, voice.voiceId, voice.settings);
     } catch (err) {
+      this.lastProviderErrorMessage = `Erreur TTS: ${String(err)}`;
       this.logger.error({ err, tenantId: this.tenantId }, "TTS synthesis failed");
       return null;
     }
@@ -105,9 +130,12 @@ export class TtsService implements ITtsService {
     if (!result) {
       const err: ElevenLabsError | null = provider instanceof ElevenLabsProvider ? provider.lastError : null;
       const msg = err?.message ?? "Erreur de synthèse TTS inconnue";
+      this.lastProviderErrorMessage = msg;
       this.logger.warn({ tenantId: this.tenantId, voiceLabel, error: msg }, "TTS provider returned null");
       return { audioId: "", durationSeconds: 0, errorMessage: msg };
     }
+
+    this.lastProviderErrorMessage = null;
 
     const audioId = crypto.randomUUID();
     const expiresAt = Date.now() + AUDIO_TTL_MS;
@@ -143,6 +171,7 @@ export class TtsService implements ITtsService {
 /** No-op TTS service used as a safe default before config is loaded. */
 export class NullTtsService implements ITtsService {
   isEnabled(): boolean { return false; }
+  getStatus(): TtsRuntimeStatus { return { state: "disabled", message: "TTS désactivé" }; }
   getVoices(): TtsVoice[] { return []; }
   async synthesize(_text: string, _voiceLabel: string): Promise<null> { return null; }
   getAudio(_id: string): null { return null; }

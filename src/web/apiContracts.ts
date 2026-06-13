@@ -14,6 +14,8 @@ export interface StatusResponse {
       apiKeySet: boolean;
       volume: number;
       maxLength: number;
+      status: string;
+      statusMessage?: string;
     };
   };
   queue: { busy: boolean; pendingCount: number };
@@ -58,6 +60,7 @@ export function buildStatusResponse(
   const cfg = tenant.runtimeConfig;
   const pending = tenant.approvalService.listPending();
   const twitch = tenant.twitchBotManager.status();
+  const ttsStatus = tenant.ttsService.getStatus();
 
   return {
     config: {
@@ -70,7 +73,9 @@ export function buildStatusResponse(
         provider: cfg.tts.provider,
         apiKeySet: cfg.tts.apiKey.length > 0,
         volume: cfg.tts.volume,
-        maxLength: cfg.tts.maxLength
+        maxLength: cfg.tts.maxLength,
+        status: ttsStatus.state,
+        statusMessage: ttsStatus.message
       }
     },
     queue: tenant.queue.getState(),

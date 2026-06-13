@@ -26,6 +26,7 @@ function makeTenant() {
     twitchBotManager: { status: vi.fn(() => ({ connected: true, channel: "streamer" })) },
     historyService: { getLast: vi.fn(() => [{ timestamp: new Date().toISOString(), username: "alice", url: "https://x.test", durationSeconds: 12 }]) },
     cooldownService: { reset: vi.fn() },
+    ttsService: { getStatus: vi.fn(() => ({ state: "ready", message: "TTS prêt" })) },
     router: {
       route: vi.fn(async (context: { reply: (text: string) => Promise<void> }) => {
         await context.reply("ok");

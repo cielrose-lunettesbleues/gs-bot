@@ -48,16 +48,17 @@ export function getDashboardClientScript(overlayPath: string): string {
     setCheck('cfg-approval', cfg.approval.enabled);
     setCheck('cfg-chat-feedback', cfg.playback ? cfg.playback.chatFeedback !== false : true);
 
-    if(cfg.tts) {
-      setCheck('cfg-tts-enabled', cfg.tts.enabled);
-      setNumVal('cfg-tts-maxlength', cfg.tts.maxLength);
-      setNumVal('cfg-tts-volume', cfg.tts.volume);
-      var keyStatus = document.getElementById('tts-api-key-status');
+      if(cfg.tts) {
+        setCheck('cfg-tts-enabled', cfg.tts.enabled);
+        setNumVal('cfg-tts-maxlength', cfg.tts.maxLength);
+        setNumVal('cfg-tts-volume', cfg.tts.volume);
+        var keyStatus = document.getElementById('tts-api-key-status');
       if(keyStatus) {
         keyStatus.textContent = cfg.tts.apiKeySet ? 'Configurée ✓' : 'Non configurée';
-        keyStatus.className = 'api-key-status ' + (cfg.tts.apiKeySet ? 'set' : 'unset');
+          keyStatus.className = 'api-key-status ' + (cfg.tts.apiKeySet ? 'set' : 'unset');
+        }
+        setText('tts-runtime-status', fmtTtsStatus(cfg.tts.status, cfg.tts.statusMessage));
       }
-    }
   }
 
   function renderQueue(queue, overlay) {
@@ -166,6 +167,16 @@ export function getDashboardClientScript(overlayPath: string): string {
       if(reason === 'queue_busy') return 'Lecture en cours';
       return reason;
     }).join(' · ');
+  }
+  function fmtTtsStatus(status, message) {
+    var label = {
+      disabled: 'Désactivé',
+      no_api_key: 'Clé API absente',
+      no_voice_configured: 'Aucune voix configurée',
+      ready: 'Prêt',
+      provider_error: 'Erreur provider'
+    }[status] || 'Inconnu';
+    return message ? (label + ' · ' + message) : label;
   }
 
   var chatHistory = [];

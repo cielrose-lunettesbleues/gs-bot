@@ -200,6 +200,7 @@ input:checked+.slider:before{transform:translateX(18px)}
       <label class="toggle" id="tog-tts-enabled" style="margin:0"><input type="checkbox" id="cfg-tts-enabled" onchange="patchTtsConfig('ttsEnabled',this.checked,this)"><span class="slider"></span></label>
     </div>
     <div class="row"><span class="row-label">Clé API ElevenLabs</span><span id="tts-api-key-status" class="api-key-status unset">Non configurée</span></div>
+    <div class="row"><span class="row-label">Statut TTS</span><span id="tts-runtime-status" style="font-size:12px;color:var(--muted);text-align:right">—</span></div>
     <div class="tts-key-row"><input type="password" id="tts-api-key-input" placeholder="sk_xxxxxxxxxxxxxxxx" autocomplete="off"><button class="btn btn-accent btn-sm" onclick="saveTtsApiKey()">Sauvegarder</button></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
       <div class="num-row"><label for="cfg-tts-maxlength" style="font-size:12px;color:var(--muted)">Longueur max (caract.)</label><input class="num-input" type="number" id="cfg-tts-maxlength" min="10" max="1000" onchange="patchTtsConfig('ttsMaxLength',+this.value,this)"></div>

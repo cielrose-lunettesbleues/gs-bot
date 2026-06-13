@@ -42,7 +42,11 @@ export function createTtsCommand(deps: CommandDependencies, commandName: string)
       const ttsEvent: TtsPlaybackEvent = {
         type: "tts",
         text,
-        audioUrl: result ? `/tts/audio/${channel}/${result.audioId}` : "",
+        audioUrl: result
+          ? (deps.createTtsAudioPath
+              ? deps.createTtsAudioPath(channel, result.audioId)
+              : `/tts/audio/${channel}/${result.audioId}`)
+          : "",
         durationSeconds: result?.durationSeconds ?? 4,
         volume
       };
