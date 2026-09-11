@@ -37,6 +37,7 @@ vi.mock("../../src/auth/oauthHandler", () => ({
 }));
 
 import { registerPublicRoutes } from "../../src/web/routes/publicRoutes";
+import { OverlayBroadcaster } from "../../src/overlay/overlayBroadcaster";
 
 function createApp(options?: {
   sessionUser?: SessionUser | null;
@@ -191,6 +192,23 @@ describe("publicRoutes", () => {
     const response = await app.request("http://example.com/overlay/streamer/events?token=overlay-token");
     expect(response.status).toBe(404);
     expect(await response.text()).toContain("Overlay inactif");
+  });
+
+  it("ends the overlay SSE stream when the tenant stops", async () => {
+    const { app, tenantManager } = createApp();
+    const broadcaster = new OverlayBroadcaster();
+    (tenantManager.get as unknown as { mockImplementation: (fn: () => unknown) => void }).mockImplementation(() => ({
+      overlayBroadcaster: broadcaster
+    }));
+    const response = await app.request("http://example.com/overlay/streamer/events?token=overlay-token");
+    expect(response.status).toBe(200);
+    const body = response.text();
+    await vi.waitFor(() => expect(broadcaster.clientCount()).toBe(1));
+
+    broadcaster.close();
+
+    expect(await body).toContain("connected");
+    expect(broadcaster.clientCount()).toBe(0);
   });
 
   it("rejects OAuth callback when state is missing or mismatched", async () => {

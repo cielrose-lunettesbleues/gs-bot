@@ -25,7 +25,8 @@ export async function createApp(config: ServerConfig, logger: Logger) {
     logger,
     config.youtubeApiKey || undefined,
     config.klipyApiKey || undefined,
-    config.sociavaultApiKey || undefined
+    config.sociavaultApiKey || undefined,
+    oauthConfig
   );
   const liveStatusPoller = new LiveStatusPoller(db, oauthConfig, tenantManager, logger);
 

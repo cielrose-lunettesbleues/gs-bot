@@ -82,4 +82,28 @@ describe("OverlayBroadcaster", () => {
     const stopMsg = res.write.mock.calls[1][0] as string;
     expect(stopMsg).toContain('"type":"stop"');
   });
+
+  it("close notifies listeners once and drops clients", () => {
+    const b = new OverlayBroadcaster();
+    const listener = vi.fn();
+    b.onClose(listener);
+    b.addClient(vi.fn(async () => undefined));
+
+    b.close();
+    b.close();
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(b.isClosed()).toBe(true);
+    expect(b.clientCount()).toBe(0);
+  });
+
+  it("onClose fires immediately when already closed", () => {
+    const b = new OverlayBroadcaster();
+    b.close();
+    const listener = vi.fn();
+
+    b.onClose(listener);
+
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
 });

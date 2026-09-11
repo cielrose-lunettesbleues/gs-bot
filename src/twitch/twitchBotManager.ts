@@ -12,6 +12,8 @@ export interface TwitchBotConfig {
 export class TwitchBotManager {
   private client: TwitchClient | null = null;
   private currentChannel: string | null = null;
+  private connected = false;
+  private shutDown = false;
 
   constructor(
     private readonly router: CommandRouter,
@@ -19,28 +21,53 @@ export class TwitchBotManager {
   ) {}
 
   async start(config: TwitchBotConfig): Promise<void> {
-    if (this.client) {
-      await this.stop();
-    }
+    await this.stop();
+    if (this.shutDown) return;
+
+    const client = new TwitchClient(config);
+    this.client = client;
     this.currentChannel = config.channel;
-    this.client = new TwitchClient(config);
-    bindTwitchMessageHandler(this.client, this.router, this.logger);
-    await this.client.connect();
+    bindTwitchMessageHandler(client, this.router, this.logger);
+    try {
+      await client.connect();
+    } catch (err) {
+      if (this.client === client) {
+        this.client = null;
+        this.currentChannel = null;
+      }
+      throw err;
+    }
+
+    // stop() or another start() ran while we were connecting
+    if (this.client !== client) {
+      await client.disconnect().catch(() => undefined);
+      return;
+    }
+    this.connected = true;
     this.logger.info({ channel: config.channel }, "Twitch bot connected");
   }
 
   async stop(): Promise<void> {
-    if (!this.client) return;
+    const client = this.client;
+    this.client = null;
+    this.currentChannel = null;
+    this.connected = false;
+    if (!client) return;
     try {
-      await this.client.disconnect();
+      await client.disconnect();
     } catch (err) {
       this.logger.warn({ err }, "Error disconnecting Twitch client");
     }
-    this.client = null;
-    this.currentChannel = null;
+  }
+
+  // Final stop for a tenant being torn down: a start() still waiting on a token
+  // refresh must not bring the bot back afterwards.
+  async shutdown(): Promise<void> {
+    this.shutDown = true;
+    await this.stop();
   }
 
   status(): { connected: boolean; channel: string | null } {
-    return { connected: this.client !== null, channel: this.currentChannel };
+    return { connected: this.connected, channel: this.currentChannel };
   }
 }

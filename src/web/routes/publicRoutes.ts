@@ -181,15 +181,30 @@ export function registerPublicRoutes({ app, db, oauthConfig, config, logger, ten
     }
 
     return streamSSE(c, async (stream) => {
+      const broadcaster = tenant.overlayBroadcaster;
       await stream.writeSSE({ data: JSON.stringify({ type: "connected" }) });
-      const remove = tenant.overlayBroadcaster.addClient(async (event) => {
+      const remove = broadcaster.addClient(async (event) => {
         await stream.writeSSE({ data: JSON.stringify(event) });
       });
-      stream.onAbort(remove);
 
-      while (!stream.aborted) {
-        await new Promise<void>((r) => setTimeout(r, 25_000));
-        if (!stream.aborted) {
+      // When the tenant stops, end the response instead of idling on a dead
+      // broadcaster: the overlay EventSource then reconnects to the next one.
+      let wake: () => void = () => undefined;
+      const offClose = broadcaster.onClose(() => wake());
+      stream.onAbort(() => {
+        remove();
+        wake();
+      });
+
+      while (!stream.aborted && !broadcaster.isClosed()) {
+        await new Promise<void>((resolve) => {
+          const timer = setTimeout(resolve, 25_000);
+          wake = () => {
+            clearTimeout(timer);
+            resolve();
+          };
+        });
+        if (!stream.aborted && !broadcaster.isClosed()) {
           try {
             await stream.writeSSE({ data: "" });
           } catch {
@@ -197,6 +212,7 @@ export function registerPublicRoutes({ app, db, oauthConfig, config, logger, ten
           }
         }
       }
+      offClose();
       remove();
     });
   });

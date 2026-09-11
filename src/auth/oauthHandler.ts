@@ -197,17 +197,32 @@ export async function getUserFromSession(
   const user = getUserById(db, session.userId);
   if (!user) return null;
 
-  const now = Math.floor(Date.now() / 1000);
-  // Refresh if token expires within 5 minutes
-  if (user.token_expires_at - now < 300) {
-    try {
-      const tokens = await refreshAccessToken(oauthConfig, user.refresh_token);
-      updateUserTokens(db, user.id, tokens.accessToken, tokens.refreshToken, tokens.expiresAt);
-      return { id: user.id, twitchLogin: user.twitch_login, accessToken: tokens.accessToken };
-    } catch {
-      return null;
-    }
-  }
+  const accessToken = await ensureFreshAccessToken(db, user.id, oauthConfig);
+  if (!accessToken) return null;
 
-  return { id: user.id, twitchLogin: user.twitch_login, accessToken: user.access_token };
+  return { id: user.id, twitchLogin: user.twitch_login, accessToken };
+}
+
+// ─── Valid user access token ──────────────────────────────────────────────────
+
+// Twitch user tokens last about 4 hours. Refreshes the stored one when it
+// expires within 5 minutes; null when the refresh is rejected.
+export async function ensureFreshAccessToken(
+  db: Database,
+  userId: number,
+  oauthConfig: OAuthConfig
+): Promise<string | null> {
+  const user = getUserById(db, userId);
+  if (!user) return null;
+
+  const now = Math.floor(Date.now() / 1000);
+  if (user.token_expires_at - now >= 300) return user.access_token;
+
+  try {
+    const tokens = await refreshAccessToken(oauthConfig, user.refresh_token);
+    updateUserTokens(db, user.id, tokens.accessToken, tokens.refreshToken, tokens.expiresAt);
+    return tokens.accessToken;
+  } catch {
+    return null;
+  }
 }

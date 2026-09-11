@@ -1,4 +1,5 @@
 import type { Logger } from "pino";
+import { ensureFreshAccessToken, type OAuthConfig } from "../auth/oauthHandler";
 import type { Database } from "../db/database";
 import { getTenantConfig, rotateOverlayToken, updateTenantConfig, getUserById } from "../db/database";
 import { CommandRouter } from "../commands/commandRouter";
@@ -59,7 +60,8 @@ export class TenantManager {
     private readonly logger: Logger,
     private readonly youtubeApiKey?: string,
     private readonly klipyApiKey?: string,
-    private readonly sociavaultApiKey?: string
+    private readonly sociavaultApiKey?: string,
+    private readonly oauthConfig?: OAuthConfig
   ) {}
 
   getOrCreate(userId: number): TenantServices {
@@ -69,6 +71,7 @@ export class TenantManager {
     const dbConfig = getTenantConfig(this.db, userId);
     const runtimeConfig = dbConfigToRuntime(dbConfig);
     const dbUser = getUserById(this.db, userId);
+    const oauthConfig = this.oauthConfig;
     const services = createTenantServices({
       db: this.db,
       userId,
@@ -78,7 +81,10 @@ export class TenantManager {
       persistRuntimeConfig: (patch) => this.persistConfig(userId, patch),
       youtubeApiKey: this.youtubeApiKey,
       klipyApiKey: this.klipyApiKey,
-      sociavaultApiKey: this.sociavaultApiKey
+      sociavaultApiKey: this.sociavaultApiKey,
+      resolveAccessToken: oauthConfig
+        ? () => ensureFreshAccessToken(this.db, userId, oauthConfig)
+        : undefined
     });
 
     this.tenants.set(userId, services);
@@ -181,8 +187,9 @@ export class TenantManager {
     const tenant = this.tenants.get(userId);
     if (!tenant) return;
     const runtime = this.getRuntimeState(userId);
-    await tenant.twitchBotManager.stop();
+    await tenant.twitchBotManager.shutdown();
     await tenant.queue.stop();
+    tenant.overlayBroadcaster.close();
     this.tenants.delete(userId);
     this.logger.info({ userId, previousRuntime: runtime }, "Tenant services stopped");
   }

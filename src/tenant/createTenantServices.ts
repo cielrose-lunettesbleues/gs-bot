@@ -34,6 +34,8 @@ interface CreateTenantServicesDeps {
   youtubeApiKey?: string;
   klipyApiKey?: string;
   sociavaultApiKey?: string;
+  // Returns a valid Twitch user token, refreshed if needed; null if it cannot.
+  resolveAccessToken?: () => Promise<string | null>;
 }
 
 export function createTenantServices({
@@ -45,7 +47,8 @@ export function createTenantServices({
   persistRuntimeConfig,
   youtubeApiKey,
   klipyApiKey,
-  sociavaultApiKey
+  sociavaultApiKey,
+  resolveAccessToken
 }: CreateTenantServicesDeps): TenantServices {
   const overlayBroadcaster = new OverlayBroadcaster();
   const obsController = new MockObsSourceController(createRuntimeState(), logger);
@@ -116,11 +119,20 @@ export function createTenantServices({
   const twitchBotManager = new TwitchBotManager(router, logger);
 
   if (dbUser?.access_token && dbUser?.twitch_login) {
-    twitchBotManager.start({
-      channel: dbUser.twitch_login,
-      botUsername: dbUser.twitch_login,
-      oauthToken: dbUser.access_token
-    }).catch((err) => logger.error({ err, userId }, "Failed to auto-start Twitch bot"));
+    const channel = dbUser.twitch_login;
+    const storedToken = dbUser.access_token;
+    // The stored token is only refreshed by dashboard requests, so a tenant woken
+    // by the live poller can hold one that expired hours ago.
+    const resolveToken = resolveAccessToken ?? (async () => storedToken);
+    resolveToken()
+      .then((oauthToken) => {
+        if (!oauthToken) {
+          logger.warn({ userId }, "No valid Twitch token, bot not started (streamer must log in again)");
+          return;
+        }
+        return twitchBotManager.start({ channel, botUsername: channel, oauthToken });
+      })
+      .catch((err) => logger.error({ err, userId }, "Failed to auto-start Twitch bot"));
   }
 
   return {
