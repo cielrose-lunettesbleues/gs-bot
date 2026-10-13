@@ -70,6 +70,15 @@ describe("getSubmitHtml", () => {
     expect(html).toContain("min-height:44px");
   });
 
+  it("keeps the decoration out of the way of screen readers and motion settings", () => {
+    const html = getSubmitHtml(props());
+
+    // Speed lines, ground and rings carry no meaning
+    expect(html).toContain('class="speed" aria-hidden="true"');
+    expect(html).toContain('class="ground" aria-hidden="true"');
+    expect(html).toContain("@media (prefers-reduced-motion: reduce)");
+  });
+
   it("shows the viewer handle once connected", () => {
     const html = getSubmitHtml(props({ viewer: { login: "viewer1", displayName: "Viewer1" } }));
     expect(html).toContain("Viewer1");

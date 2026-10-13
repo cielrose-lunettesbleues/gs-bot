@@ -20,121 +20,282 @@ function toJsonLiteral(value: unknown): string {
     .replace(/&/g, "\\u0026");
 }
 
+// The art direction nods to 16-bit era platformers: cobalt sky, checkered
+// ground, gold rings, HUD panels. Every asset here is drawn with CSS and inline
+// SVG -- no character sprites, no external request, nothing copied.
 export function getSubmitHtml(props: SubmitPageProps): string {
   return /* html */ `<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#0e0e12">
+<meta name="theme-color" content="#0b1d6e">
 <title>Envoyer une vidéo — ${props.channel}</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{
-  --bg:#0e0e12; --panel:#17171f; --panel-2:#1f1f2b;
-  --text:#ececf1; --muted:#9a9aab; --accent:#9147ff; --accent-2:#772ce8;
-  --ok:#2ecc71; --err:#ff5c5c; --border:#2a2a38;
+  --sky-top:#0a1744; --sky-mid:#123a9e; --sky-low:#2f7ad6;
+  --panel-top:#15224f; --panel-low:#0c1633; --panel-edge:#070e24;
+  --grass:#3ea832; --grass-dark:#2b7d22;
+  --dirt:#c8832a; --dirt-dark:#9c5f1a;
+  --gold:#ffd23f; --gold-dark:#e09a00;
+  --text:#f4f6ff; --muted:#9fb0dd;
+  --ok:#5ee06a; --err:#ff6b6b;
+  --ink:#2a1a00;
 }
+html{height:100%}
 body{
-  background:var(--bg); color:var(--text);
+  min-height:100%;
+  color:var(--text);
   font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-  line-height:1.5; padding:16px; max-width:720px; margin:0 auto;
+  line-height:1.5;
   -webkit-text-size-adjust:100%;
+  padding:0 0 28px;
+  background:var(--sky-mid);
 }
-header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px;flex-wrap:wrap}
-h1{font-size:20px;font-weight:700}
-h1 span{color:var(--accent)}
-.panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:14px}
-.panel-title{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:10px}
-label{display:block;font-size:13px;color:var(--muted);margin-bottom:4px}
-/* 16px exactly: below that, iOS Safari zooms the page when a field is focused */
+/* Couche de ciel séparée et réellement fixe: background-attachment:fixed est
+   mal géré par iOS Safari, qui l'étire au lieu de le fixer. */
+body::before{
+  content:"";position:fixed;inset:0;z-index:-1;
+  background:
+    radial-gradient(circle at 18% 14%, rgba(255,255,255,.16) 0 42px, transparent 43px),
+    radial-gradient(circle at 24% 12%, rgba(255,255,255,.13) 0 30px, transparent 31px),
+    radial-gradient(circle at 78% 22%, rgba(255,255,255,.12) 0 36px, transparent 37px),
+    linear-gradient(180deg, var(--sky-top) 0%, var(--sky-mid) 45%, var(--sky-low) 100%);
+}
+.wrap{max-width:720px;margin:0 auto;padding:0 16px}
+
+/* ── Bandeau titre ──────────────────────────────────────────────────────── */
+header{position:relative;padding:22px 0 0;margin-bottom:18px;overflow:hidden}
+.title-row{
+  display:flex;align-items:center;justify-content:space-between;
+  gap:12px;flex-wrap:wrap;position:relative;z-index:2;
+}
+h1{
+  font-size:clamp(19px,5.2vw,29px);
+  font-style:italic;font-weight:900;letter-spacing:-.4px;text-transform:uppercase;
+  color:#fff;
+  text-shadow:
+    -2px -2px 0 #061034, 2px -2px 0 #061034, -2px 2px 0 #061034, 2px 2px 0 #061034,
+    0 7px 0 rgba(0,0,0,.28);
+}
+h1 .chan{color:var(--gold)}
+/* Lignes de vitesse: pur décor, cachées aux lecteurs d'écran */
+.speed{position:absolute;inset:0;z-index:1;opacity:.28;pointer-events:none}
+.speed i{
+  position:absolute;height:3px;border-radius:3px;background:#fff;
+  animation:dash 1.5s linear infinite;
+}
+.speed i:nth-child(1){top:18%;width:70px;animation-delay:0s}
+.speed i:nth-child(2){top:46%;width:46px;animation-delay:.35s}
+.speed i:nth-child(3){top:72%;width:96px;animation-delay:.7s}
+@keyframes dash{
+  0%{left:-30%;opacity:0}
+  15%{opacity:.9}
+  100%{left:115%;opacity:0}
+}
+/* Sol: bande d'herbe + damier défilant */
+.ground{position:relative;margin-top:16px;height:34px}
+.ground .grass{
+  height:12px;
+  background:linear-gradient(180deg,var(--grass),var(--grass-dark));
+  box-shadow:inset 0 2px 0 rgba(255,255,255,.25);
+}
+.ground .checks{
+  height:22px;
+  background-color:var(--dirt);
+  background-image:
+    linear-gradient(45deg,var(--dirt-dark) 25%,transparent 25%,transparent 75%,var(--dirt-dark) 75%),
+    linear-gradient(45deg,var(--dirt-dark) 25%,transparent 25%,transparent 75%,var(--dirt-dark) 75%);
+  background-size:22px 22px;
+  background-position:0 0,11px 11px;
+  animation:roll 1.4s linear infinite;
+}
+@keyframes roll{
+  from{background-position:0 0,11px 11px}
+  to{background-position:22px 0,33px 11px}
+}
+
+/* ── Anneaux ────────────────────────────────────────────────────────────── */
+.ring{
+  width:17px;height:17px;flex:0 0 auto;border-radius:50%;
+  border:5px solid var(--gold);
+  box-shadow:0 0 0 2px #7a4b00, inset 0 0 0 2px #7a4b00;
+  animation:spin 1.1s linear infinite;
+}
+.ring.sm{width:12px;height:12px;border-width:4px}
+@keyframes spin{
+  0%{transform:scaleX(1)}
+  50%{transform:scaleX(.18)}
+  100%{transform:scaleX(1)}
+}
+
+/* ── Panneaux HUD ───────────────────────────────────────────────────────── */
+.panel{
+  background:linear-gradient(180deg,var(--panel-top),var(--panel-low));
+  border:3px solid var(--panel-edge);
+  border-radius:12px;
+  box-shadow:inset 0 0 0 2px rgba(255,255,255,.12), 0 7px 0 rgba(0,0,0,.32);
+  padding:0 0 16px;margin-bottom:18px;overflow:hidden;
+}
+.panel-title{
+  display:flex;align-items:center;gap:9px;
+  background:linear-gradient(180deg,var(--gold),var(--gold-dark));
+  color:var(--ink);
+  font-style:italic;font-weight:900;text-transform:uppercase;
+  letter-spacing:.04em;font-size:13px;
+  padding:7px 14px;margin-bottom:14px;
+  box-shadow:inset 0 -2px 0 rgba(0,0,0,.2);
+}
+.panel-body{padding:0 14px}
+label{display:block;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px}
+
+/* 16px exactement: en dessous, iOS Safari zoome quand un champ reçoit le focus */
 input[type=text],input[type=url],input[type=number]{
-  width:100%;background:var(--panel-2);border:1px solid var(--border);border-radius:8px;
-  color:var(--text);padding:10px 12px;font-size:16px;
+  width:100%;
+  background:#070e24;
+  border:3px solid var(--panel-edge);
+  box-shadow:inset 0 2px 0 rgba(0,0,0,.4);
+  border-radius:8px;
+  color:var(--text);padding:11px 12px;font-size:16px;
 }
-input:focus{outline:2px solid var(--accent);outline-offset:0}
+input::placeholder{color:#5f74ab}
+input:focus{outline:3px solid var(--gold);outline-offset:1px}
 .row{display:flex;gap:10px;flex-wrap:wrap}
 .row>div{flex:1;min-width:140px}
+
 .btn{
-  background:var(--panel-2);color:var(--text);border:1px solid var(--border);
-  border-radius:8px;padding:10px 16px;font-size:16px;cursor:pointer;
-  /* 44px is the comfortable touch target on phones */
+  background:linear-gradient(180deg,#2b3f80,#182a5e);
+  color:var(--text);
+  border:3px solid var(--panel-edge);
+  border-radius:9px;
+  padding:9px 16px;font-size:16px;font-weight:700;cursor:pointer;
+  box-shadow:0 4px 0 var(--panel-edge);
+  /* 44px, la cible tactile confortable sur téléphone */
   min-height:44px;
   touch-action:manipulation;
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
 }
-.btn:hover{border-color:var(--accent)}
-.btn:disabled{opacity:.5;cursor:not-allowed}
-.btn-accent{background:var(--accent);border-color:var(--accent);font-weight:600}
-.btn-accent:hover{background:var(--accent-2)}
-.btn-sm{padding:6px 12px;font-size:14px;min-height:36px}
-.actions{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap}
-.who{font-size:14px;color:var(--muted);display:flex;align-items:center;gap:10px}
-.badge{background:var(--panel-2);border:1px solid var(--border);border-radius:999px;padding:4px 10px;font-size:12px}
+.btn:active{transform:translateY(3px);box-shadow:0 1px 0 var(--panel-edge)}
+.btn:disabled{opacity:.55;cursor:not-allowed;transform:none}
+.btn-accent{
+  background:linear-gradient(180deg,var(--gold),var(--gold-dark));
+  color:var(--ink);font-style:italic;font-weight:900;text-transform:uppercase;
+}
+.btn-sm{padding:6px 12px;font-size:14px;min-height:36px;border-width:2px;box-shadow:0 3px 0 var(--panel-edge)}
+.actions{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
+
+.who{display:flex;align-items:center;gap:9px;position:relative;z-index:2}
+.badge{
+  display:inline-flex;align-items:center;gap:7px;
+  background:#070e24;border:3px solid var(--panel-edge);
+  box-shadow:inset 0 0 0 2px rgba(255,255,255,.1);
+  border-radius:999px;padding:5px 12px;font-size:13px;font-weight:700;
+}
+.badge.live{color:var(--gold)}
 .badge.guest{color:var(--muted)}
-.badge.live{color:var(--accent)}
-.notice{font-size:13px;color:var(--muted);margin-top:8px}
-.notice.warn{color:#ffce54}
-#preview{margin-top:12px;display:none}
+
+.notice{font-size:12px;color:var(--muted);margin-top:10px;text-transform:uppercase;letter-spacing:.04em}
+.notice.warn{color:var(--gold)}
+
+#preview{margin-top:14px;display:none}
 #preview.visible{display:block}
 .frame{
-  position:relative;width:100%;background:#000;border-radius:10px;overflow:hidden;
+  position:relative;width:100%;background:#000;overflow:hidden;
+  border:3px solid var(--panel-edge);border-radius:10px;
+  box-shadow:inset 0 0 0 2px rgba(255,255,255,.12);
   aspect-ratio:16/9;
 }
-.frame.portrait{aspect-ratio:9/16;max-width:320px;margin:0 auto}
+.frame.portrait{aspect-ratio:9/16;max-width:300px;margin:0 auto}
 .frame>*{position:absolute;inset:0;width:100%;height:100%;border:none;object-fit:contain}
-#messages{list-style:none;margin-top:10px}
-#messages li{font-size:14px;padding:8px 10px;border-radius:8px;background:var(--panel-2);margin-bottom:6px}
-#messages li.ok{border-left:3px solid var(--ok)}
-#messages li.err{border-left:3px solid var(--err)}
-.fav{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)}
+
+#messages{list-style:none;margin-top:12px}
+#messages li{
+  display:flex;align-items:center;gap:9px;
+  font-size:14px;padding:9px 11px;margin-bottom:7px;
+  background:#070e24;border-radius:8px;
+  border-left:5px solid #35508f;
+}
+#messages li.ok{border-left-color:var(--ok)}
+#messages li.err{border-left-color:var(--err)}
+
+.fav{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:2px solid #15224f}
 .fav:last-child{border-bottom:none}
 .fav-label{flex:1;min-width:0}
 .fav-label strong{display:block;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.fav-label small{color:var(--muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
-.empty{color:var(--muted);font-size:14px;font-style:italic}
-footer{color:var(--muted);font-size:12px;text-align:center;margin:18px 0 8px}
+.fav-label small{display:block;color:var(--muted);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.empty{color:var(--muted);font-size:13px;font-style:italic}
+.count{
+  margin-left:auto;font-style:normal;font-weight:900;
+  background:var(--ink);color:var(--gold);
+  border-radius:999px;padding:1px 9px;font-size:12px;
+}
+
+footer{
+  color:#cfe0ff;font-size:11px;text-align:center;margin-top:6px;
+  text-transform:uppercase;letter-spacing:.08em;
+}
+
+@media (prefers-reduced-motion: reduce){
+  .ground .checks,.ring,.speed i{animation:none}
+  .speed{display:none}
+}
 </style>
 </head>
 <body>
 <header>
-  <h1>Envoyer une vidéo sur <span>${props.channel}</span></h1>
-  <div class="who" id="who"></div>
+  <div class="speed" aria-hidden="true"><i></i><i></i><i></i></div>
+  <div class="wrap title-row">
+    <h1>Envoyer une vidéo<br><span class="chan">${props.channel}</span></h1>
+    <div class="who" id="who"></div>
+  </div>
+  <div class="ground" aria-hidden="true">
+    <div class="grass"></div>
+    <div class="checks"></div>
+  </div>
 </header>
 
-<div class="panel">
-  <div class="panel-title">La vidéo</div>
-  <label for="url">Lien de la vidéo</label>
-  <!-- autocapitalize/autocorrect off: iOS would otherwise mangle a typed link -->
-  <input type="url" id="url" placeholder="https://..." autocomplete="off" spellcheck="false"
-         autocapitalize="off" autocorrect="off" inputmode="url">
-  <div class="row" style="margin-top:10px">
-    <div>
-      <label for="caption">Texte à afficher (optionnel)</label>
-      <input type="text" id="caption" maxlength="200" placeholder="un petit mot" autocomplete="off"
-             autocapitalize="sentences">
-    </div>
-    <div>
-      <label for="duration">Durée en secondes (optionnel)</label>
-      <input type="number" id="duration" min="1" max="300" inputmode="numeric"
-             placeholder="${props.defaultDurationSeconds}">
+<div class="wrap">
+  <div class="panel">
+    <div class="panel-title"><span class="ring sm" aria-hidden="true"></span>La vidéo</div>
+    <div class="panel-body">
+      <label for="url">Lien de la vidéo</label>
+      <!-- autocapitalize/autocorrect off: iOS déformerait un lien tapé à la main -->
+      <input type="url" id="url" placeholder="https://..." autocomplete="off" spellcheck="false"
+             autocapitalize="off" autocorrect="off" inputmode="url">
+      <div class="row" style="margin-top:12px">
+        <div>
+          <label for="caption">Texte à afficher</label>
+          <input type="text" id="caption" maxlength="200" placeholder="un petit mot" autocomplete="off"
+                 autocapitalize="sentences">
+        </div>
+        <div>
+          <label for="duration">Durée (s)</label>
+          <input type="number" id="duration" min="1" max="300" inputmode="numeric"
+                 placeholder="${props.defaultDurationSeconds}">
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn" id="btn-preview">Prévisualiser</button>
+        <button class="btn btn-accent" id="btn-send">Envoyer</button>
+        <button class="btn btn-sm" id="btn-fav" hidden>★ Favori</button>
+      </div>
+      <div class="notice" id="rules"></div>
+      <div id="preview"></div>
+      <ul id="messages"></ul>
     </div>
   </div>
-  <div class="actions">
-    <button class="btn" id="btn-preview">Prévisualiser</button>
-    <button class="btn btn-accent" id="btn-send">Envoyer</button>
-    <button class="btn btn-sm" id="btn-fav" hidden>Ajouter aux favoris</button>
+
+  <div class="panel" id="fav-panel" hidden>
+    <div class="panel-title">
+      <span class="ring sm" aria-hidden="true"></span>Mes favoris
+      <span class="count" id="fav-count">0</span>
+    </div>
+    <div class="panel-body"><div id="fav-list"></div></div>
   </div>
-  <div class="notice" id="rules"></div>
-  <div id="preview"></div>
-  <ul id="messages"></ul>
-</div>
 
-<div class="panel" id="fav-panel" hidden>
-  <div class="panel-title">Mes favoris</div>
-  <div id="fav-list"></div>
+  <footer>Mêmes règles que le chat</footer>
 </div>
-
-<footer>Les vidéos passent par les mêmes règles que le chat.</footer>
 
 <script>
 (function(){
@@ -186,13 +347,34 @@ footer{color:var(--muted);font-size:12px;text-align:center;margin:18px 0 8px}
   function say(text, kind){
     var li = document.createElement("li");
     li.className = kind || "";
-    li.textContent = text;
+    var dot = document.createElement("span");
+    dot.className = "ring sm";
+    dot.setAttribute("aria-hidden", "true");
+    var span = document.createElement("span");
+    span.textContent = text;
+    li.appendChild(dot);
+    li.appendChild(span);
     messages.insertBefore(li, messages.firstChild);
     while(messages.children.length > 5) messages.removeChild(messages.lastChild);
   }
 
   function describeError(code){
     return ERRORS[code] || ("Erreur : " + code);
+  }
+
+  // Un anneau qui tourne pendant l'attente, puis le libellé revient
+  function busy(button, on){
+    if(on){
+      button.dataset.label = button.textContent;
+      button.textContent = "";
+      var ring = document.createElement("span");
+      ring.className = "ring sm";
+      button.appendChild(ring);
+      button.disabled = true;
+    } else {
+      button.textContent = button.dataset.label || button.textContent;
+      button.disabled = false;
+    }
   }
 
   function api(path, options){
@@ -206,24 +388,30 @@ footer{color:var(--muted);font-size:12px;text-align:center;margin:18px 0 8px}
     });
   }
 
-  // ── Identity ──────────────────────────────────────────────────────────────
+  // ── Identité ──────────────────────────────────────────────────────────────
   function renderWho(){
     var who = el("who");
     who.innerHTML = "";
     var badge = document.createElement("span");
     badge.className = "badge " + (BOOT.viewer ? "live" : "guest");
-    badge.textContent = BOOT.viewer ? ("@" + BOOT.viewer.displayName) : "Invité";
+    var ring = document.createElement("span");
+    ring.className = "ring sm";
+    ring.setAttribute("aria-hidden", "true");
+    var name = document.createElement("span");
+    name.textContent = BOOT.viewer ? ("@" + BOOT.viewer.displayName) : "Invité";
+    badge.appendChild(ring);
+    badge.appendChild(name);
     who.appendChild(badge);
 
     var btn = document.createElement("button");
     btn.className = "btn btn-sm";
     if(BOOT.viewer){
-      btn.textContent = "Se déconnecter";
+      btn.textContent = "Déconnexion";
       btn.onclick = function(){
         api("/viewer/logout", { method:"POST" }).then(function(){ location.reload(); });
       };
     } else {
-      btn.textContent = "Se connecter avec Twitch";
+      btn.textContent = "Connexion Twitch";
       btn.onclick = function(){
         location.href = "/viewer/auth/twitch?channel=" + encodeURIComponent(BOOT.channel) + "&token=" + encodeURIComponent(BOOT.token);
       };
@@ -247,7 +435,7 @@ footer{color:var(--muted);font-size:12px;text-align:center;margin:18px 0 8px}
     rules.textContent = parts.length ? ("Sur ce canal : " + parts.join(", ") + ".") : "";
   }
 
-  // ── Preview ───────────────────────────────────────────────────────────────
+  // ── Prévisualisation ──────────────────────────────────────────────────────
   function frame(portrait){
     var div = document.createElement("div");
     div.className = "frame" + (portrait ? " portrait" : "");
@@ -283,8 +471,8 @@ footer{color:var(--muted);font-size:12px;text-align:center;margin:18px 0 8px}
       video.src = preview.url;
       video.controls = true;
       video.muted = true;
-      // Inline playback and a metadata-only preload: iOS would otherwise take
-      // over the screen, and a phone would download the whole file to preview
+      // Lecture en ligne et préchargement limité: iOS confisquerait l'écran, et
+      // un téléphone téléchargerait toute la vidéo juste pour la prévisualiser
       video.playsInline = true;
       video.setAttribute("playsinline", "");
       video.preload = "metadata";
@@ -308,17 +496,17 @@ footer{color:var(--muted);font-size:12px;text-align:center;margin:18px 0 8px}
     if(!url){ say("Colle un lien d'abord.", "err"); return; }
 
     var btn = el("btn-preview");
-    btn.disabled = true;
+    busy(btn, true);
     api(BASE + "/preview" + QS, { method:"POST", body: JSON.stringify({ url: url }) })
       .then(function(r){
         if(!r.body.ok){ say(describeError(r.body.error), "err"); previewBox.className = ""; return; }
         renderPreview(r.body.preview);
       })
       .catch(function(){ say("Réseau indisponible.", "err"); })
-      .then(function(){ btn.disabled = false; });
+      .then(function(){ busy(btn, false); });
   }
 
-  // ── Send ──────────────────────────────────────────────────────────────────
+  // ── Envoi ─────────────────────────────────────────────────────────────────
   function doSend(){
     var url = urlInput.value.trim();
     if(!url){ say("Colle un lien d'abord.", "err"); return; }
@@ -330,7 +518,7 @@ footer{color:var(--muted);font-size:12px;text-align:center;margin:18px 0 8px}
     if(!isNaN(duration) && duration > 0) payload.durationSeconds = duration;
 
     var btn = el("btn-send");
-    btn.disabled = true;
+    busy(btn, true);
     api(BASE + "/send" + QS, { method:"POST", body: JSON.stringify(payload) })
       .then(function(r){
         if(!r.body.ok){
@@ -340,22 +528,25 @@ footer{color:var(--muted);font-size:12px;text-align:center;margin:18px 0 8px}
         }
         var replies = r.body.replies || [];
         if(replies.length === 0){
-          say("Envoyé.", "ok");
+          say("Envoyé !", "ok");
         } else {
           replies.forEach(function(text){
-            // The bot prefixes its chat replies with the handle it answered to
+            // Le bot préfixe ses réponses du pseudo auquel il répond
             say(text.replace(/^@\\S+\\s*/, ""), "ok");
           });
         }
       })
       .catch(function(){ say("Réseau indisponible.", "err"); })
-      .then(function(){ btn.disabled = false; });
+      .then(function(){ busy(btn, false); });
   }
 
-  // ── Favorites ─────────────────────────────────────────────────────────────
+  // ── Favoris ───────────────────────────────────────────────────────────────
   function renderFavorites(){
     var list = el("fav-list");
+    var count = el("fav-count");
     list.innerHTML = "";
+    if(count) count.textContent = String(BOOT.favorites ? BOOT.favorites.length : 0);
+
     if(!BOOT.favorites || BOOT.favorites.length === 0){
       var empty = document.createElement("p");
       empty.className = "empty";
@@ -367,6 +558,11 @@ footer{color:var(--muted);font-size:12px;text-align:center;margin:18px 0 8px}
     BOOT.favorites.forEach(function(fav){
       var row = document.createElement("div");
       row.className = "fav";
+
+      var ring = document.createElement("span");
+      ring.className = "ring sm";
+      ring.setAttribute("aria-hidden", "true");
+      row.appendChild(ring);
 
       var label = document.createElement("div");
       label.className = "fav-label";
