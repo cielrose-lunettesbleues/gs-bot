@@ -1,3 +1,5 @@
+import { GUEST_USERNAME } from "../viewer/viewerIdentity";
+
 export function getOverlayHtml(): string {
   return /* html */ `<!DOCTYPE html>
 <html>
@@ -73,9 +75,9 @@ iframe{
 }
 #info{
   position:absolute;bottom:0;left:0;right:0;
-  padding:12px 20px;
+  padding:9px 18px;
   background:linear-gradient(transparent,rgba(0,0,0,.6));
-  color:#fff;font-family:sans-serif;font-size:15px;
+  color:#fff;font-family:sans-serif;font-size:13px;
   opacity:0;transition:opacity .4s;
   pointer-events:none;
 }
@@ -139,7 +141,11 @@ iframe{
   var ttsCaptionEl = document.getElementById('tts-caption');
 
   // URL params: ?info=1 to show the username bar
-  var showInfo = new URLSearchParams(location.search).get('info') === '1';
+  // Le nom de qui a envoyé s'affiche par défaut. Un streamer qui n'en veut pas
+  // ajoute ?info=0 à l'URL de sa source OBS.
+  var showInfo = new URLSearchParams(location.search).get('info') !== '0';
+  // Les invités de la page viewers n'ont pas de nom à montrer
+  var GUEST_HANDLE = ${JSON.stringify(GUEST_USERNAME)};
 
   function ytId(url){
     var m = url.match(/(?:youtube\\.com\\/watch\\?.*v=|youtu\\.be\\/|youtube\\.com\\/shorts\\/|youtube\\.com\\/embed\\/)([a-zA-Z0-9_-]+)/);
@@ -272,8 +278,8 @@ iframe{
     } else {
       requestAnimationFrame(reveal);
     }
-    if(showInfo){
-      infoUser.textContent='@'+data.username;
+    if(showInfo && data.username){
+      infoUser.textContent = data.username === GUEST_HANDLE ? 'Anonyme' : '@' + data.username;
       info.classList.add('visible');
     }
     if(data.caption){

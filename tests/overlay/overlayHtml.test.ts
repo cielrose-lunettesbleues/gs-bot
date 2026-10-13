@@ -47,6 +47,18 @@ describe("getOverlayHtml", () => {
     expect(html).toContain("requestAnimationFrame(reveal)");
   });
 
+  it("names the submitter by default, and calls a guest anonymous", () => {
+    const html = getOverlayHtml();
+
+    // Shown unless the streamer opts out with ?info=0 on their OBS source
+    expect(html).toContain("get('info') !== '0'");
+    expect(html).toContain("'Anonyme'");
+    // The guest handle comes from the viewer module rather than a second copy
+    expect(html).toContain('var GUEST_HANDLE = "invite"');
+    // Small, as asked
+    expect(html).toContain("font-size:13px");
+  });
+
   it("still ends playback on the native video ended event", () => {
     expect(getOverlayHtml()).toContain("addEventListener('ended', hide)");
   });

@@ -225,8 +225,13 @@ h1{
     0 7px 0 rgba(0,0,0,.28);
 }
 h1 .chan{color:var(--gold)}
-/* Lignes de vitesse: pur décor, cachées aux lecteurs d'écran */
-.speed{position:absolute;inset:0;z-index:1;opacity:.28;pointer-events:none}
+/* Lignes de vitesse: pur décor, cachées aux lecteurs d'écran. Elles vivent dans
+   la scène, à hauteur des personnages, et leur conteneur les rogne lui-même:
+   un overflow sur la scène couperait le décor qui déborde vers le haut. */
+.speed{
+  position:absolute;inset:0;z-index:2;overflow:hidden;
+  opacity:.28;pointer-events:none;
+}
 /* Animé en transform et non en left: left force un recalcul de mise en page à
    chaque image, ce qui saccade dès que le navigateur a autre chose à faire. */
 .speed i{
@@ -234,9 +239,10 @@ h1 .chan{color:var(--gold)}
   will-change:transform,opacity;
   animation:dash 1.5s linear infinite;
 }
-.speed i:nth-child(1){top:18%;width:70px;animation-delay:0s}
-.speed i:nth-child(2){top:46%;width:46px;animation-delay:.35s}
-.speed i:nth-child(3){top:72%;width:96px;animation-delay:.7s}
+/* Réparties sur la hauteur occupée par les deux personnages */
+.speed i:nth-child(1){top:22%;width:70px;animation-delay:0s}
+.speed i:nth-child(2){top:48%;width:46px;animation-delay:.35s}
+.speed i:nth-child(3){top:70%;width:96px;animation-delay:.7s}
 @keyframes dash{
   0%{transform:translateX(-30vw);opacity:0}
   15%{opacity:.9}
@@ -471,7 +477,6 @@ ${spriteStyles(props.sprites ?? {})}
 </head>
 <body>
 <header>
-  <div class="speed" aria-hidden="true"><i></i><i></i><i></i></div>
   <div class="wrap title-row">
     <h1>Envoyer une vidéo<br><span class="chan">${props.channel}</span></h1>
     <div class="who" id="who"></div>
@@ -547,6 +552,7 @@ ${spriteStyles(props.sprites ?? {})}
 
 <div class="scene">
   <div class="backdrop" aria-hidden="true"${props.sprites?.backdrop ? "" : " hidden"}></div>
+  <div class="speed" aria-hidden="true"><i></i><i></i><i></i></div>
   <div class="mascot" aria-hidden="true"${props.sprites?.mascot ? "" : " hidden"}></div>
   <div class="sidekick" aria-hidden="true"${props.sprites?.sidekick ? "" : " hidden"}></div>
   <div class="ground" aria-hidden="true">

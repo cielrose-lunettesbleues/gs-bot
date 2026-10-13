@@ -80,6 +80,17 @@ describe("getSubmitHtml", () => {
     expect(html).not.toContain("to{background-position:22px 0");
   });
 
+  it("runs the speed lines across the characters, clipped by their own box", () => {
+    const html = getSubmitHtml(props());
+    const headerEnd = html.indexOf("</header>");
+    const speed = html.indexOf('class="speed"');
+
+    // They used to streak across the title; they belong with the runners
+    expect(speed).toBeGreaterThan(headerEnd);
+    // Their own overflow: the scene cannot clip, or it would cut the backdrop
+    expect(html).toContain("position:absolute;inset:0;z-index:2;overflow:hidden");
+  });
+
   it("anchors the scenery to the ground rather than to the window", () => {
     const html = getSubmitHtml(props());
     const scene = html.indexOf('<div class="scene">');
