@@ -159,7 +159,9 @@ iframe{
   function buildMedia(url, portrait){
     var id = ytId(url);
     if(id){
-      var isShort = /youtube\\.com\\/shorts\\//.test(url);
+      // Le drapeau portrait vient de la recherche YouTube, qui connaît le
+       // format réel: un Short partagé en lien youtu.be est reconnu quand même.
+      var isShort = /youtube\\.com\\/shorts\\//.test(url) || portrait === true;
       var f=document.createElement('iframe');
       f.src='https://www.youtube.com/embed/'+id
         +'?autoplay=1&controls=0&modestbranding=1&rel=0'
@@ -171,7 +173,9 @@ iframe{
       if(isShort){
         var bg=document.createElement('div');
         bg.className='yt-short-bg';
-        bg.style.backgroundImage='url(https://img.youtube.com/vi/'+id+'/maxresdefault.jpg)';
+        // Deux couches: maxres n'existe pas pour tous les Shorts, et la couche
+        // hqdefault en dessous reste visible quand la première échoue.
+        bg.style.backgroundImage='url(https://img.youtube.com/vi/'+id+'/maxresdefault.jpg), url(https://img.youtube.com/vi/'+id+'/hqdefault.jpg)';
         w.appendChild(bg);
         var inner=document.createElement('div');
         inner.className='yt-short-inner';

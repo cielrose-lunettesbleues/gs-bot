@@ -25,6 +25,20 @@ describe("buildMediaPreview", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("previews a Short in the shape the overlay will give it", async () => {
+    const short = await buildMediaPreview("https://www.youtube.com/shorts/abc123");
+    const wide = await buildMediaPreview("https://www.youtube.com/watch?v=abc123");
+
+    expect(short).toMatchObject({ kind: "youtube", portrait: true });
+    expect(wide).toMatchObject({ kind: "youtube", portrait: false });
+  });
+
+  it("uses a thumbnail that exists for every video", async () => {
+    const preview = await buildMediaPreview("https://youtu.be/abc123");
+    // maxresdefault is missing on many videos, Shorts especially
+    expect(preview).toMatchObject({ thumbnailUrl: "https://img.youtube.com/vi/abc123/hqdefault.jpg" });
+  });
+
   it("previews a direct video and a direct image", async () => {
     expect(await buildMediaPreview("https://cdn.test/clip.mp4")).toMatchObject({
       kind: "video",

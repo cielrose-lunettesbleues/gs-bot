@@ -595,7 +595,7 @@ ${spriteStyles(props.sprites ?? {})}
 
     var box;
     if(preview.kind === "youtube"){
-      box = frame(false);
+      box = frame(preview.portrait);
       var iframe = document.createElement("iframe");
       iframe.src = preview.embedUrl;
       iframe.allow = "encrypted-media";

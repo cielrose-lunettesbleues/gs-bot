@@ -13,6 +13,21 @@ describe("getOverlayHtml", () => {
     expect(cutIndex).toBeLessThan(fallbackIndex);
   });
 
+  it("treats a portrait YouTube result as a Short, whatever the link looks like", () => {
+    const html = getOverlayHtml();
+
+    // The search knows the real shape; a Short shared as youtu.be has no /shorts/
+    expect(html).toContain("portrait === true");
+  });
+
+  it("falls back to a thumbnail that always exists behind the blurred backdrop", () => {
+    const html = getOverlayHtml();
+
+    // maxresdefault 404s on many Shorts, leaving the backdrop empty
+    expect(html).toContain("maxresdefault.jpg), url(https://img.youtube.com/vi/");
+    expect(html).toContain("hqdefault.jpg)");
+  });
+
   it("still ends playback on the native video ended event", () => {
     expect(getOverlayHtml()).toContain("addEventListener('ended', hide)");
   });

@@ -4,7 +4,7 @@ import { isInstagramPostUrl, isInstagramShareUrl } from "./sociavaultClient";
 // What the submit page needs in order to show the viewer what they are about
 // to send, without reimplementing the overlay player.
 export type MediaPreview =
-  | { kind: "youtube"; embedUrl: string; thumbnailUrl: string }
+  | { kind: "youtube"; embedUrl: string; thumbnailUrl: string; portrait: boolean }
   | { kind: "image"; url: string }
   | { kind: "video"; url: string; portrait: boolean; durationSeconds: number }
   | { kind: "iframe"; url: string; portrait: boolean }
@@ -32,7 +32,10 @@ export async function buildMediaPreview(url: string, deps: PreviewDeps = {}): Pr
     return {
       kind: "youtube",
       embedUrl: `https://www.youtube.com/embed/${videoId}?autoplay=0&controls=1&rel=0`,
-      thumbnailUrl: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`
+      // hqdefault rather than maxres: it exists for every video, Shorts included
+      thumbnailUrl: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
+      // Previewed in the shape the overlay will actually give it
+      portrait: /youtube\.com\/shorts\//i.test(url)
     };
   }
 
