@@ -57,7 +57,8 @@ function spriteStyles(sprites: SpriteSet): string {
   ${sheetBackground(ring)}
   ${sheetAnimation("ring-sheet", ring)}
 }
-.ring.sm{border:none;transform:scale(.78)}
+/* Pas de mise à l'échelle fractionnaire: elle brouillerait du pixel art */
+.ring.sm{border:none;transform:none}
 ${sheetKeyframes("ring-sheet", ring)}`);
   }
 
@@ -322,8 +323,10 @@ footer{
   text-transform:uppercase;letter-spacing:.08em;
 }
 
-/* Emplacement du personnage: debout sur le sol, à droite de l'en-tête */
+/* Emplacement du personnage: debout sur le sol, à droite de l'en-tête.
+   Masqué sur écran étroit, où il chevaucherait le badge d'identité. */
 .mascot{position:absolute;right:16px;bottom:22px;z-index:3;pointer-events:none}
+@media (max-width:520px){.mascot{display:none}}
 
 @media (prefers-reduced-motion: reduce){
   .ground .checks,.ring,.speed i{animation:none}

@@ -1,11 +1,18 @@
 {
   "ring": {
     "file": "ring.png",
-    "frames": 10,
+    "frames": 4,
+    "fps": 12,
+    "width": 16,
+    "height": 16
+  },
+  "mascot": {
+    "file": "mascot.png",
+    "frames": 4,
     "fps": 16,
-    "width": 56,
-    "height": 56,
-    "displayWidth": 22,
-    "displayHeight": 22
+    "width": 31,
+    "height": 43,
+    "displayWidth": 62,
+    "displayHeight": 86
   }
 }
