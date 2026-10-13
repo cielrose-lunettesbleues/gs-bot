@@ -12,8 +12,15 @@ const spriteSchema = z.object({
   /** Horizontal sprite sheet: number of frames side by side. 1 = still image. */
   frames: z.number().int().min(1).max(64).default(1),
   fps: z.number().int().min(1).max(60).default(12),
+  /** Size of one frame in the file. */
   width: z.number().int().min(1).max(1024).default(64),
-  height: z.number().int().min(1).max(1024).default(64)
+  height: z.number().int().min(1).max(1024).default(64),
+  /**
+   * Size on the page, when it should differ from the file. The sheet is scaled
+   * as a whole and the frame step follows, so the animation stays in register.
+   */
+  displayWidth: z.number().int().min(1).max(1024).optional(),
+  displayHeight: z.number().int().min(1).max(1024).optional()
 });
 
 const manifestSchema = z.object({

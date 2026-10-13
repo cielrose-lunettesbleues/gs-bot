@@ -16,6 +16,20 @@ export interface SubmitPageProps {
   sprites?: SpriteSet;
 }
 
+// A sprite may be shown smaller than it is stored, so every geometry below is
+// expressed in display pixels: the whole sheet is scaled to frames × display
+// width, which keeps the step offsets and the frame boundaries in register.
+function displaySize(sprite: SpriteDefinition): { w: number; h: number; sheet: number } {
+  const w = sprite.displayWidth ?? sprite.width;
+  const h = sprite.displayHeight ?? sprite.height;
+  return { w, h, sheet: w * sprite.frames };
+}
+
+function sheetBackground(sprite: SpriteDefinition): string {
+  const { w, h, sheet } = displaySize(sprite);
+  return `width:${w}px;height:${h}px;background:url("/sprites/${sprite.file}") 0 0/${sheet}px ${h}px no-repeat;`;
+}
+
 // A sheet animation walks the strip one frame at a time; a single frame is
 // simply left still.
 function sheetAnimation(name: string, sprite: SpriteDefinition): string {
@@ -26,7 +40,7 @@ function sheetAnimation(name: string, sprite: SpriteDefinition): string {
 
 function sheetKeyframes(name: string, sprite: SpriteDefinition): string {
   if (sprite.frames <= 1) return "";
-  return `@keyframes ${name}{to{background-position:-${sprite.width * sprite.frames}px 0}}`;
+  return `@keyframes ${name}{to{background-position:-${displaySize(sprite).sheet}px 0}}`;
 }
 
 // Emitted after the base stylesheet so these rules win, while every untouched
@@ -39,36 +53,35 @@ function spriteStyles(sprites: SpriteSet): string {
     const ring = sprites.ring;
     blocks.push(`
 .ring{
-  width:${ring.width}px;height:${ring.height}px;
   border:none;box-shadow:none;border-radius:0;
-  background:url("/sprites/${ring.file}") 0 0/auto 100% no-repeat;
+  ${sheetBackground(ring)}
   ${sheetAnimation("ring-sheet", ring)}
 }
-.ring.sm{width:${ring.width}px;height:${ring.height}px;border:none;transform:scale(.78)}
+.ring.sm{border:none;transform:scale(.78)}
 ${sheetKeyframes("ring-sheet", ring)}`);
   }
 
   if (sprites.ground) {
     const ground = sprites.ground;
+    const { w, h } = displaySize(ground);
     blocks.push(`
-.ground{height:${12 + ground.height}px}
+.ground{height:${12 + h}px}
 .ground .checks{
-  height:${ground.height}px;
+  height:${h}px;
   background-color:transparent;
   background-image:url("/sprites/${ground.file}");
-  background-size:auto ${ground.height}px;
+  background-size:${w}px ${h}px;
   background-position:0 0;
   animation:ground-sheet 1.4s linear infinite;
 }
-@keyframes ground-sheet{to{background-position:-${ground.width}px 0}}`);
+@keyframes ground-sheet{to{background-position:-${w}px 0}}`);
   }
 
   if (sprites.mascot) {
     const mascot = sprites.mascot;
     blocks.push(`
 .mascot{
-  width:${mascot.width}px;height:${mascot.height}px;
-  background:url("/sprites/${mascot.file}") 0 0/auto 100% no-repeat;
+  ${sheetBackground(mascot)}
   ${sheetAnimation("mascot-sheet", mascot)}
 }
 ${sheetKeyframes("mascot-sheet", mascot)}`);

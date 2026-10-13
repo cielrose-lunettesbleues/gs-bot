@@ -103,6 +103,20 @@ describe("getSubmitHtml", () => {
     expect(html).toContain("border:5px solid var(--gold)");
   });
 
+  it("keeps a downscaled sheet in register", () => {
+    const html = getSubmitHtml(props({
+      sprites: {
+        // Stored at 56px, shown at 22px: every offset must follow the display size
+        ring: { file: "ring.png", frames: 10, fps: 16, width: 56, height: 56, displayWidth: 22, displayHeight: 22 }
+      }
+    }));
+
+    expect(html).toContain("width:22px;height:22px");
+    expect(html).toContain("/220px 22px no-repeat");
+    expect(html).toContain("background-position:-220px 0");
+    expect(html).not.toContain("560px");
+  });
+
   it("leaves a still sprite unanimated", () => {
     const html = getSubmitHtml(props({
       sprites: { ground: { file: "ground.png", frames: 1, fps: 12, width: 32, height: 22 } }

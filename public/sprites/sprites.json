@@ -1,0 +1,11 @@
+{
+  "ring": {
+    "file": "ring.png",
+    "frames": 10,
+    "fps": 16,
+    "width": 56,
+    "height": 56,
+    "displayWidth": 22,
+    "displayHeight": 22
+  }
+}
