@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS tenant_configs (
   queue_max_size             INTEGER NOT NULL DEFAULT 3,
   duration_seconds           INTEGER NOT NULL DEFAULT 30,
   chat_feedback              INTEGER NOT NULL DEFAULT 1,
-  allowed_domains            TEXT    NOT NULL DEFAULT 'youtube.com,youtu.be,streamable.com,tenor.com,giphy.com,klipy.com,tiktok.com',
+  allowed_domains            TEXT    NOT NULL DEFAULT 'youtube.com,youtu.be,streamable.com,tenor.com,giphy.com,klipy.com,tiktok.com,instagram.com',
   allow_direct_files         INTEGER NOT NULL DEFAULT 1,
   allowed_file_extensions    TEXT    NOT NULL DEFAULT '.mp4,.webm,.mov',
   max_video_duration_seconds INTEGER NOT NULL DEFAULT 0,
@@ -86,9 +86,10 @@ CREATE INDEX IF NOT EXISTS idx_tts_voices_tenant ON tenant_tts_voices(tenant_id)
 `;
 
 const MIGRATIONS = [
-  // Add klipy.com and tiktok.com to existing tenant rows that predate these domains
+  // Add domains to existing tenant rows that predate them
   `UPDATE tenant_configs SET allowed_domains = allowed_domains || ',klipy.com'  WHERE allowed_domains NOT LIKE '%klipy.com%'`,
   `UPDATE tenant_configs SET allowed_domains = allowed_domains || ',tiktok.com' WHERE allowed_domains NOT LIKE '%tiktok.com%'`,
+  `UPDATE tenant_configs SET allowed_domains = allowed_domains || ',instagram.com' WHERE allowed_domains NOT LIKE '%instagram.com%'`,
 ];
 
 // ALTER TABLE migrations — idempotent (errors silently ignored)

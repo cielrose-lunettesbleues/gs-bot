@@ -11,6 +11,8 @@ export interface PlaybackItem {
   username: string;
   caption?: string;
   portrait?: boolean;
+  /** Hard cut requested with "/<seconds>", applied even to native videos. */
+  cutAfterSeconds?: number;
   reply: (message: string) => Promise<void>;
   /** Optional async callback that generates a TTS event at actual play time. */
   ttsGenerate?: () => Promise<TtsPlaybackEvent | null>;
@@ -31,7 +33,7 @@ export interface TtsPlaybackEvent {
 }
 
 export type PlaybackEvent =
-  | { type: "start"; url: string; durationSeconds: number; username: string; caption?: string; portrait?: boolean }
+  | { type: "start"; url: string; durationSeconds: number; username: string; caption?: string; portrait?: boolean; cutAfterSeconds?: number }
   | { type: "stop" }
   | TtsPlaybackEvent;
 
@@ -99,7 +101,7 @@ export class PlaybackQueue {
     try {
       await this.obsController.setSourceUrl(item.url);
       await this.obsController.showSource();
-      this.onEvent?.({ type: "start", url: item.url, durationSeconds: item.durationSeconds, username: item.username, caption: item.caption, portrait: item.portrait });
+      this.onEvent?.({ type: "start", url: item.url, durationSeconds: item.durationSeconds, username: item.username, caption: item.caption, portrait: item.portrait, cutAfterSeconds: item.cutAfterSeconds });
 
       // Fire TTS generation non-blocking — broadcast when ready
       if (item.ttsGenerate) {

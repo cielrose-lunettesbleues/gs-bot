@@ -313,6 +313,7 @@ tmi.js → twitchMessageHandler → CommandRouter → GreenScreenCommand → Pla
 
 ```txt
 !gs <url>              — joue un média dans l'overlay OBS
+!gs <url> /10          — coupe la lecture après 10s (le /N est placable avant ou après le |)
 !gstop                 — stop immédiat
 !gs subonly on|off     — active/désactive le mode sub-only (mod)
 !gs modonly on|off     — active/désactive le mode mod-only (mod)
@@ -370,6 +371,7 @@ Couverture principale actuelle :
 
 - [x] Connexion Twitch chat via tmi.js
 - [x] Commande `!gs <url>` avec validation URL
+- [x] Résolution Instagram (reels, posts, IGTV) vers le MP4 direct via SociaVault
 - [x] Commande `!gstop` (stop d'urgence)
 - [x] Commandes admin (`subonly`, `modonly`, `cooldown`, `history`, `blacklist`)
 - [x] File de lecture (modes queue/replace/drop)

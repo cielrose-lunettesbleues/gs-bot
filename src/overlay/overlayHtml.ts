@@ -232,8 +232,13 @@ iframe{
       captionEl.textContent=data.caption;
       captionEl.classList.add('visible');
     }
+    // A requested "/<seconds>" cut applies to every media type, including
+    // native videos that would otherwise play to their own end.
+    if(data.cutAfterSeconds){
+      hideTimer=setTimeout(hide, Math.max(data.cutAfterSeconds*1000, 500));
+    }
     // Client-side fallback timer for YouTube and GIFs (no native 'ended' event)
-    if(data.durationSeconds && !(/\\.(mp4|webm|mov)(\\?.*)?$/i.test(data.url))){
+    else if(data.durationSeconds && !(/\\.(mp4|webm|mov)(\\?.*)?$/i.test(data.url))){
       hideTimer=setTimeout(hide, Math.max(data.durationSeconds*1000-500, 500));
     }
   }

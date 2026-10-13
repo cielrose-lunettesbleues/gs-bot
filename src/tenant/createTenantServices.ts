@@ -16,7 +16,7 @@ import { TwitchBotManager } from "../twitch/twitchBotManager";
 import { MockObsSourceController } from "../obs/mockObsSourceController";
 import { createRuntimeState } from "../state/runtimeState";
 import { searchShortVideo } from "../media/youtubeSearch";
-import { sociavaultResolve } from "../media/sociavaultClient";
+import { sociavaultResolve, sociavaultResolveInstagram } from "../media/sociavaultClient";
 import { searchGif } from "../media/klipySearch";
 import { TtsService, type ITtsService } from "../tts/ttsService";
 import type { Database, DbUser } from "../db/database";
@@ -90,6 +90,9 @@ export function createTenantServices({
     tiktokSearch: undefined,
     tiktokResolve: sociavaultApiKey
       ? (url: string) => sociavaultResolve(url, sociavaultApiKey, logger)
+      : undefined,
+    instagramResolve: sociavaultApiKey
+      ? (url: string) => sociavaultResolveInstagram(url, sociavaultApiKey, logger)
       : undefined,
     youtubeSearch: youtubeApiKey
       ? (query: string, maxDuration: number) => searchShortVideo(query, maxDuration, youtubeApiKey)

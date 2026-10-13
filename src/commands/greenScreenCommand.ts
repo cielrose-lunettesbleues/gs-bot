@@ -1,6 +1,7 @@
 import type { Command, CommandDependencies } from "./types";
 import type { TtsPlaybackEvent } from "../queue/playbackQueue";
 import { resolveMediaUrl } from "../media/urlResolver";
+import { extractRequestedDuration } from "./durationToken";
 
 function buildTtsGenerate(
   deps: CommandDependencies,
@@ -42,9 +43,11 @@ export function createGreenScreenCommand(
         return;
       }
 
+      // A "/<seconds>" cut may sit anywhere, before or after the "|"
+      const { input: commandInput, requestedSeconds } = extractRequestedDuration(args.join(" "));
+
       // Split on "|" to extract: <media query> | <tts text> | <voice>
-      const rawInput = args.join(" ");
-      const pipeParts = rawInput.split("|").map((s) => s.trim());
+      const pipeParts = commandInput.split("|").map((s) => s.trim());
       const mainInput = pipeParts[0] ?? "";
       const caption = pipeParts[1] || undefined;
       const voiceLabel = pipeParts[2] || undefined;
@@ -86,6 +89,7 @@ export function createGreenScreenCommand(
       let videoUrl: string;
       let playDuration = deps.config.playback.durationSeconds;
       let portrait: boolean | undefined;
+      let cutAfterSeconds: number | undefined;
 
       if (URL_RE.test(firstArg)) {
         // ── URL mode ────────────────────────────────────────────────────────
@@ -104,6 +108,26 @@ export function createGreenScreenCommand(
           const resolved = await deps.tiktokResolve(firstArg);
           if (!resolved) {
             await context.reply(`@${context.user.username} Impossible de résoudre cette URL TikTok.`);
+            return;
+          }
+          videoUrl = resolved.url;
+          playDuration = resolved.durationSeconds || playDuration;
+          portrait = resolved.portrait;
+        } else if (/instagram\.com/i.test(firstArg)) {
+          if (!deps.instagramResolve) {
+            await context.reply(`@${context.user.username} Résolution Instagram non configurée.`);
+            return;
+          }
+          if (feedback) await context.reply(`@${context.user.username} Résolution Instagram en cours...`);
+          const resolved = await deps.instagramResolve(firstArg);
+          if (!resolved) {
+            await context.reply(`@${context.user.username} Impossible de résoudre cette URL Instagram.`);
+            return;
+          }
+          // A requested cut makes the length of the source irrelevant
+          const maxDuration = deps.config.validation.maxDurationSeconds;
+          if (!requestedSeconds && maxDuration > 0 && resolved.durationSeconds > maxDuration) {
+            await context.reply(`@${context.user.username} Vidéo trop longue (${resolved.durationSeconds}s).`);
             return;
           }
           videoUrl = resolved.url;
@@ -175,6 +199,14 @@ export function createGreenScreenCommand(
         }
       }
 
+      // ── Requested cut overrides the resolved length ──────────────────────
+      // Capped by the tenant maximum; the chat feedback shows what was applied.
+      if (requestedSeconds) {
+        const maxRequestable = deps.config.validation.maxDurationSeconds;
+        playDuration = maxRequestable > 0 ? Math.min(requestedSeconds, maxRequestable) : requestedSeconds;
+        cutAfterSeconds = playDuration;
+      }
+
       // ── Build TTS generator (called at actual play time) ─────────────────
       const ttsGenerate = buildTtsGenerate(deps, caption, voiceLabel, context.channel);
 
@@ -187,6 +219,7 @@ export function createGreenScreenCommand(
             username: context.user.username,
             caption,
             portrait,
+            cutAfterSeconds,
             ttsGenerate,
             userReply: context.reply
           },
@@ -201,6 +234,7 @@ export function createGreenScreenCommand(
         username: context.user.username,
         caption,
         portrait,
+        cutAfterSeconds,
         reply: context.reply,
         ttsGenerate
       });

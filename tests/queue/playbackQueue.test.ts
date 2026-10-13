@@ -173,3 +173,29 @@ describe("PlaybackQueue — stop", () => {
     expect(result.status).toBe("playing");
   });
 });
+
+describe("PlaybackQueue — requested cut", () => {
+  it("passes cutAfterSeconds to the start event", async () => {
+    const events: Array<Record<string, unknown>> = [];
+    const queue = new PlaybackQueue(makeObs(), { mode: "queue", maxSize: 2 }, makeLogger(), (e) =>
+      events.push(e as unknown as Record<string, unknown>)
+    );
+
+    await queue.enqueue({ ...makeItem(), cutAfterSeconds: 10 });
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(events[0]).toMatchObject({ type: "start", cutAfterSeconds: 10 });
+  });
+
+  it("leaves cutAfterSeconds undefined when none was requested", async () => {
+    const events: Array<Record<string, unknown>> = [];
+    const queue = new PlaybackQueue(makeObs(), { mode: "queue", maxSize: 2 }, makeLogger(), (e) =>
+      events.push(e as unknown as Record<string, unknown>)
+    );
+
+    await queue.enqueue(makeItem());
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(events[0].cutAfterSeconds).toBeUndefined();
+  });
+});

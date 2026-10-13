@@ -11,6 +11,7 @@ interface PendingRequest {
   durationSeconds: number;
   caption?: string;
   portrait?: boolean;
+  cutAfterSeconds?: number;
   ttsGenerate?: () => Promise<TtsPlaybackEvent | null>;
   userReply: (msg: string) => Promise<void>;
   timeoutHandle: NodeJS.Timeout;
@@ -43,7 +44,7 @@ export class ApprovalService {
   }
 
   public async submit(
-    item: { url: string; durationSeconds: number; username: string; caption?: string; portrait?: boolean; ttsGenerate?: () => Promise<TtsPlaybackEvent | null>; userReply: (msg: string) => Promise<void> },
+    item: { url: string; durationSeconds: number; username: string; caption?: string; portrait?: boolean; cutAfterSeconds?: number; ttsGenerate?: () => Promise<TtsPlaybackEvent | null>; userReply: (msg: string) => Promise<void> },
     channelNotify: (msg: string) => Promise<void>
   ): Promise<void> {
     const key = item.username.toLowerCase();
@@ -89,6 +90,7 @@ export class ApprovalService {
       username: req.username,
       caption: req.caption,
       portrait: req.portrait,
+      cutAfterSeconds: req.cutAfterSeconds,
       ttsGenerate: req.ttsGenerate,
       reply: req.userReply
     });

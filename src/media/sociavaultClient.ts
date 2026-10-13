@@ -1,4 +1,6 @@
-const BASE = "https://api.sociavault.com/v1/scrape/tiktok";
+const API_BASE = "https://api.sociavault.com/v1/scrape";
+const TIKTOK_BASE = `${API_BASE}/tiktok`;
+const INSTAGRAM_BASE = `${API_BASE}/instagram`;
 
 export interface TiktokResolved {
   url: string;
@@ -56,7 +58,7 @@ export async function sociavaultSearch(
   let res: Response;
   try {
     res = await fetch(
-      `${BASE}/search/keyword?query=${encodeURIComponent(query)}&count=10`,
+      `${TIKTOK_BASE}/search/keyword?query=${encodeURIComponent(query)}&count=10`,
       { headers: { "X-API-Key": apiKey }, signal: AbortSignal.timeout(10000) }
     );
   } catch (err) {
@@ -114,4 +116,91 @@ export async function sociavaultResolve(
   }
   // Embed URL bypasses the H.265 codec issue — TikTok's own player handles it
   return { url: embedUrl(m[1]), durationSeconds: 0, portrait: true };
+}
+
+// ─── Instagram ────────────────────────────────────────────────────────────────
+
+export interface InstagramResolved {
+  url: string;
+  durationSeconds: number;
+  portrait: boolean;
+}
+
+// Reels, posts and IGTV, with or without a leading /<username>/ segment
+const INSTAGRAM_POST_RE =
+  /^https:\/\/(?:www\.)?instagram\.com\/(?:[^/?#]+\/)?(?:reel|reels|p|tv)\/[A-Za-z0-9_-]+/i;
+
+export function isInstagramPostUrl(url: string): boolean {
+  return INSTAGRAM_POST_RE.test(url);
+}
+
+interface ShortcodeMedia {
+  video_url?: unknown;
+  video_duration?: unknown;
+  dimensions?: unknown;
+}
+
+// The media sits under one or two {success, data} envelopes depending on the
+// trim setting, so walk down to whichever level carries it.
+function findShortcodeMedia(payload: unknown): ShortcodeMedia | null {
+  let node: unknown = payload;
+  for (let depth = 0; depth < 4; depth += 1) {
+    if (!node || typeof node !== "object") return null;
+    const media = (node as { xdt_shortcode_media?: unknown }).xdt_shortcode_media;
+    if (media && typeof media === "object") return media as ShortcodeMedia;
+    node = (node as { data?: unknown }).data;
+  }
+  return null;
+}
+
+// Instagram embeds never autoplay, so the overlay needs the direct video file:
+// it then plays as a plain <video> and reports its own end.
+export async function sociavaultResolveInstagram(
+  instagramUrl: string,
+  apiKey: string,
+  log?: SimpleLogger
+): Promise<InstagramResolved | null> {
+  if (!isInstagramPostUrl(instagramUrl)) {
+    log?.warn({ instagramUrl }, "SociaVault: not an Instagram post or reel URL");
+    return null;
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(
+      `${INSTAGRAM_BASE}/post-info?url=${encodeURIComponent(instagramUrl)}`,
+      { headers: { "X-API-Key": apiKey }, signal: AbortSignal.timeout(10000) }
+    );
+  } catch (err) {
+    log?.warn({ instagramUrl, err: String(err) }, "SociaVault Instagram fetch failed");
+    return null;
+  }
+  if (!res.ok) {
+    log?.warn({ instagramUrl, status: res.status }, "SociaVault Instagram non-OK response");
+    return null;
+  }
+
+  const media = findShortcodeMedia(await res.json());
+  const videoUrl = media && typeof media.video_url === "string" ? media.video_url : "";
+  if (!videoUrl) {
+    log?.warn({ instagramUrl }, "SociaVault Instagram: post carries no video");
+    return null;
+  }
+
+  const rawDuration = typeof media?.video_duration === "number" ? media.video_duration : 0;
+  const dimensions = (media?.dimensions ?? {}) as { width?: unknown; height?: unknown };
+  const width = typeof dimensions.width === "number" ? dimensions.width : 0;
+  const height = typeof dimensions.height === "number" ? dimensions.height : 0;
+
+  log?.info(
+    { instagramUrl, durationSeconds: rawDuration, width, height },
+    "SociaVault Instagram resolved"
+  );
+
+  return {
+    url: videoUrl,
+    durationSeconds: rawDuration > 0 ? Math.ceil(rawDuration) : 0,
+    // Reels are vertical; only a clearly landscape post plays full width
+    portrait: height >= width
+  };
 }
