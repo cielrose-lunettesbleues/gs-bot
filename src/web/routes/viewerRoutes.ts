@@ -18,6 +18,7 @@ import {
 } from "../../db/database";
 import { getCookie } from "../../auth/sessionMiddleware";
 import { buildMediaPreview } from "../../media/mediaPreview";
+import { searchGifs } from "../../media/klipySearch";
 import { sociavaultResolve, sociavaultResolveInstagram } from "../../media/sociavaultClient";
 import { getClientIp, verifySameOrigin, isSecureRequest } from "../../security/httpSecurity";
 import { RateLimiter } from "../../security/rateLimiter";
@@ -29,12 +30,19 @@ import { isAllowedSpriteFile, loadSpriteSet } from "../../views/spriteManifest";
 import { resolveSubmitterIdentity } from "../../viewer/viewerIdentity";
 import { beginViewerLogin } from "../../viewer/viewerLogin";
 import { clearViewerCookie, getViewerFromRequest, VIEWER_COOKIE } from "../../viewer/viewerSession";
-import { favoriteCreateSchema, parseJsonBody, viewerPreviewSchema, viewerSubmitSchema } from "../requestValidation";
+import {
+  favoriteCreateSchema,
+  gifSearchSchema,
+  parseJsonBody,
+  viewerPreviewSchema,
+  viewerSubmitSchema
+} from "../requestValidation";
 
 const MAX_FAVORITES_PER_VIEWER = 100;
 const SEND_LIMIT = { hits: 5, windowMs: 60_000 };
 const PREVIEW_LIMIT = { hits: 20, windowMs: 60_000 };
 const LIMITER_PRUNE_THRESHOLD = 1000;
+const GIF_RESULTS = 24;
 
 interface ViewerRoutesDeps {
   app: Hono;
@@ -153,6 +161,7 @@ export function registerViewerRoutes({ app, db, oauthConfig, config, logger, ten
       maxDurationSeconds: runtime.validation.maxDurationSeconds,
       allowedDomains: runtime.validation.allowedDomains,
       favorites: viewer ? listFavorites(db, viewer.id).map((f) => ({ id: f.id, url: f.url, label: f.label })) : [],
+      gifsEnabled: Boolean(config.klipyApiKey),
       sprites
     }));
   });
@@ -197,6 +206,27 @@ export function registerViewerRoutes({ app, db, oauthConfig, config, logger, ten
 
     const preview = await buildMediaPreview(parsed.data.url, mediaResolvers());
     return c.json({ ok: true, preview });
+  });
+
+  // ─── GIF browsing ───────────────────────────────────────────────────────────
+
+  app.post("/submit/:channel/gifs", async (c) => {
+    if (!verifySameOrigin(c)) return c.json({ ok: false, error: "csrf_check_failed" }, 403);
+    const resolved = resolveChannel(c);
+    if (isError(resolved)) return c.json({ ok: false, error: resolved.error }, resolved.status);
+
+    // The key stays server-side: the page never sees it, and the browse is
+    // metered like a preview since each call costs a third-party request.
+    if (!config.klipyApiKey) return c.json({ ok: false, error: "gifs_not_configured" }, 503);
+
+    const retryAfter = limited(c, previewLimiter);
+    if (retryAfter) return c.json({ ok: false, error: "rate_limited", retryAfterSeconds: retryAfter }, 429);
+
+    const parsed = await parseJsonBody(c, gifSearchSchema);
+    if (!parsed.success) return parsed.response;
+
+    const gifs = await searchGifs(parsed.data.query, config.klipyApiKey, GIF_RESULTS, logger);
+    return c.json({ ok: true, gifs });
   });
 
   // ─── Submit ─────────────────────────────────────────────────────────────────

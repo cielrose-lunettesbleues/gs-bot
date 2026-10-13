@@ -98,6 +98,11 @@ export const viewerPreviewSchema = z.object({
 }).strict();
 export type ViewerPreviewBody = z.infer<typeof viewerPreviewSchema>;
 
+export const gifSearchSchema = z.object({
+  query: z.string().trim().min(1).max(60)
+}).strict();
+export type GifSearchBody = z.infer<typeof gifSearchSchema>;
+
 export const favoriteCreateSchema = z.object({
   url: z.string().trim().min(1).max(500),
   label: z.string().trim().max(120).optional()

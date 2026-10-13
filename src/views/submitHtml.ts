@@ -12,6 +12,8 @@ export interface SubmitPageProps {
   maxDurationSeconds: number;
   allowedDomains: string[];
   favorites: Array<{ id: number; url: string; label: string }>;
+  /** False when the operator has no Klipy key: the GIF panel then stays hidden. */
+  gifsEnabled?: boolean;
   /** Optional images that take over from the CSS artwork when present. */
   sprites?: SpriteSet;
 }
@@ -342,6 +344,28 @@ input:focus{outline:3px solid var(--gold);outline-offset:1px}
 #messages li.ok{border-left-color:var(--ok)}
 #messages li.err{border-left-color:var(--err)}
 
+/* ── Parcours de GIF ─────────────────────────────────────────────────────── */
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.chip{
+  background:#070e24;border:2px solid var(--panel-edge);border-radius:999px;
+  color:var(--muted);padding:6px 12px;font-size:14px;min-height:36px;
+  cursor:pointer;touch-action:manipulation;
+}
+.chip:hover{border-color:var(--gold);color:var(--text)}
+.gif-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px;margin-top:12px}
+.gif-item{
+  position:relative;aspect-ratio:1;padding:0;overflow:hidden;cursor:pointer;
+  background:#070e24;border:3px solid var(--panel-edge);border-radius:8px;
+}
+.gif-item:hover{border-color:var(--gold)}
+.gif-item img{width:100%;height:100%;object-fit:cover;display:block}
+.gif-fav{
+  position:absolute;top:4px;right:4px;z-index:2;
+  background:rgba(7,14,36,.85);border:2px solid var(--panel-edge);border-radius:6px;
+  color:var(--gold);font-size:13px;line-height:1;padding:5px 7px;min-height:30px;cursor:pointer;
+}
+.gif-fav:hover{border-color:var(--gold)}
+
 .fav{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:2px solid #15224f}
 .fav:last-child{border-bottom:none}
 .fav-label{flex:1;min-width:0}
@@ -427,6 +451,21 @@ ${spriteStyles(props.sprites ?? {})}
     </div>
   </div>
 
+  <div class="panel" id="gif-panel" hidden>
+    <div class="panel-title"><span class="ring sm" aria-hidden="true"></span>Chercher un GIF</div>
+    <div class="panel-body">
+      <div class="row">
+        <div style="flex:3">
+          <label for="gif-query">Mots clés</label>
+          <input type="text" id="gif-query" placeholder="chat, danse, fail..." autocomplete="off"
+                 autocapitalize="off">
+        </div>
+      </div>
+      <div class="chips" id="gif-chips"></div>
+      <div class="gif-grid" id="gif-grid"></div>
+    </div>
+  </div>
+
   <div class="panel" id="fav-panel" hidden>
     <div class="panel-title">
       <span class="ring sm" aria-hidden="true"></span>Mes favoris
@@ -450,7 +489,8 @@ ${spriteStyles(props.sprites ?? {})}
     approvalEnabled: props.approvalEnabled,
     maxDurationSeconds: props.maxDurationSeconds,
     allowedDomains: props.allowedDomains,
-    favorites: props.favorites
+    favorites: props.favorites,
+    gifsEnabled: props.gifsEnabled === true
   })};
 
   var BASE = "/submit/" + encodeURIComponent(BOOT.channel);
@@ -681,6 +721,81 @@ ${spriteStyles(props.sprites ?? {})}
       .then(function(){ busy(btn, false); });
   }
 
+  // ── Parcours de GIF ───────────────────────────────────────────────────────
+  var GIF_SUGGESTIONS = ["lol", "danse", "chat", "wow", "fail", "applaudir"];
+
+  function pickGif(gif){
+    urlInput.value = gif.url;
+    renderPreview({ kind: "image", url: gif.previewUrl });
+    urlInput.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  function renderGifs(gifs){
+    var grid = el("gif-grid");
+    grid.innerHTML = "";
+    if(!gifs || gifs.length === 0){
+      var empty = document.createElement("p");
+      empty.className = "empty";
+      empty.textContent = "Aucun GIF pour cette recherche.";
+      grid.appendChild(empty);
+      return;
+    }
+
+    gifs.forEach(function(gif){
+      var item = document.createElement("button");
+      item.className = "gif-item";
+      item.type = "button";
+      item.title = gif.title;
+
+      var img = document.createElement("img");
+      img.src = gif.previewUrl;
+      img.alt = gif.title;
+      img.loading = "lazy";
+      item.appendChild(img);
+      item.onclick = function(){ pickGif(gif); };
+      grid.appendChild(item);
+
+      if(BOOT.viewer){
+        var star = document.createElement("button");
+        star.className = "gif-fav";
+        star.type = "button";
+        star.textContent = "★";
+        star.title = "Ajouter aux favoris";
+        star.onclick = function(ev){
+          ev.stopPropagation();
+          addFavorite(gif.url, gif.title);
+        };
+        item.appendChild(star);
+      }
+    });
+  }
+
+  function doGifSearch(query){
+    var term = (query || el("gif-query").value).trim();
+    if(!term){ say("Tape un mot clé pour chercher un GIF.", "err"); return; }
+    el("gif-query").value = term;
+
+    api(BASE + "/gifs" + QS, { method:"POST", body: JSON.stringify({ query: term }) })
+      .then(function(r){
+        if(!r.body.ok){ say(describeError(r.body.error), "err"); return; }
+        renderGifs(r.body.gifs);
+      })
+      .catch(function(){ say("Réseau indisponible.", "err"); });
+  }
+
+  function renderChips(){
+    var chips = el("gif-chips");
+    chips.innerHTML = "";
+    GIF_SUGGESTIONS.forEach(function(word){
+      var chip = document.createElement("button");
+      chip.className = "chip";
+      chip.type = "button";
+      chip.textContent = word;
+      chip.onclick = function(){ doGifSearch(word); };
+      chips.appendChild(chip);
+    });
+  }
+
   // ── Favoris ───────────────────────────────────────────────────────────────
   function renderFavorites(){
     var list = el("fav-list");
@@ -740,12 +855,8 @@ ${spriteStyles(props.sprites ?? {})}
     });
   }
 
-  function doAddFavorite(){
-    var url = urlInput.value.trim();
-    if(!url){ say("Colle un lien d'abord.", "err"); return; }
-    var label = captionInput.value.trim();
-
-    api("/viewer/favorites", { method:"POST", body: JSON.stringify({ url: url, label: label }) })
+  function addFavorite(url, label){
+    return api("/viewer/favorites", { method:"POST", body: JSON.stringify({ url: url, label: label || "" }) })
       .then(function(r){
         if(!r.body.ok){ say(describeError(r.body.error), "err"); return; }
         BOOT.favorites.unshift(r.body.favorite);
@@ -754,15 +865,27 @@ ${spriteStyles(props.sprites ?? {})}
       });
   }
 
+  function doAddFavorite(){
+    var url = urlInput.value.trim();
+    if(!url){ say("Colle un lien d'abord.", "err"); return; }
+    addFavorite(url, captionInput.value.trim());
+  }
+
   el("btn-preview").onclick = doPreview;
   el("btn-send").onclick = doSend;
   el("btn-fav").onclick = doAddFavorite;
   urlInput.addEventListener("keydown", function(ev){
     if(ev.key === "Enter") doSend();
   });
+  el("gif-query").addEventListener("keydown", function(ev){
+    if(ev.key === "Enter"){ ev.preventDefault(); doGifSearch(); }
+  });
+
+  el("gif-panel").hidden = !BOOT.gifsEnabled;
 
   renderWho();
   renderRules();
+  renderChips();
   renderFavorites();
 })();
 </script>

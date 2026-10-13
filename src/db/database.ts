@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS tenant_configs (
   chat_feedback              INTEGER NOT NULL DEFAULT 1,
   allowed_domains            TEXT    NOT NULL DEFAULT 'youtube.com,youtu.be,streamable.com,tenor.com,giphy.com,klipy.com,tiktok.com,instagram.com',
   allow_direct_files         INTEGER NOT NULL DEFAULT 1,
-  allowed_file_extensions    TEXT    NOT NULL DEFAULT '.mp4,.webm,.mov',
+  allowed_file_extensions    TEXT    NOT NULL DEFAULT '.mp4,.webm,.mov,.gif',
   max_video_duration_seconds INTEGER NOT NULL DEFAULT 0,
   overlay_token              TEXT    NOT NULL DEFAULT '',
   web_submit_enabled         INTEGER NOT NULL DEFAULT 1,
@@ -124,6 +124,8 @@ const MIGRATIONS = [
   `UPDATE tenant_configs SET allowed_domains = allowed_domains || ',klipy.com'  WHERE allowed_domains NOT LIKE '%klipy.com%'`,
   `UPDATE tenant_configs SET allowed_domains = allowed_domains || ',tiktok.com' WHERE allowed_domains NOT LIKE '%tiktok.com%'`,
   `UPDATE tenant_configs SET allowed_domains = allowed_domains || ',instagram.com' WHERE allowed_domains NOT LIKE '%instagram.com%'`,
+  // Les GIF choisis depuis la page viewers arrivent en lien direct vers un CDN
+  `UPDATE tenant_configs SET allowed_file_extensions = allowed_file_extensions || ',.gif' WHERE allowed_file_extensions NOT LIKE '%.gif%'`,
 ];
 
 // ALTER TABLE migrations — idempotent (errors silently ignored)

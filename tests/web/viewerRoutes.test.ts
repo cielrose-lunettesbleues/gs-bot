@@ -51,7 +51,7 @@ afterEach(() => {
   rmSync(testDir, { recursive: true, force: true });
 });
 
-function createApp() {
+function createApp(options?: { klipyApiKey?: string }) {
   const app = new Hono();
   const routed: Array<Record<string, unknown>> = [];
   const tenant = {
@@ -72,7 +72,11 @@ function createApp() {
     app,
     db,
     oauthConfig: { clientId: "cid", clientSecret: "cs", redirectUri: `${ORIGIN}/auth/twitch/callback` },
-    config: { sociavaultApiKey: "", spritesDir: join(testDir, "sprites") } as never,
+    config: {
+      sociavaultApiKey: "",
+      klipyApiKey: options?.klipyApiKey ?? "",
+      spritesDir: join(testDir, "sprites")
+    } as never,
     logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } as never,
     tenantManager: tenantManager as never
   });
@@ -299,6 +303,47 @@ describe("viewer favorites", () => {
     expect(stolen.status).toBe(404);
     const stillThere = await (await app.request(`${ORIGIN}/viewer/favorites`, { headers: { Cookie: mine } })).json();
     expect(stillThere.favorites).toHaveLength(1);
+  });
+});
+
+describe("gif browsing", () => {
+  it("says so plainly when the operator has no Klipy key", async () => {
+    const { app } = createApp();
+
+    const res = await post(app, `/submit/streamer/gifs?token=${webToken}`, { query: "chat" });
+
+    expect(res.status).toBe(503);
+    expect((await res.json()).error).toBe("gifs_not_configured");
+  });
+
+  it("returns results without ever exposing the key", async () => {
+    const fetchMock = vi.fn(async (_url: string) => new Response(JSON.stringify({
+      data: { data: [{ title: "chat", file: { hd: { gif: { url: "https://cdn.test/a.gif" } }, sd: { gif: { url: "https://cdn.test/a-sd.gif" } } } }] }
+    }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { app } = createApp({ klipyApiKey: "klipy-key" });
+
+    const res = await post(app, `/submit/streamer/gifs?token=${webToken}`, { query: "chat" });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.gifs).toEqual([
+      { url: "https://cdn.test/a.gif", previewUrl: "https://cdn.test/a-sd.gif", title: "chat" }
+    ]);
+    expect(JSON.stringify(body)).not.toContain("klipy-key");
+  });
+
+  it("refuses an empty query and a request from another origin", async () => {
+    const { app } = createApp({ klipyApiKey: "klipy-key" });
+
+    expect((await post(app, `/submit/streamer/gifs?token=${webToken}`, { query: "" })).status).toBe(400);
+
+    const crossOrigin = await app.request(`${ORIGIN}/submit/streamer/gifs?token=${webToken}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: "chat" })
+    });
+    expect(crossOrigin.status).toBe(403);
   });
 });
 

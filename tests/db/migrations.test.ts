@@ -60,6 +60,25 @@ describe("allowed_domains migrations", () => {
     expect(domains.match(/tiktok\.com/g)).toHaveLength(1);
   });
 
+  it("adds the gif extension to a row that predates it, once only", () => {
+    const first = openDatabase(testDir);
+    insertTenant(first);
+    // The list as it shipped before GIFs could be picked from the viewer page
+    first.prepare("UPDATE tenant_configs SET allowed_file_extensions=? WHERE user_id=1").run(".mp4,.webm,.mov");
+    first.close();
+
+    const second = openDatabase(testDir);
+    const third = openDatabase(testDir);
+    const row = third.prepare("SELECT allowed_file_extensions AS exts FROM tenant_configs WHERE user_id=1").get() as {
+      exts: string;
+    };
+    second.close();
+    third.close();
+
+    expect(row.exts).toContain(".gif");
+    expect(row.exts.match(/\.gif/g)).toHaveLength(1);
+  });
+
   it("gives an existing tenant row the viewer page columns", () => {
     const first = openDatabase(testDir);
     insertTenant(first);

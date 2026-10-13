@@ -269,6 +269,7 @@ Events envoyés :
 GET  /submit/:channel?token=...         → page publique (HTML)
 GET  /submit/:channel/state?token=...   → état (identité, règles, favoris)
 POST /submit/:channel/preview?token=... → prévisualisation d'un lien
+POST /submit/:channel/gifs?token=...    → recherche de GIF (Klipy, clé côté serveur)
 POST /submit/:channel/send?token=...    → envoi d'une vidéo
 GET  /viewer/auth/twitch?channel=&token= → connexion viewer (aucune portée demandée)
 POST /viewer/logout
@@ -284,7 +285,8 @@ Principes :
 - **En sub-only ou mod-only, les invités sont refusés** : leur statut est invérifiable faute d'identité. Les viewers connectés sont vérifiés via l'API Twitch (portées `channel:read:subscriptions` et `moderation:read`), avec un cache de 5 minutes.
 - **La validation d'URL précède tout fetch** côté prévisualisation, pour que la route ne devienne pas un moyen de faire requêter des hôtes arbitraires au serveur.
 - Limites par IP : 5 envois et 20 prévisualisations par minute (`RateLimiter`).
-- **Sprites optionnels** : `public/sprites/sprites.json` décrit les emplacements `mascot`, `ring` et `ground`, servis par `GET /sprites/:file`. Chaque emplacement est opt-in et la page garde son dessin CSS quand le fichier est absent — supprimer une image suffit à revenir au rendu d'origine, sans toucher au code. Le manifeste est lu au démarrage, les noms de fichiers sont restreints pour empêcher toute traversée de répertoire.
+- **Parcours de GIF** : la clé Klipy ne quitte jamais le serveur, la recherche est limitée comme la prévisualisation, et le panneau reste masqué quand `GS_KLIPY_API_KEY` est absente. Les GIF arrivant en lien direct vers un CDN, `.gif` fait désormais partie des extensions autorisées par défaut (migration incluse pour les tenants existants).
+- **Sprites optionnels** : `public/sprites/sprites.json` décrit les emplacements `mascot`, `sidekick`, `ring` et `ground`, servis par `GET /sprites/:file`. Chaque emplacement est opt-in et la page garde son dessin CSS quand le fichier est absent — supprimer une image suffit à revenir au rendu d'origine, sans toucher au code. Le manifeste est lu au démarrage, les noms de fichiers sont restreints pour empêcher toute traversée de répertoire.
 
 ---
 
@@ -416,6 +418,7 @@ Couverture principale actuelle :
 - [x] Commande `!gs <url>` avec validation URL
 - [x] Résolution Instagram (reels, posts, IGTV) vers le MP4 direct via SociaVault
 - [x] Page viewers `/submit/:channel` (envoi sans chat, prévisualisation, favoris)
+- [x] Parcours de GIF Klipy depuis la page viewers, ajoutables en favoris
 - [x] Identité viewer séparée des streamers (table `viewers`, cookie `gs_viewer`)
 - [x] Vérification sub/mod des viewers via l'API Twitch
 - [x] Commande `!gstop` (stop d'urgence)
