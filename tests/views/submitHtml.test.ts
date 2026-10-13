@@ -225,8 +225,8 @@ describe("getSubmitHtml", () => {
     // One turn equals the tile width: the pattern lands back on itself
     expect(html).toContain("background-size:512px 256px");
     expect(html).toContain("to{transform:translateX(-512px)}");
-    // Far away means slow: a hundred seconds for one tile
-    expect(html).toContain("backdrop-scroll 100s linear infinite");
+    // Far away means slow: two minutes for one tile
+    expect(html).toContain("backdrop-scroll 120s linear infinite");
   });
 
   it("leaves a still sprite unanimated", () => {

@@ -51,6 +51,11 @@ function sheetKeyframes(name: string, sprite: SpriteDefinition): string {
   return `@keyframes ${name}{to{background-position:-${displaySize(sprite).sheet}px 0}}`;
 }
 
+// Un tour de décor dure ce temps-là, quelle que soit la taille de la tuile. À
+// 1024px affichés cela fait environ 8,5 px/s, contre 16 px/s pour le sol: c'est
+// l'écart entre les deux qui donne la profondeur.
+const BACKDROP_SCROLL_SECONDS = 120;
+
 // Emitted after the base stylesheet so these rules win, while every untouched
 // slot keeps its drawn fallback. Deleting a sprite file is therefore enough to
 // restore the original look.
@@ -120,7 +125,7 @@ ${sheetKeyframes("sidekick-sheet", sidekick)}`);
   background-image:url("/sprites/${backdrop.file}");
   background-size:${w}px ${h}px;
   background-repeat:repeat-x;
-  animation:backdrop-scroll 100s linear infinite;
+  animation:backdrop-scroll ${BACKDROP_SCROLL_SECONDS}s linear infinite;
 }
 /* Un tour complet fait exactement la largeur de la tuile: le motif retombe
    sur lui-même, donc la boucle ne se voit pas. */
@@ -239,9 +244,10 @@ h1 .chan{color:var(--gold)}
 }
 /* Décor lointain: bande fixée au bas de la fenêtre, derrière tout le contenu.
    Fixe plutôt qu'en flux, pour qu'il ne bouge pas au défilement comme le ferait
-   un horizon. L'opacité le tient au second plan. */
+   un horizon. L'opacité le tient au second plan, et sa base est calée sur la
+   ligne de course: le décor s'élève au-dessus d'elle au lieu de s'y enfoncer. */
 .backdrop{
-  position:fixed;left:0;right:0;bottom:0;z-index:-1;
+  position:fixed;left:0;right:0;bottom:22px;z-index:-1;
   overflow:hidden;pointer-events:none;opacity:.3;
 }
 
