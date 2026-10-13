@@ -5,7 +5,7 @@ const INSTAGRAM_BASE = `${API_BASE}/instagram`;
 export interface TiktokResolved {
   url: string;
   durationSeconds: number;
-  portrait: true;
+  portrait: boolean;
 }
 
 export interface TiktokSearchResult extends TiktokResolved {
@@ -60,6 +60,19 @@ export async function expandShortLink(url: string, log?: SimpleLogger): Promise<
     log?.warn({ url, err: String(err) }, "Short link expansion failed");
     return url;
   }
+}
+
+// Payloads arrive wrapped in one or two {success, data} envelopes depending on
+// the trim setting, so walk down to whichever level carries the key.
+function findInEnvelopes(payload: unknown, key: string): Record<string, unknown> | null {
+  let node: unknown = payload;
+  for (let depth = 0; depth < 5; depth += 1) {
+    if (!node || typeof node !== "object") return null;
+    const found = (node as Record<string, unknown>)[key];
+    if (found && typeof found === "object") return found as Record<string, unknown>;
+    node = (node as { data?: unknown }).data;
+  }
+  return null;
 }
 
 function videoDuration(v: AwemeInfo): number {
@@ -133,6 +146,105 @@ export function isTiktokShortLink(url: string): boolean {
   return TIKTOK_SHORT_RE.test(url);
 }
 
+const tiktokCache = new Map<string, { value: TiktokResolved; at: number }>();
+const TIKTOK_CACHE_TTL_MS = 10 * 60 * 1000;
+const TIKTOK_CACHE_MAX = 200;
+
+export function clearTiktokCache(): void {
+  tiktokCache.clear();
+}
+
+interface BitRateEntry {
+  is_bytevc1?: unknown;
+  play_addr?: unknown;
+}
+
+function toValues(value: unknown): unknown[] {
+  if (Array.isArray(value)) return value;
+  if (value && typeof value === "object") return Object.values(value as Record<string, unknown>);
+  return [];
+}
+
+function firstHttpsUrl(addr: unknown): string {
+  const list = (addr as { url_list?: unknown } | undefined)?.url_list;
+  const found = toValues(list).find((entry) => typeof entry === "string" && entry.startsWith("https://"));
+  return typeof found === "string" ? found : "";
+}
+
+function asNumber(value: unknown): number {
+  return typeof value === "number" ? value : 0;
+}
+
+// The embed player starts muted and, in consent regions, hides the video behind
+// a cookie banner nobody can click inside an OBS source. So a real file is
+// needed -- and it must be H.264: ByteVC1 is HEVC, which the OBS browser cannot
+// decode. That codec trap is the reason the embed was used in the first place.
+function pickPlayableVideo(video: Record<string, unknown>): { url: string; width: number; height: number } | null {
+  const playAddr = video.play_addr as { width?: unknown; height?: unknown } | undefined;
+  const fallbackWidth = asNumber(playAddr?.width);
+  const fallbackHeight = asNumber(playAddr?.height);
+
+  for (const entry of toValues(video.bit_rate) as BitRateEntry[]) {
+    if (entry?.is_bytevc1) continue;
+    const url = firstHttpsUrl(entry?.play_addr);
+    if (!url) continue;
+    const addr = entry.play_addr as { width?: unknown; height?: unknown };
+    return {
+      url,
+      width: asNumber(addr?.width) || fallbackWidth,
+      height: asNumber(addr?.height) || fallbackHeight
+    };
+  }
+
+  const direct = firstHttpsUrl(video.download_no_watermark_addr) || firstHttpsUrl(video.download_addr);
+  if (direct) return { url: direct, width: fallbackWidth, height: fallbackHeight };
+
+  return null;
+}
+
+async function fetchTiktokDirect(
+  url: string,
+  apiKey: string,
+  log?: SimpleLogger
+): Promise<TiktokResolved | null> {
+  let res: Response;
+  try {
+    res = await fetch(`${TIKTOK_BASE}/video-info?url=${encodeURIComponent(url)}`, {
+      headers: { "X-API-Key": apiKey },
+      signal: AbortSignal.timeout(10000)
+    });
+  } catch (err) {
+    log?.warn({ url, err: String(err) }, "SociaVault TikTok fetch failed");
+    return null;
+  }
+  if (!res.ok) {
+    log?.warn({ url, status: res.status }, `SociaVault TikTok refused with HTTP ${res.status}`);
+    return null;
+  }
+
+  const detail = findInEnvelopes(await res.json(), "aweme_detail");
+  const video = detail?.video;
+  if (!video || typeof video !== "object") {
+    log?.warn({ url }, "SociaVault TikTok: no video in response");
+    return null;
+  }
+
+  const picked = pickPlayableVideo(video as Record<string, unknown>);
+  if (!picked) {
+    log?.warn({ url }, "SociaVault TikTok: no H.264 playable url");
+    return null;
+  }
+
+  const duration = normalizeDuration(asNumber((video as Record<string, unknown>).duration));
+  log?.info({ url, durationSeconds: duration, width: picked.width, height: picked.height }, "SociaVault TikTok resolved");
+
+  return {
+    url: picked.url,
+    durationSeconds: duration,
+    portrait: picked.height >= picked.width
+  };
+}
+
 export async function sociavaultResolve(
   tiktokUrl: string,
   apiKey: string,
@@ -152,7 +264,20 @@ export async function sociavaultResolve(
     return null;
   }
 
-  // Embed URL bypasses the H.265 codec issue — TikTok's own player handles it
+  const canonical = target.split("?")[0];
+  const cached = tiktokCache.get(canonical);
+  if (cached && Date.now() - cached.at < TIKTOK_CACHE_TTL_MS) return cached.value;
+
+  const direct = apiKey ? await fetchTiktokDirect(canonical, apiKey, log) : null;
+  if (direct) {
+    if (tiktokCache.size >= TIKTOK_CACHE_MAX) tiktokCache.clear();
+    tiktokCache.set(canonical, { value: direct, at: Date.now() });
+    return direct;
+  }
+
+  // Last resort, deliberately not cached so the next try can still get a file:
+  // the embed plays, but muted and possibly behind a cookie banner.
+  log?.warn({ tiktokUrl: canonical }, "SociaVault TikTok: falling back to the embed player");
   return { url: embedUrl(match[1]), durationSeconds: 0, portrait: true };
 }
 
@@ -209,17 +334,8 @@ interface ShortcodeMedia {
   dimensions?: unknown;
 }
 
-// The media sits under one or two {success, data} envelopes depending on the
-// trim setting, so walk down to whichever level carries it.
 function findShortcodeMedia(payload: unknown): ShortcodeMedia | null {
-  let node: unknown = payload;
-  for (let depth = 0; depth < 4; depth += 1) {
-    if (!node || typeof node !== "object") return null;
-    const media = (node as { xdt_shortcode_media?: unknown }).xdt_shortcode_media;
-    if (media && typeof media === "object") return media as ShortcodeMedia;
-    node = (node as { data?: unknown }).data;
-  }
-  return null;
+  return findInEnvelopes(payload, "xdt_shortcode_media") as ShortcodeMedia | null;
 }
 
 // Instagram embeds never autoplay, so the overlay needs the direct video file:

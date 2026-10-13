@@ -40,8 +40,16 @@ export async function buildMediaPreview(url: string, deps: PreviewDeps = {}): Pr
     if (!deps.tiktokResolve) return { kind: "unsupported", reason: "tiktok_not_configured" };
     const resolved = await deps.tiktokResolve(url);
     if (!resolved) return { kind: "unsupported", reason: "tiktok_unresolved" };
-    // TikTok plays through its own embed, so the preview is the same iframe
-    return { kind: "iframe", url: resolved.url, portrait: true };
+    // Only the embed fallback needs an iframe; a resolved file plays as video
+    if (/tiktok\.com\/embed/i.test(resolved.url)) {
+      return { kind: "iframe", url: resolved.url, portrait: resolved.portrait };
+    }
+    return {
+      kind: "video",
+      url: resolved.url,
+      portrait: resolved.portrait,
+      durationSeconds: resolved.durationSeconds
+    };
   }
 
   if (isInstagramPostUrl(url) || isInstagramShareUrl(url)) {

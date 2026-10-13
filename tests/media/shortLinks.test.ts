@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   canonicalInstagramUrl,
   clearInstagramCache,
+  clearTiktokCache,
   isInstagramShareUrl,
   isTiktokShortLink,
   sociavaultResolve,
@@ -15,6 +16,7 @@ const EMBED = "https://www.tiktok.com/embed/v2/7123456789012345678?autoplay=1";
 afterEach(() => {
   vi.unstubAllGlobals();
   clearInstagramCache();
+  clearTiktokCache();
 });
 
 /** expandShortLink only reads res.url, so a minimal stand-in is enough. */
@@ -33,31 +35,105 @@ describe("isTiktokShortLink", () => {
   });
 });
 
+function tiktokPayload(video: Record<string, unknown>) {
+  return { data: { aweme_detail: { video } } };
+}
+
+function stubTiktokApi(payload: unknown, status = 200) {
+  const fetchMock = vi.fn(async (url: string) => {
+    // A short link is expanded first; only res.url is read there
+    if (!url.includes("api.sociavault.com")) return { url: CANONICAL_TIKTOK } as unknown as Response;
+    return new Response(JSON.stringify(payload), { status });
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+}
+
+const H264 = tiktokPayload({
+  duration: 12000,
+  bit_rate: [
+    { is_bytevc1: 0, play_addr: { url_list: ["https://cdn.test/h264.mp4"], width: 576, height: 1024 } }
+  ]
+});
+
 describe("sociavaultResolve", () => {
-  it("reads a desktop link without any network call", async () => {
+  it("returns a playable file rather than the embed", async () => {
+    stubTiktokApi(H264);
+
+    expect(await sociavaultResolve(CANONICAL_TIKTOK, API_KEY)).toEqual({
+      url: "https://cdn.test/h264.mp4",
+      durationSeconds: 12,
+      portrait: true
+    });
+  });
+
+  it("skips HEVC variants the OBS browser cannot decode", async () => {
+    stubTiktokApi(tiktokPayload({
+      duration: 8000,
+      bit_rate: [
+        { is_bytevc1: 1, play_addr: { url_list: ["https://cdn.test/hevc.mp4"], width: 576, height: 1024 } },
+        { is_bytevc1: 0, play_addr: { url_list: ["https://cdn.test/h264.mp4"], width: 576, height: 1024 } }
+      ]
+    }));
+
+    const resolved = await sociavaultResolve(CANONICAL_TIKTOK, API_KEY);
+
+    expect(resolved?.url).toBe("https://cdn.test/h264.mp4");
+  });
+
+  it("falls back to the no-watermark address when every variant is HEVC", async () => {
+    stubTiktokApi(tiktokPayload({
+      duration: 5000,
+      bit_rate: [{ is_bytevc1: 1, play_addr: { url_list: ["https://cdn.test/hevc.mp4"] } }],
+      download_no_watermark_addr: { url_list: ["https://cdn.test/nowm.mp4"] },
+      play_addr: { width: 1920, height: 1080 }
+    }));
+
+    const resolved = await sociavaultResolve(CANONICAL_TIKTOK, API_KEY);
+
+    expect(resolved?.url).toBe("https://cdn.test/nowm.mp4");
+    expect(resolved?.portrait).toBe(false);
+  });
+
+  it("falls back to the embed when the API refuses, and does not cache it", async () => {
+    const fetchMock = stubTiktokApi({}, 402);
+
+    const first = await sociavaultResolve(CANONICAL_TIKTOK, API_KEY);
+    const second = await sociavaultResolve(CANONICAL_TIKTOK, API_KEY);
+
+    expect(first?.url).toBe(EMBED);
+    expect(second?.url).toBe(EMBED);
+    // Retried, so a later call can still get a real file
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("never calls the API without a key", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
-    expect(await sociavaultResolve(CANONICAL_TIKTOK, API_KEY)).toEqual({
-      url: EMBED,
-      durationSeconds: 0,
-      portrait: true
-    });
+    const resolved = await sociavaultResolve(CANONICAL_TIKTOK, "");
+
+    expect(resolved?.url).toBe(EMBED);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("accepts a photo post", async () => {
-    const resolved = await sociavaultResolve("https://www.tiktok.com/@user/photo/7123456789012345678", API_KEY);
-    expect(resolved?.url).toBe(EMBED);
-  });
-
-  it("expands a phone share link to reach the video id", async () => {
-    const fetchMock = stubRedirect(CANONICAL_TIKTOK);
+  it("expands a phone share link, then resolves the file", async () => {
+    const fetchMock = stubTiktokApi(H264);
 
     const resolved = await sociavaultResolve("https://vm.tiktok.com/ZMhabc123/", API_KEY);
 
+    // One call to expand the short link, one to the API
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(resolved?.url).toBe("https://cdn.test/h264.mp4");
+  });
+
+  it("serves a preview and the send that follows from one credit", async () => {
+    const fetchMock = stubTiktokApi(H264);
+
+    await sociavaultResolve(CANONICAL_TIKTOK, API_KEY);
+    await sociavaultResolve(`${CANONICAL_TIKTOK}?is_from_webapp=1`, API_KEY);
+
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(resolved?.url).toBe(EMBED);
   });
 
   it("gives up when the short link leads nowhere usable", async () => {
