@@ -14,7 +14,8 @@ import {
   buildHistoryResponse,
   buildOverlayRotateTokenResponse,
   buildStatusResponse,
-  buildTtsVoicesResponse
+  buildTtsVoicesResponse,
+  buildWebRotateTokenResponse
 } from "../apiContracts";
 import {
   configPatchSchema,
@@ -24,16 +25,18 @@ import {
   ttsVoiceCreateSchema,
   ttsVoiceUpdateSchema
 } from "../requestValidation";
-import { buildOverlayPath } from "../publicTokens";
+import { buildOverlayPath, buildSubmitUrl } from "../publicTokens";
 import { verifySameOrigin } from "../../security/httpSecurity";
 
 interface ApiRoutesDeps {
   db: Database;
   logger: Logger;
   tenantManager: TenantManager;
+  /** Base URL of this deployment, used to show the viewer link on the dashboard. */
+  publicUrl?: string;
 }
 
-export function createApiRouter({ db, logger, tenantManager }: ApiRoutesDeps): Hono {
+export function createApiRouter({ db, logger, tenantManager, publicUrl }: ApiRoutesDeps): Hono {
   const api = new Hono();
 
   api.use("*", async (c, next) => {
@@ -56,7 +59,8 @@ export function createApiRouter({ db, logger, tenantManager }: ApiRoutesDeps): H
       buildStatusResponse(
         tenant,
         buildOverlayPath(user.twitchLogin, tenant.runtimeConfig.publicAccess.overlayToken),
-        runtime
+        runtime,
+        buildSubmitUrl(publicUrl ?? "", user.twitchLogin, tenant.runtimeConfig.publicAccess.webToken)
       )
     );
   });
@@ -74,6 +78,14 @@ export function createApiRouter({ db, logger, tenantManager }: ApiRoutesDeps): H
     const token = tenantManager.rotateOverlayToken(user.id);
     logger.info({ userId: user.id }, "Overlay token rotated");
     return c.json(buildOverlayRotateTokenResponse(buildOverlayPath(user.twitchLogin, token)));
+  });
+
+  // Revokes every viewer link in circulation without touching the OBS overlay.
+  api.post("/web/rotate-token", (c) => {
+    const user = requireAuth(c)!;
+    const token = tenantManager.rotateWebToken(user.id);
+    logger.info({ userId: user.id }, "Viewer page token rotated");
+    return c.json(buildWebRotateTokenResponse(buildSubmitUrl(publicUrl ?? "", user.twitchLogin, token)));
   });
 
   api.patch("/config", async (c) => {

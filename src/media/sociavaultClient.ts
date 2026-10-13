@@ -134,6 +134,17 @@ export function isInstagramPostUrl(url: string): boolean {
   return INSTAGRAM_POST_RE.test(url);
 }
 
+// Successful resolutions are memoised briefly so a submit-page preview and the
+// send that follows it cost one credit instead of two. The CDN links stay valid
+// far longer than this window.
+const instagramCache = new Map<string, { value: InstagramResolved; at: number }>();
+const INSTAGRAM_CACHE_TTL_MS = 10 * 60 * 1000;
+const INSTAGRAM_CACHE_MAX = 200;
+
+export function clearInstagramCache(): void {
+  instagramCache.clear();
+}
+
 interface ShortcodeMedia {
   video_url?: unknown;
   video_duration?: unknown;
@@ -164,6 +175,9 @@ export async function sociavaultResolveInstagram(
     log?.warn({ instagramUrl }, "SociaVault: not an Instagram post or reel URL");
     return null;
   }
+
+  const cached = instagramCache.get(instagramUrl);
+  if (cached && Date.now() - cached.at < INSTAGRAM_CACHE_TTL_MS) return cached.value;
 
   let res: Response;
   try {
@@ -197,10 +211,14 @@ export async function sociavaultResolveInstagram(
     "SociaVault Instagram resolved"
   );
 
-  return {
+  const resolved: InstagramResolved = {
     url: videoUrl,
     durationSeconds: rawDuration > 0 ? Math.ceil(rawDuration) : 0,
     // Reels are vertical; only a clearly landscape post plays full width
     portrait: height >= width
   };
+
+  if (instagramCache.size >= INSTAGRAM_CACHE_MAX) instagramCache.clear();
+  instagramCache.set(instagramUrl, { value: resolved, at: Date.now() });
+  return resolved;
 }

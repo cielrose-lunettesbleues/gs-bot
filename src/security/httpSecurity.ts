@@ -69,3 +69,12 @@ export function verifyScopedToken(secret: string, scope: string, subject: string
   const expected = createScopedToken(secret, scope, subject);
   return safeEqual(expected, token);
 }
+
+// Behind the Railway proxy the socket address is useless, so the first hop of
+// x-forwarded-for is what identifies a public caller for rate limiting.
+export function getClientIp(c: Context): string {
+  const forwardedFor = c.req.header("x-forwarded-for");
+  const first = forwardedFor?.split(",")[0].trim();
+  if (first) return first;
+  return c.req.header("x-real-ip")?.trim() || "unknown";
+}

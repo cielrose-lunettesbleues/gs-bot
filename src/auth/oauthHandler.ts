@@ -8,7 +8,13 @@ import {
   upsertUser
 } from "../db/database";
 
-const SCOPES = "chat:read chat:edit channel:read:redemptions user:read:email";
+// The last two are read by the submit page to verify a viewer sub/mod status
+// against the channel. Adding them requires the streamer to re-authorise.
+const SCOPES = "chat:read chat:edit channel:read:redemptions user:read:email channel:read:subscriptions moderation:read";
+
+// A viewer signing in only proves who they are: no scope is requested, so the
+// consent screen stays empty and no viewer token is ever useful to us.
+export const VIEWER_SCOPES = "";
 const TWITCH_TOKEN_URL = "https://id.twitch.tv/oauth2/token";
 const TWITCH_VALIDATE_URL = "https://id.twitch.tv/oauth2/validate";
 const TWITCH_USERS_URL = "https://api.twitch.tv/helix/users";
@@ -39,12 +45,12 @@ export interface TwitchAppAccessToken {
 
 // ─── Auth URL ─────────────────────────────────────────────────────────────────
 
-export function buildAuthUrl(config: OAuthConfig, state: string): string {
+export function buildAuthUrl(config: OAuthConfig, state: string, scope: string = SCOPES): string {
   const params = new URLSearchParams({
     client_id: config.clientId,
     redirect_uri: config.redirectUri,
     response_type: "code",
-    scope: SCOPES,
+    scope,
     state,
     force_verify: "false"
   });
@@ -225,4 +231,48 @@ export async function ensureFreshAccessToken(
   } catch {
     return null;
   }
+}
+
+// ─── Channel relationship checks ──────────────────────────────────────────────
+
+// Both endpoints are queried with the broadcaster token, which is why the
+// streamer needs the channel:read:subscriptions and moderation:read scopes.
+// A failure is reported as "not subscribed" / "not a moderator" rather than
+// thrown: the submit page must stay usable when Twitch is unavailable.
+async function helixHas(
+  url: string,
+  broadcasterToken: string,
+  clientId: string
+): Promise<boolean> {
+  try {
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${broadcasterToken}`, "Client-Id": clientId },
+      signal: AbortSignal.timeout(5000)
+    });
+    if (!res.ok) return false;
+    const data = (await res.json()) as { data?: unknown[] };
+    return Array.isArray(data.data) && data.data.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+export async function isChannelSubscriber(
+  broadcasterToken: string,
+  clientId: string,
+  broadcasterId: string,
+  viewerTwitchId: string
+): Promise<boolean> {
+  const params = new URLSearchParams({ broadcaster_id: broadcasterId, user_id: viewerTwitchId });
+  return helixHas(`https://api.twitch.tv/helix/subscriptions/user?${params.toString()}`, broadcasterToken, clientId);
+}
+
+export async function isChannelModerator(
+  broadcasterToken: string,
+  clientId: string,
+  broadcasterId: string,
+  viewerTwitchId: string
+): Promise<boolean> {
+  const params = new URLSearchParams({ broadcaster_id: broadcasterId, user_id: viewerTwitchId });
+  return helixHas(`https://api.twitch.tv/helix/moderation/moderators?${params.toString()}`, broadcasterToken, clientId);
 }

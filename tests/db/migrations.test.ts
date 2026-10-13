@@ -2,7 +2,7 @@ import { mkdirSync, rmSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { openDatabase } from "../../src/db/database";
+import { getTenantConfig, openDatabase, rotateWebToken } from "../../src/db/database";
 import type { Database } from "../../src/db/database";
 
 let testDir: string;
@@ -58,6 +58,42 @@ describe("allowed_domains migrations", () => {
 
     expect(domains).toContain("instagram.com");
     expect(domains.match(/tiktok\.com/g)).toHaveLength(1);
+  });
+
+  it("gives an existing tenant row the viewer page columns", () => {
+    const first = openDatabase(testDir);
+    insertTenant(first);
+    const config = getTenantConfig(first, 1);
+    first.close();
+
+    expect(config.web_submit_enabled).toBe(1);
+    expect(config.web_guest_enabled).toBe(1);
+    expect(config.web_token).toMatch(/^[0-9a-f]{48}$/);
+  });
+
+  it("mints a web token on first read and keeps it stable", () => {
+    const db = openDatabase(testDir);
+    insertTenant(db);
+
+    const first = getTenantConfig(db, 1).web_token;
+    const second = getTenantConfig(db, 1).web_token;
+    db.close();
+
+    expect(first).toBe(second);
+  });
+
+  it("rotating the web token leaves the overlay token alone", () => {
+    const db = openDatabase(testDir);
+    insertTenant(db);
+    const before = getTenantConfig(db, 1);
+
+    const rotated = rotateWebToken(db, 1);
+    const after = getTenantConfig(db, 1);
+    db.close();
+
+    expect(rotated).not.toBe(before.web_token);
+    expect(after.web_token).toBe(rotated);
+    expect(after.overlay_token).toBe(before.overlay_token);
   });
 
   it("does not duplicate instagram.com when reopened", () => {

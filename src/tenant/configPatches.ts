@@ -14,6 +14,8 @@ export type TenantConfigPatch = Partial<Pick<DbTenantConfig,
   | "tts_volume"
   | "tts_max_length"
   | "tts_cooldown_seconds"
+  | "web_submit_enabled"
+  | "web_guest_enabled"
 >>;
 
 export type TenantAdminConfigPatch = Partial<Pick<DbTenantConfig,
@@ -32,6 +34,8 @@ export function buildDashboardConfigPatch(body: ConfigPatchBody): TenantConfigPa
   if (typeof body.approvalEnabled === "boolean") patch.approval_enabled = body.approvalEnabled ? 1 : 0;
   if (typeof body.durationSeconds === "number") patch.duration_seconds = Math.floor(body.durationSeconds);
   if (typeof body.chatFeedback === "boolean") patch.chat_feedback = body.chatFeedback ? 1 : 0;
+  if (typeof body.webSubmitEnabled === "boolean") patch.web_submit_enabled = body.webSubmitEnabled ? 1 : 0;
+  if (typeof body.webGuestEnabled === "boolean") patch.web_guest_enabled = body.webGuestEnabled ? 1 : 0;
   return patch;
 }
 

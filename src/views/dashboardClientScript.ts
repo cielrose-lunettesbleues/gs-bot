@@ -39,6 +39,16 @@ export function getDashboardClientScript(overlayPath: string): string {
     if(urlEl) urlEl.textContent = overlayUrl;
   }
 
+  var submitUrl = '';
+  function renderWeb(web) {
+    if(!web) return;
+    submitUrl = web.url || '';
+    var el = document.getElementById('submit-url');
+    if(el) el.textContent = submitUrl || 'Définis GS_PUBLIC_URL pour obtenir le lien';
+    setCheck('cfg-web-submit', web.submitEnabled);
+    setCheck('cfg-web-guest', web.guestEnabled);
+  }
+
   function renderConfig(cfg) {
     setCheck('cfg-subonly', cfg.access.subOnly);
     setCheck('cfg-modonly', cfg.access.modOnly);
@@ -121,6 +131,7 @@ export function getDashboardClientScript(overlayPath: string): string {
     try {
       var st = await api('GET', '/api/status');
       if(st.overlay && st.overlay.url) updateOverlayUrl(st.overlay.url);
+      renderWeb(st.web);
       document.getElementById('status-dot').className = 'ok';
       renderConfig(st.config);
       renderQueue(st.queue, st.overlay);
@@ -283,6 +294,32 @@ export function getDashboardClientScript(overlayPath: string): string {
         if(urlEl) urlEl.textContent = overlayUrl;
       }
       toast('URL OBS régénérée ✓', 'ok');
+    } catch(e) {
+      toast('Erreur lors de la régénération', 'err');
+    } finally { btn.disabled = false; }
+  };
+
+  window.copySubmitUrl = function() {
+    if(!submitUrl){ toast('Aucun lien à copier','err'); return; }
+    navigator.clipboard.writeText(submitUrl).then(function(){
+      var btn = document.getElementById('copy-submit-btn');
+      btn.textContent = 'Copié !'; btn.className = 'btn-copy copied';
+      setTimeout(function(){ btn.textContent = 'Copier'; btn.className = 'btn-copy'; }, 2000);
+    }).catch(function(){ toast('Impossible de copier','err'); });
+  };
+
+  window.rotateSubmitUrl = async function() {
+    var btn = document.getElementById('rotate-submit-btn');
+    if(!confirm('Régénérer le lien viewers ? Tous les liens déjà partagés cesseront de fonctionner.')) return;
+    btn.disabled = true;
+    try {
+      var result = await api('POST', '/api/web/rotate-token');
+      if(result.submitUrl){
+        submitUrl = result.submitUrl;
+        var el = document.getElementById('submit-url');
+        if(el) el.textContent = submitUrl;
+      }
+      toast('Lien viewers régénéré ✓', 'ok');
     } catch(e) {
       toast('Erreur lors de la régénération', 'err');
     } finally { btn.disabled = false; }

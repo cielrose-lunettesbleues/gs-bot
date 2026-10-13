@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { isInstagramPostUrl, sociavaultResolveInstagram } from "../../src/media/sociavaultClient";
+import { clearInstagramCache, isInstagramPostUrl, sociavaultResolveInstagram } from "../../src/media/sociavaultClient";
 
 const API_KEY = "sk_live_test";
 const REEL = "https://www.instagram.com/reel/DEiyb48AeB9/";
@@ -19,6 +19,8 @@ function stubFetch(body: unknown, status = 200) {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  // Resolutions are memoised in the module, so every test starts from empty
+  clearInstagramCache();
 });
 
 describe("isInstagramPostUrl", () => {

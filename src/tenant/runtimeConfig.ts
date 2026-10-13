@@ -22,8 +22,10 @@ export interface TenantRuntimeConfig {
     maxLength: number;
     cooldownSeconds: number;
   };
+  web: { submitEnabled: boolean; guestEnabled: boolean };
   publicAccess: {
     overlayToken: string;
+    webToken: string;
   };
 }
 
@@ -54,8 +56,13 @@ export function dbConfigToRuntime(row: DbTenantConfig): TenantRuntimeConfig {
       maxLength: row.tts_max_length ?? 200,
       cooldownSeconds: row.tts_cooldown_seconds ?? 0
     },
+    web: {
+      submitEnabled: Boolean(row.web_submit_enabled ?? 1),
+      guestEnabled: Boolean(row.web_guest_enabled ?? 1)
+    },
     publicAccess: {
-      overlayToken: row.overlay_token
+      overlayToken: row.overlay_token,
+      webToken: row.web_token ?? ""
     }
   };
 }
@@ -68,5 +75,6 @@ export function applyRuntimeConfig(target: TenantRuntimeConfig, source: TenantRu
   Object.assign(target.playback, source.playback);
   Object.assign(target.validation, source.validation);
   Object.assign(target.tts, source.tts);
+  Object.assign(target.web, source.web);
   Object.assign(target.publicAccess, source.publicAccess);
 }

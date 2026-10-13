@@ -58,7 +58,16 @@ export function createGreenScreenCommand(
 
       const firstArg = mainArgs[0];
       if (!firstArg) {
-        if (feedback) await context.reply(`@${context.user.username} Usage : ${commandName} <url> ou ${commandName} <mots clés> [| texte]`);
+        // Bare command: hand out the viewer page rather than a usage line, so
+        // nobody has to type a URL in chat.
+        const link = deps.submitUrl?.();
+        if (feedback) {
+          await context.reply(
+            link
+              ? `@${context.user.username} Envoie ta vidéo ici : ${link}`
+              : `@${context.user.username} Usage : ${commandName} <url> ou ${commandName} <mots clés> [| texte]`
+          );
+        }
         return;
       }
 

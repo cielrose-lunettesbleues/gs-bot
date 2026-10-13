@@ -18,6 +18,7 @@ import { createRuntimeState } from "../state/runtimeState";
 import { searchShortVideo } from "../media/youtubeSearch";
 import { sociavaultResolve, sociavaultResolveInstagram } from "../media/sociavaultClient";
 import { searchGif } from "../media/klipySearch";
+import { buildSubmitUrl } from "../web/publicTokens";
 import { TtsService, type ITtsService } from "../tts/ttsService";
 import type { Database, DbUser } from "../db/database";
 import type { TenantAdminConfigPatch } from "./configPatches";
@@ -34,6 +35,7 @@ interface CreateTenantServicesDeps {
   youtubeApiKey?: string;
   klipyApiKey?: string;
   sociavaultApiKey?: string;
+  publicUrl?: string;
   // Returns a valid Twitch user token, refreshed if needed; null if it cannot.
   resolveAccessToken?: () => Promise<string | null>;
 }
@@ -48,6 +50,7 @@ export function createTenantServices({
   youtubeApiKey,
   klipyApiKey,
   sociavaultApiKey,
+  publicUrl,
   resolveAccessToken
 }: CreateTenantServicesDeps): TenantServices {
   const overlayBroadcaster = new OverlayBroadcaster();
@@ -108,6 +111,8 @@ export function createTenantServices({
       return `/tts/audio/${channel}/${audioId}?token=${encodeURIComponent(runtimeConfig.publicAccess.overlayToken)}`;
     },
     broadcastOverlay: (event: TtsPlaybackEvent) => overlayBroadcaster.broadcast(event),
+    // Read at call time, so a rotated token is reflected immediately
+    submitUrl: () => buildSubmitUrl(publicUrl ?? "", channelLogin, runtimeConfig.publicAccess.webToken),
     config: runtimeConfig,
     logger
   };

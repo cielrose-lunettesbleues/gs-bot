@@ -1,7 +1,7 @@
 import type { Logger } from "pino";
 import { ensureFreshAccessToken, type OAuthConfig } from "../auth/oauthHandler";
 import type { Database } from "../db/database";
-import { getTenantConfig, rotateOverlayToken, updateTenantConfig, getUserById } from "../db/database";
+import { getTenantConfig, rotateOverlayToken, rotateWebToken, updateTenantConfig, getUserById } from "../db/database";
 import { CommandRouter } from "../commands/commandRouter";
 import { ApprovalService } from "../approval/approvalService";
 import { BlacklistService } from "../blacklist/blacklistService";
@@ -61,7 +61,9 @@ export class TenantManager {
     private readonly youtubeApiKey?: string,
     private readonly klipyApiKey?: string,
     private readonly sociavaultApiKey?: string,
-    private readonly oauthConfig?: OAuthConfig
+    private readonly oauthConfig?: OAuthConfig,
+    /** Base URL of this deployment, used to build the viewer submit link. */
+    private readonly publicUrl?: string
   ) {}
 
   getOrCreate(userId: number): TenantServices {
@@ -82,6 +84,7 @@ export class TenantManager {
       youtubeApiKey: this.youtubeApiKey,
       klipyApiKey: this.klipyApiKey,
       sociavaultApiKey: this.sociavaultApiKey,
+      publicUrl: this.publicUrl,
       resolveAccessToken: oauthConfig
         ? () => ensureFreshAccessToken(this.db, userId, oauthConfig)
         : undefined
@@ -214,5 +217,16 @@ export class TenantManager {
       tenant.runtimeConfig.publicAccess.overlayToken = overlayToken;
     }
     return overlayToken;
+  }
+
+  // Revoking the viewer page leaves the OBS overlay untouched, which is why the
+  // two tokens are separate.
+  rotateWebToken(userId: number): string {
+    const webToken = rotateWebToken(this.db, userId);
+    const tenant = this.tenants.get(userId);
+    if (tenant) {
+      tenant.runtimeConfig.publicAccess.webToken = webToken;
+    }
+    return webToken;
   }
 }

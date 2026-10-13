@@ -46,7 +46,10 @@ CREATE TABLE IF NOT EXISTS tenant_configs (
   allow_direct_files         INTEGER NOT NULL DEFAULT 1,
   allowed_file_extensions    TEXT    NOT NULL DEFAULT '.mp4,.webm,.mov',
   max_video_duration_seconds INTEGER NOT NULL DEFAULT 0,
-  overlay_token              TEXT    NOT NULL DEFAULT ''
+  overlay_token              TEXT    NOT NULL DEFAULT '',
+  web_submit_enabled         INTEGER NOT NULL DEFAULT 1,
+  web_guest_enabled          INTEGER NOT NULL DEFAULT 1,
+  web_token                  TEXT    NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS history (
@@ -83,6 +86,37 @@ CREATE TABLE IF NOT EXISTS tenant_tts_voices (
 );
 
 CREATE INDEX IF NOT EXISTS idx_tts_voices_tenant ON tenant_tts_voices(tenant_id);
+
+-- Viewers are the audience of the submit page. They are deliberately kept out
+-- of "users", which means "streamer running a tenant": a viewer must never own
+-- a tenant, a bot or a dashboard. No Twitch token is stored for them, only the
+-- identity needed to attribute a submission.
+CREATE TABLE IF NOT EXISTS viewers (
+  id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+  twitch_id           TEXT    UNIQUE NOT NULL,
+  twitch_login        TEXT    NOT NULL,
+  twitch_display_name TEXT    NOT NULL,
+  created_at          INTEGER NOT NULL DEFAULT (unixepoch()),
+  last_seen_at        INTEGER NOT NULL DEFAULT (unixepoch())
+);
+
+CREATE TABLE IF NOT EXISTS viewer_sessions (
+  id         TEXT    PRIMARY KEY,
+  viewer_id  INTEGER NOT NULL REFERENCES viewers(id) ON DELETE CASCADE,
+  expires_at INTEGER NOT NULL,
+  created_at INTEGER NOT NULL DEFAULT (unixepoch())
+);
+
+CREATE TABLE IF NOT EXISTS viewer_favorites (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  viewer_id  INTEGER NOT NULL REFERENCES viewers(id) ON DELETE CASCADE,
+  url        TEXT    NOT NULL,
+  label      TEXT    NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+  UNIQUE (viewer_id, url)
+);
+
+CREATE INDEX IF NOT EXISTS idx_viewer_favorites ON viewer_favorites(viewer_id, created_at DESC);
 `;
 
 const MIGRATIONS = [
@@ -106,6 +140,9 @@ const COLUMN_MIGRATIONS = [
   `ALTER TABLE tenant_tts_voices ADD COLUMN style REAL NOT NULL DEFAULT 0.0`,
   `ALTER TABLE tenant_tts_voices ADD COLUMN use_speaker_boost INTEGER NOT NULL DEFAULT 1`,
   `ALTER TABLE tenant_tts_voices ADD COLUMN speed REAL NOT NULL DEFAULT 1.0`,
+  `ALTER TABLE tenant_configs ADD COLUMN web_submit_enabled INTEGER NOT NULL DEFAULT 1`,
+  `ALTER TABLE tenant_configs ADD COLUMN web_guest_enabled INTEGER NOT NULL DEFAULT 1`,
+  `ALTER TABLE tenant_configs ADD COLUMN web_token TEXT NOT NULL DEFAULT ''`,
 ];
 
 export function openDatabase(dataDir: string): Database {
@@ -226,27 +263,43 @@ export interface DbTenantConfig {
   tts_max_length: number;
   tts_cooldown_seconds: number;
   overlay_token: string;
+  web_submit_enabled: number;
+  web_guest_enabled: number;
+  web_token: string;
 }
 
-function generateOverlayToken(): string {
+function generatePublicToken(): string {
   return crypto.randomBytes(24).toString("hex");
 }
 
 export function getTenantConfig(db: Database, userId: number): DbTenantConfig {
   db.prepare("INSERT OR IGNORE INTO tenant_configs (user_id) VALUES (?)").run(userId);
   const row = db.prepare("SELECT * FROM tenant_configs WHERE user_id=?").get(userId) as DbTenantConfig;
-  if (row.overlay_token) return row;
+  if (row.overlay_token && row.web_token) return row;
 
-  const overlayToken = generateOverlayToken();
-  db.prepare("UPDATE tenant_configs SET overlay_token=? WHERE user_id=?").run(overlayToken, userId);
+  // Tokens are minted on first read, so a row created before a token existed
+  // gets one without needing a dedicated migration.
+  if (!row.overlay_token) {
+    db.prepare("UPDATE tenant_configs SET overlay_token=? WHERE user_id=?").run(generatePublicToken(), userId);
+  }
+  if (!row.web_token) {
+    db.prepare("UPDATE tenant_configs SET web_token=? WHERE user_id=?").run(generatePublicToken(), userId);
+  }
   return db.prepare("SELECT * FROM tenant_configs WHERE user_id=?").get(userId) as DbTenantConfig;
 }
 
 export function rotateOverlayToken(db: Database, userId: number): string {
-  const overlayToken = generateOverlayToken();
+  const overlayToken = generatePublicToken();
   db.prepare("INSERT OR IGNORE INTO tenant_configs (user_id) VALUES (?)").run(userId);
   db.prepare("UPDATE tenant_configs SET overlay_token=? WHERE user_id=?").run(overlayToken, userId);
   return overlayToken;
+}
+
+export function rotateWebToken(db: Database, userId: number): string {
+  const webToken = generatePublicToken();
+  db.prepare("INSERT OR IGNORE INTO tenant_configs (user_id) VALUES (?)").run(userId);
+  db.prepare("UPDATE tenant_configs SET web_token=? WHERE user_id=?").run(webToken, userId);
+  return webToken;
 }
 
 export function updateTenantConfig(db: Database, userId: number, patch: Partial<DbTenantConfig>): void {
@@ -396,5 +449,95 @@ export function updateTtsVoiceSettings(
 
 export function deleteTtsVoice(db: Database, id: number, tenantId: number): boolean {
   const result = db.prepare("DELETE FROM tenant_tts_voices WHERE id=? AND tenant_id=?").run(id, tenantId);
+  return result.changes > 0;
+}
+
+// ─── Viewers (submit page audience) ───────────────────────────────────────────
+
+export interface DbViewer {
+  id: number;
+  twitch_id: string;
+  twitch_login: string;
+  twitch_display_name: string;
+  created_at: number;
+  last_seen_at: number;
+}
+
+export function upsertViewer(
+  db: Database,
+  data: { twitch_id: string; twitch_login: string; twitch_display_name: string }
+): DbViewer {
+  db.prepare(`
+    INSERT INTO viewers (twitch_id, twitch_login, twitch_display_name)
+    VALUES (@twitch_id, @twitch_login, @twitch_display_name)
+    ON CONFLICT(twitch_id) DO UPDATE SET
+      twitch_login        = excluded.twitch_login,
+      twitch_display_name = excluded.twitch_display_name,
+      last_seen_at        = unixepoch()
+  `).run(data);
+  return db.prepare("SELECT * FROM viewers WHERE twitch_id = ?").get(data.twitch_id) as DbViewer;
+}
+
+export function getViewerById(db: Database, id: number): DbViewer | undefined {
+  return db.prepare("SELECT * FROM viewers WHERE id = ?").get(id) as DbViewer | undefined;
+}
+
+export function createViewerSession(db: Database, sessionId: string, viewerId: number, ttlSeconds = 2592000): void {
+  db.prepare("INSERT INTO viewer_sessions (id, viewer_id, expires_at) VALUES (?,?,unixepoch()+?)")
+    .run(sessionId, viewerId, ttlSeconds);
+}
+
+export function getViewerSession(db: Database, sessionId: string): { viewerId: number } | undefined {
+  const row = db.prepare("SELECT viewer_id FROM viewer_sessions WHERE id=? AND expires_at>unixepoch()")
+    .get(sessionId) as { viewer_id: number } | undefined;
+  return row ? { viewerId: row.viewer_id } : undefined;
+}
+
+export function deleteViewerSession(db: Database, sessionId: string): void {
+  db.prepare("DELETE FROM viewer_sessions WHERE id=?").run(sessionId);
+}
+
+export function purgeExpiredViewerSessions(db: Database): void {
+  db.prepare("DELETE FROM viewer_sessions WHERE expires_at<=unixepoch()").run();
+}
+
+// ─── Viewer favorites ─────────────────────────────────────────────────────────
+
+export interface DbViewerFavorite {
+  id: number;
+  viewer_id: number;
+  url: string;
+  label: string;
+  created_at: number;
+}
+
+export function listFavorites(db: Database, viewerId: number, limit = 100): DbViewerFavorite[] {
+  return db.prepare("SELECT * FROM viewer_favorites WHERE viewer_id=? ORDER BY id DESC LIMIT ?")
+    .all(viewerId, limit) as DbViewerFavorite[];
+}
+
+export function countFavorites(db: Database, viewerId: number): number {
+  const row = db.prepare("SELECT COUNT(*) AS n FROM viewer_favorites WHERE viewer_id=?").get(viewerId) as { n: number };
+  return row.n;
+}
+
+/** Returns undefined when this url is already a favorite of this viewer. */
+export function addFavorite(
+  db: Database,
+  viewerId: number,
+  entry: { url: string; label: string }
+): DbViewerFavorite | undefined {
+  try {
+    db.prepare("INSERT INTO viewer_favorites (viewer_id, url, label) VALUES (?,?,?)")
+      .run(viewerId, entry.url, entry.label);
+  } catch {
+    return undefined;
+  }
+  return db.prepare("SELECT * FROM viewer_favorites WHERE viewer_id=? AND url=?")
+    .get(viewerId, entry.url) as DbViewerFavorite;
+}
+
+export function deleteFavorite(db: Database, viewerId: number, favoriteId: number): boolean {
+  const result = db.prepare("DELETE FROM viewer_favorites WHERE id=? AND viewer_id=?").run(favoriteId, viewerId);
   return result.changes > 0;
 }

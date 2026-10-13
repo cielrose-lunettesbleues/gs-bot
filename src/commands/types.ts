@@ -53,6 +53,8 @@ export interface CommandDependencies {
   createTtsAudioPath?: (channel: string, audioId: string) => string;
   /** Broadcast a TTS event directly to the overlay (without going through the playback queue). */
   broadcastOverlay?: (event: TtsPlaybackEvent) => void;
+  /** Absolute link to the viewer submit page; empty when no public URL is known. */
+  submitUrl?: () => string;
   config: {
     access: { subOnly: boolean; modOnly: boolean };
     cooldown: { enabled: boolean; seconds: number; perUserEnabled?: boolean; perUserSeconds?: number };

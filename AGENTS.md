@@ -98,6 +98,7 @@ src/
   web/
     routes/
       publicRoutes.ts         — setup, auth, dashboard, overlay, TTS public
+      viewerRoutes.ts         — page viewers : envoi, prévisualisation, favoris
       apiRoutes.ts            — routes `/api/*`
     requestValidation.ts      — schémas Zod et parsing JSON
     apiContracts.ts           — contrats typés de réponses API
@@ -110,6 +111,14 @@ src/
   overlay/
     overlayHtml.ts            — page OBS Browser Source (SSE client)
     overlayBroadcaster.ts     — diffuse les events PlaybackEvent aux clients SSE
+  viewer/
+    viewerSession.ts          — cookie et session viewer (isolés des streamers)
+    viewerLogin.ts            — flux OAuth viewer (partage le callback streamer)
+    viewerIdentity.ts         — pseudo, sub/mod d'un soumissionnaire (cache 5 min)
+  media/
+    mediaPreview.ts           — descripteur de prévisualisation pour la page viewers
+  security/
+    rateLimiter.ts            — limite glissante par IP pour les routes publiques
   twitch/
     twitchClient.ts           — wrapper tmi.js
     twitchMessageHandler.ts   — liaison tmi.js → CommandRouter
@@ -170,6 +179,10 @@ HOST=0.0.0.0
 GS_DATA_DIR=./data
 LOG_LEVEL=info
 
+# URL publique de ce déploiement, utilisée pour construire le lien viewers.
+# Déduite de TWITCH_REDIRECT_URI si absente.
+GS_PUBLIC_URL=
+
 # Optionnel si configuré via /setup :
 TWITCH_CLIENT_ID=
 TWITCH_CLIENT_SECRET=
@@ -203,6 +216,7 @@ duration_seconds
 allowed_domains, allow_direct_files, allowed_file_extensions
 max_video_duration_seconds
 overlay_token
+web_submit_enabled, web_guest_enabled, web_token
 ```
 
 Modifiable en live via `PATCH /api/config` depuis le dashboard.
@@ -243,6 +257,30 @@ Events envoyés :
 { type: "stop" }                                          // cacher
 { type: "connected" }                                     // connexion initiale
 ```
+
+---
+
+## Page viewers
+
+```txt
+GET  /submit/:channel?token=...         → page publique (HTML)
+GET  /submit/:channel/state?token=...   → état (identité, règles, favoris)
+POST /submit/:channel/preview?token=... → prévisualisation d'un lien
+POST /submit/:channel/send?token=...    → envoi d'une vidéo
+GET  /viewer/auth/twitch?channel=&token= → connexion viewer (aucune portée demandée)
+POST /viewer/logout
+GET|POST /viewer/favorites, DELETE /viewer/favorites/:id
+```
+
+Principes :
+
+- **Le token `web_token` est distinct de `overlay_token`** : régénérer la page viewers ne casse pas la source OBS.
+- **Un viewer n'est pas un streamer.** Les viewers vivent dans `viewers` / `viewer_sessions` avec le cookie `gs_viewer`, et aucun token Twitch n'est stocké pour eux. Une session viewer ne satisfait jamais `requireAuth` : elle ne donne accès ni au dashboard ni à `/api/*`.
+- **Les envois repassent par `tenant.router`**, donc blacklist, permissions, cooldown, approbation et validation d'URL s'appliquent sans duplication de logique.
+- **Les invités partagent le pseudo `invite`**, ce qui fait porter le cooldown sur l'ensemble des invités et permet de les bloquer d'un seul `!gs blacklist add invite`.
+- **En sub-only ou mod-only, les invités sont refusés** : leur statut est invérifiable faute d'identité. Les viewers connectés sont vérifiés via l'API Twitch (portées `channel:read:subscriptions` et `moderation:read`), avec un cache de 5 minutes.
+- **La validation d'URL précède tout fetch** côté prévisualisation, pour que la route ne devienne pas un moyen de faire requêter des hôtes arbitraires au serveur.
+- Limites par IP : 5 envois et 20 prévisualisations par minute (`RateLimiter`).
 
 ---
 
@@ -313,6 +351,7 @@ tmi.js → twitchMessageHandler → CommandRouter → GreenScreenCommand → Pla
 
 ```txt
 !gs <url>              — joue un média dans l'overlay OBS
+!gs                    — renvoie le lien de la page viewers (si GS_PUBLIC_URL est connue)
 !gs <url> /10          — coupe la lecture après 10s (le /N est placable avant ou après le |)
 !gstop                 — stop immédiat
 !gs subonly on|off     — active/désactive le mode sub-only (mod)
@@ -372,6 +411,9 @@ Couverture principale actuelle :
 - [x] Connexion Twitch chat via tmi.js
 - [x] Commande `!gs <url>` avec validation URL
 - [x] Résolution Instagram (reels, posts, IGTV) vers le MP4 direct via SociaVault
+- [x] Page viewers `/submit/:channel` (envoi sans chat, prévisualisation, favoris)
+- [x] Identité viewer séparée des streamers (table `viewers`, cookie `gs_viewer`)
+- [x] Vérification sub/mod des viewers via l'API Twitch
 - [x] Commande `!gstop` (stop d'urgence)
 - [x] Commandes admin (`subonly`, `modonly`, `cooldown`, `history`, `blacklist`)
 - [x] File de lecture (modes queue/replace/drop)

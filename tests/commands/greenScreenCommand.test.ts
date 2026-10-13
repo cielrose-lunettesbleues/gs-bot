@@ -39,6 +39,34 @@ const modCtx = (username = "u", isSubscriber = true) => ({
 });
 
 describe("greenScreenCommand", () => {
+  it("hands out the viewer page link when called bare", async () => {
+    const deps = makeDeps();
+    const submitUrl = vi.fn(() => "https://gs.example/submit/streamer?token=abc");
+    const command = createGreenScreenCommand({ ...deps, submitUrl }, "!gs");
+    const reply = vi.fn(async () => undefined);
+
+    await command.execute(
+      { channel: "#c", rawMessage: "!gs", user: { username: "u", isMod: false, isBroadcaster: false, isSubscriber: false }, reply },
+      []
+    );
+
+    expect(reply).toHaveBeenCalledWith(expect.stringContaining("https://gs.example/submit/streamer?token=abc"));
+    expect(deps.queue.enqueue).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the usage line when no public url is known", async () => {
+    const deps = makeDeps();
+    const command = createGreenScreenCommand({ ...deps, submitUrl: () => "" }, "!gs");
+    const reply = vi.fn(async () => undefined);
+
+    await command.execute(
+      { channel: "#c", rawMessage: "!gs", user: { username: "u", isMod: false, isBroadcaster: false, isSubscriber: false }, reply },
+      []
+    );
+
+    expect(reply).toHaveBeenCalledWith(expect.stringContaining("Usage"));
+  });
+
   it("rejects missing url", async () => {
     const deps = makeDeps();
     const command = createGreenScreenCommand(deps, "!gs");

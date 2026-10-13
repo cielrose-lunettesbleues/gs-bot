@@ -2,12 +2,13 @@ import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import type { Logger } from "pino";
 import { createLogger } from "./logger/logger";
-import { openDatabase, purgeExpiredSessions } from "./db/database";
+import { openDatabase, purgeExpiredSessions, purgeExpiredViewerSessions } from "./db/database";
 import { sessionMiddleware } from "./auth/sessionMiddleware";
 import { TenantManager } from "./tenant/tenantManager";
 import { LiveStatusPoller, LIVE_POLL_INTERVAL_MS } from "./tenant/liveStatusPoller";
 import { createApiRouter } from "./web/routes/apiRoutes";
 import { registerPublicRoutes } from "./web/routes/publicRoutes";
+import { registerViewerRoutes } from "./web/routes/viewerRoutes";
 import { loadServerConfig } from "./config/serverConfig";
 import type { ServerConfig } from "./config/serverConfig";
 
@@ -26,12 +27,16 @@ export async function createApp(config: ServerConfig, logger: Logger) {
     config.youtubeApiKey || undefined,
     config.klipyApiKey || undefined,
     config.sociavaultApiKey || undefined,
-    oauthConfig
+    oauthConfig,
+    config.publicUrl
   );
   const liveStatusPoller = new LiveStatusPoller(db, oauthConfig, tenantManager, logger);
 
   // Purge expired sessions every hour
-  setInterval(() => purgeExpiredSessions(db), 3_600_000);
+  setInterval(() => {
+    purgeExpiredSessions(db);
+    purgeExpiredViewerSessions(db);
+  }, 3_600_000);
   setInterval(() => {
     void liveStatusPoller.poll();
   }, LIVE_POLL_INTERVAL_MS);
@@ -40,7 +45,8 @@ export async function createApp(config: ServerConfig, logger: Logger) {
   const app = new Hono();
   app.use("*", sessionMiddleware(db, oauthConfig));
   registerPublicRoutes({ app, db, oauthConfig, config, logger, tenantManager });
-  app.route("/api", createApiRouter({ db, logger, tenantManager }));
+  registerViewerRoutes({ app, db, oauthConfig, config, logger, tenantManager });
+  app.route("/api", createApiRouter({ db, logger, tenantManager, publicUrl: config.publicUrl }));
 
   return { app, tenantManager, db };
 }

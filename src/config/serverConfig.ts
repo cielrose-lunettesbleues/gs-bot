@@ -18,13 +18,16 @@ const schema = z.object({
   GS_YOUTUBE_API_KEY: z.string().default(""),
   GS_KLIPY_API_KEY: z.string().default(""),
   GS_SOCIAVAULT_API_KEY: z.string().default(""),
-  GS_SETUP_TOKEN: z.string().default("")
+  GS_SETUP_TOKEN: z.string().default(""),
+  GS_PUBLIC_URL: z.string().default("")
 });
 
 export interface ServerConfig {
   port: number;
   host: string;
   dataDir: string;
+  /** Absolute base URL used to build links handed to viewers. */
+  publicUrl: string;
   logLevel: string;
   youtubeApiKey: string;
   klipyApiKey: string;
@@ -82,6 +85,7 @@ export function loadServerConfig(): ServerConfig {
     port: env.PORT,
     host: env.HOST,
     dataDir: env.GS_DATA_DIR,
+    publicUrl: resolvePublicUrl(env.GS_PUBLIC_URL, env.TWITCH_REDIRECT_URI),
     logLevel: env.LOG_LEVEL,
     youtubeApiKey: env.GS_YOUTUBE_API_KEY,
     klipyApiKey: env.GS_KLIPY_API_KEY,
@@ -93,4 +97,19 @@ export function loadServerConfig(): ServerConfig {
       redirectUri: env.TWITCH_REDIRECT_URI
     }
   };
+}
+
+// The public base URL is needed for links the bot posts in chat. It is taken
+// from GS_PUBLIC_URL when set, otherwise derived from the OAuth redirect URI
+// the operator already configured, which points at this same deployment.
+export function resolvePublicUrl(publicUrl: string, redirectUri: string): string {
+  const explicit = publicUrl.trim().replace(/\/+$/, "");
+  if (explicit) return explicit;
+
+  try {
+    const parsed = new URL(redirectUri);
+    return `${parsed.protocol}//${parsed.host}`;
+  } catch {
+    return "";
+  }
 }

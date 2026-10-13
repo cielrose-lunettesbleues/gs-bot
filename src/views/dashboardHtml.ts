@@ -148,6 +148,19 @@ input:checked+.slider:before{transform:translateX(18px)}
     <p style="font-size:11px;color:var(--muted)">Clients connectés : <span id="overlay-clients">0</span></p>
   </div>
 
+  <div class="panel col-full">
+    <div class="panel-title">Page viewers</div>
+    <p style="font-size:13px;color:var(--muted)">Le lien que le bot donne dans le chat quand quelqu'un tape <strong style="color:var(--text)">!gs</strong> sans rien d'autre. Les envois y passent par les mêmes règles que le chat.</p>
+    <div class="url-row">
+      <span class="url-box" id="submit-url">—</span>
+      <button class="btn-copy" id="copy-submit-btn" onclick="copySubmitUrl()">Copier</button>
+      <button class="btn-copy" id="rotate-submit-btn" onclick="rotateSubmitUrl()">Régénérer</button>
+    </div>
+    <div class="row"><span class="row-label">Page activée</span><label class="toggle" id="tog-web-submit"><input type="checkbox" id="cfg-web-submit" onchange="patchConfig('webSubmitEnabled',this.checked,this)"><span class="slider"></span></label></div>
+    <div class="row"><span class="row-label">Envois sans connexion Twitch</span><label class="toggle" id="tog-web-guest"><input type="checkbox" id="cfg-web-guest" onchange="patchConfig('webGuestEnabled',this.checked,this)"><span class="slider"></span></label></div>
+    <p style="font-size:11px;color:var(--muted)">Régénérer invalide tous les liens déjà partagés, sans toucher à ta source OBS. En sub-only ou mod-only, les invités sont refusés : leur statut est invérifiable.</p>
+  </div>
+
   <div class="panel">
     <div class="panel-title">Configuration</div>
     <div class="row"><span class="row-label">Sub only</span><label class="toggle" id="tog-subonly"><input type="checkbox" id="cfg-subonly" onchange="patchConfig('subOnly',this.checked,this)"><span class="slider"></span></label></div>
@@ -204,7 +217,7 @@ input:checked+.slider:before{transform:translateX(18px)}
     <div class="tts-key-row"><input type="password" id="tts-api-key-input" placeholder="sk_xxxxxxxxxxxxxxxx" autocomplete="off"><button class="btn btn-accent btn-sm" onclick="saveTtsApiKey()">Sauvegarder</button></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
       <div class="num-row"><label for="cfg-tts-maxlength" style="font-size:12px;color:var(--muted)">Longueur max (caract.)</label><input class="num-input" type="number" id="cfg-tts-maxlength" min="10" max="1000" onchange="patchTtsConfig('ttsMaxLength',+this.value,this)"></div>
-      <div class="num-row"><label for="cfg-tts-volume" style="font-size:12px;color:var(--muted)">Volume (0–1)</label><input class="num-input" type="number" id="cfg-tts-volume" min="0" max="1" step="0.1" onchange="patchTtsConfig('ttsVolume',+this.value,this)"></div>
+      <div class="num-row"><label for="cfg-tts-volume" style="font-size:12px;color:var(--muted)">Volume (0–2)</label><input class="num-input" type="number" id="cfg-tts-volume" min="0" max="2" step="0.1" onchange="patchTtsConfig('ttsVolume',+this.value,this)"></div>
     </div>
     <div class="panel-title" style="margin-top:4px">Voix configurées</div>
     <div id="tts-voice-list"><p class="empty">Aucune voix configurée</p></div>

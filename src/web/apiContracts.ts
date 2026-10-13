@@ -21,6 +21,7 @@ export interface StatusResponse {
   queue: { busy: boolean; pendingCount: number };
   approval: { pendingCount: number; pending: string[] };
   overlay: { clients: number; url: string };
+  web: { submitEnabled: boolean; guestEnabled: boolean; url: string };
   twitch: { connected: boolean; channel: string | null };
   runtime: TenantRuntimeState;
 }
@@ -55,7 +56,8 @@ export interface OverlayRotateTokenResponse {
 export function buildStatusResponse(
   tenant: TenantServices,
   overlayUrl: string,
-  runtime: TenantRuntimeState
+  runtime: TenantRuntimeState,
+  submitUrl = ""
 ): StatusResponse {
   const cfg = tenant.runtimeConfig;
   const pending = tenant.approvalService.listPending();
@@ -83,6 +85,13 @@ export function buildStatusResponse(
     overlay: {
       clients: tenant.overlayBroadcaster.clientCount(),
       url: overlayUrl
+    },
+    web: {
+      // Tolerates a runtime config built before these flags existed; the DB
+      // default for both is enabled.
+      submitEnabled: cfg.web?.submitEnabled ?? true,
+      guestEnabled: cfg.web?.guestEnabled ?? true,
+      url: submitUrl
     },
     twitch: { connected: twitch.connected, channel: twitch.channel },
     runtime
@@ -115,4 +124,13 @@ export function buildTtsVoicesResponse(voices: DbTtsVoice[]): TtsVoicesResponse 
 
 export function buildOverlayRotateTokenResponse(overlayUrl: string): OverlayRotateTokenResponse {
   return { ok: true, overlayUrl };
+}
+
+export interface WebRotateTokenResponse {
+  ok: true;
+  submitUrl: string;
+}
+
+export function buildWebRotateTokenResponse(submitUrl: string): WebRotateTokenResponse {
+  return { ok: true, submitUrl };
 }

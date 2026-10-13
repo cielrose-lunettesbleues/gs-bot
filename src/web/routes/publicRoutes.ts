@@ -19,7 +19,8 @@ import { getDashboardHtml } from "../../views/dashboardHtml";
 import { getLoginHtml } from "../../views/loginHtml";
 import { getSetupHtml } from "../../views/setupHtml";
 import { setupSchema, parseJsonBody } from "../requestValidation";
-import { buildOverlayPath, isValidSetupRequest } from "../publicTokens";
+import { buildOverlayPath, buildSubmitPath, isValidSetupRequest } from "../publicTokens";
+import { clearViewerFlow, completeViewerLogin, readViewerFlow } from "../../viewer/viewerLogin";
 import { escapeHtml, isSecureRequest, verifySameOrigin } from "../../security/httpSecurity";
 
 const MAX_OVERLAY_CLIENTS_PER_TENANT = 3;
@@ -109,6 +110,19 @@ export function registerPublicRoutes({ app, db, oauthConfig, config, logger, ten
     try {
       const tokens = await exchangeCode(oauthConfig, code);
       const userInfo = await fetchUserInfo(tokens.accessToken, oauthConfig.clientId);
+
+      // The viewer flow borrows this callback because Twitch allows a single
+      // registered redirect URI. It must stop here: no tenant, no bot, no
+      // streamer session — only an audience identity.
+      const viewerFlow = readViewerFlow(c);
+      if (viewerFlow) {
+        const viewer = completeViewerLogin(c, db, userInfo);
+        clearViewerFlow(c);
+        c.header("Set-Cookie", `oauth_state=; HttpOnly; Max-Age=0; Path=/${isSecureRequest(c) ? "; Secure" : ""}`, { append: true });
+        logger.info({ viewerId: viewer.id, channel: viewerFlow.channel }, "Viewer logged in via Twitch OAuth");
+        return c.redirect(buildSubmitPath(viewerFlow.channel, viewerFlow.token));
+      }
+
       const dbUser = upsertUser(db, {
         twitch_id: userInfo.id,
         twitch_login: userInfo.login,

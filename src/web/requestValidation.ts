@@ -16,7 +16,9 @@ export const configPatchSchema = z.object({
   cooldownSeconds: z.number().int().min(0).max(3600).optional(),
   approvalEnabled: z.boolean().optional(),
   durationSeconds: z.number().int().min(1).max(300).optional(),
-  chatFeedback: z.boolean().optional()
+  chatFeedback: z.boolean().optional(),
+  webSubmitEnabled: z.boolean().optional(),
+  webGuestEnabled: z.boolean().optional()
 }).strict();
 export type ConfigPatchBody = z.infer<typeof configPatchSchema>;
 
@@ -81,3 +83,23 @@ export async function parseJsonBody<T>(
 
   return { success: true, data: parsed.data };
 }
+
+// ─── Viewer submit page ───────────────────────────────────────────────────────
+
+export const viewerSubmitSchema = z.object({
+  url: z.string().trim().min(1).max(500),
+  caption: z.string().trim().max(200).optional(),
+  durationSeconds: z.number().int().min(1).max(300).optional()
+}).strict();
+export type ViewerSubmitBody = z.infer<typeof viewerSubmitSchema>;
+
+export const viewerPreviewSchema = z.object({
+  url: z.string().trim().min(1).max(500)
+}).strict();
+export type ViewerPreviewBody = z.infer<typeof viewerPreviewSchema>;
+
+export const favoriteCreateSchema = z.object({
+  url: z.string().trim().min(1).max(500),
+  label: z.string().trim().max(120).optional()
+}).strict();
+export type FavoriteCreateBody = z.infer<typeof favoriteCreateSchema>;
