@@ -118,6 +118,16 @@ describe("getSubmitHtml", () => {
     expect(html).not.toContain('name="apple-mobile-web-app-capable"');
   });
 
+  it("lists favourite GIFs apart from videos, with a thumbnail to recognise them", () => {
+    const html = getSubmitHtml(props());
+
+    expect(html).toContain('favoriteGroup("Mes GIFs", gifs)');
+    expect(html).toContain('favoriteGroup("Mes vidéos", videos)');
+    // A GIF is recognised at a glance, not by its address
+    expect(html).toContain('thumb.className = "fav-thumb"');
+    expect(html).toContain('thumb.loading = "lazy"');
+  });
+
   it("keeps the decoration out of the way of screen readers and motion settings", () => {
     const html = getSubmitHtml(props());
 

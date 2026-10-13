@@ -28,6 +28,14 @@ function buildTtsGenerate(
 }
 
 const URL_RE = /^https?:\/\//i;
+const GIF_URL_RE = /\.gif(\?.*)?$/i;
+
+/** A looping image has no natural end, so it gets a short default instead. */
+export const GIF_DEFAULT_DURATION_SECONDS = 10;
+
+function isGifUrl(url: string): boolean {
+  return GIF_URL_RE.test(url);
+}
 
 export function createGreenScreenCommand(
   deps: CommandDependencies,
@@ -208,11 +216,18 @@ export function createGreenScreenCommand(
         }
       }
 
+      const maxRequestable = deps.config.validation.maxDurationSeconds;
+      const capped = (seconds: number) => (maxRequestable > 0 ? Math.min(seconds, maxRequestable) : seconds);
+
+      // ── A GIF loops, so the tenant video length means nothing to it ──────
+      if (!requestedSeconds && isGifUrl(videoUrl)) {
+        playDuration = capped(GIF_DEFAULT_DURATION_SECONDS);
+      }
+
       // ── Requested cut overrides the resolved length ──────────────────────
       // Capped by the tenant maximum; the chat feedback shows what was applied.
       if (requestedSeconds) {
-        const maxRequestable = deps.config.validation.maxDurationSeconds;
-        playDuration = maxRequestable > 0 ? Math.min(requestedSeconds, maxRequestable) : requestedSeconds;
+        playDuration = capped(requestedSeconds);
         cutAfterSeconds = playDuration;
       }
 

@@ -130,6 +130,51 @@ describe("greenScreenCommand", () => {
   });
 
   const IG_REEL = "https://www.instagram.com/reel/DEiyb48AeB9/";
+  const GIF = "https://cdn.test/funny.gif";
+
+  it("plays a gif for ten seconds rather than the tenant video length", async () => {
+    const deps = makeDeps();
+    const command = createGreenScreenCommand(deps, "!gs");
+    const ctx = modCtx("nina");
+
+    await command.execute(ctx, [GIF]);
+
+    // A looping image has no natural end, and 15s of tenant default is long
+    expect(deps.queue.enqueue).toHaveBeenCalledWith(expect.objectContaining({ durationSeconds: 10 }));
+  });
+
+  it("lets an explicit duration win over the gif default", async () => {
+    const deps = makeDeps();
+    const command = createGreenScreenCommand(deps, "!gs");
+    const ctx = modCtx("omar");
+
+    await command.execute(ctx, [GIF, "/3"]);
+
+    expect(deps.queue.enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({ durationSeconds: 3, cutAfterSeconds: 3 })
+    );
+  });
+
+  it("caps the gif default to the tenant maximum", async () => {
+    const deps = makeDeps();
+    deps.config.validation.maxDurationSeconds = 4;
+    const command = createGreenScreenCommand(deps, "!gs");
+    const ctx = modCtx("perrine");
+
+    await command.execute(ctx, [`${GIF}?v=2`]);
+
+    expect(deps.queue.enqueue).toHaveBeenCalledWith(expect.objectContaining({ durationSeconds: 4 }));
+  });
+
+  it("leaves a video on the tenant length", async () => {
+    const deps = makeDeps();
+    const command = createGreenScreenCommand(deps, "!gs");
+    const ctx = modCtx("quentin");
+
+    await command.execute(ctx, ["https://youtube.com/watch?v=1"]);
+
+    expect(deps.queue.enqueue).toHaveBeenCalledWith(expect.objectContaining({ durationSeconds: 15 }));
+  });
 
   it("plays a resolved Instagram reel", async () => {
     const deps = makeDeps();

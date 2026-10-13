@@ -391,6 +391,15 @@ input:focus{outline:3px solid var(--gold);outline-offset:1px}
 }
 .gif-fav:hover{border-color:var(--gold)}
 
+.fav-group + .fav-group{margin-top:16px}
+.fav-group-title{
+  font-size:12px;text-transform:uppercase;letter-spacing:.05em;
+  color:var(--muted);margin-bottom:4px;
+}
+.fav-thumb{
+  width:40px;height:40px;flex:0 0 auto;object-fit:cover;
+  background:#070e24;border:2px solid var(--panel-edge);border-radius:6px;
+}
 .fav{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:2px solid #15224f}
 .fav:last-child{border-bottom:none}
 .fav-label{flex:1;min-width:0}
@@ -867,28 +876,28 @@ ${spriteStyles(props.sprites ?? {})}
   }
 
   // ── Favoris ───────────────────────────────────────────────────────────────
-  function renderFavorites(){
-    var list = el("fav-list");
-    var count = el("fav-count");
-    list.innerHTML = "";
-    if(count) count.textContent = String(BOOT.favorites ? BOOT.favorites.length : 0);
+  function isGifUrl(url){
+    return /\\.gif(\\?.*)?$/i.test(url);
+  }
 
-    if(!BOOT.favorites || BOOT.favorites.length === 0){
-      var empty = document.createElement("p");
-      empty.className = "empty";
-      empty.textContent = "Aucun favori pour le moment.";
-      list.appendChild(empty);
-      return;
-    }
-
-    BOOT.favorites.forEach(function(fav){
+  function favoriteRow(fav){
       var row = document.createElement("div");
       row.className = "fav";
 
-      var ring = document.createElement("span");
-      ring.className = "ring sm";
-      ring.setAttribute("aria-hidden", "true");
-      row.appendChild(ring);
+      // Un GIF se reconnaît d'un coup d'œil, pas à son adresse
+      if(isGifUrl(fav.url)){
+        var thumb = document.createElement("img");
+        thumb.className = "fav-thumb";
+        thumb.src = fav.url;
+        thumb.alt = "";
+        thumb.loading = "lazy";
+        row.appendChild(thumb);
+      } else {
+        var ring = document.createElement("span");
+        ring.className = "ring sm";
+        ring.setAttribute("aria-hidden", "true");
+        row.appendChild(ring);
+      }
 
       var label = document.createElement("div");
       label.className = "fav-label";
@@ -920,9 +929,43 @@ ${spriteStyles(props.sprites ?? {})}
         });
       };
       row.appendChild(remove);
+      return row;
+  }
 
-      list.appendChild(row);
-    });
+  function favoriteGroup(title, items){
+    var box = document.createElement("div");
+    box.className = "fav-group";
+
+    var heading = document.createElement("div");
+    heading.className = "fav-group-title";
+    heading.textContent = title + " (" + items.length + ")";
+    box.appendChild(heading);
+
+    items.forEach(function(fav){ box.appendChild(favoriteRow(fav)); });
+    return box;
+  }
+
+  function renderFavorites(){
+    var list = el("fav-list");
+    var count = el("fav-count");
+    var favorites = BOOT.favorites || [];
+    list.innerHTML = "";
+    if(count) count.textContent = String(favorites.length);
+
+    if(favorites.length === 0){
+      var empty = document.createElement("p");
+      empty.className = "empty";
+      empty.textContent = "Aucun favori pour le moment.";
+      list.appendChild(empty);
+      return;
+    }
+
+    // Deux listes: on ne cherche pas un GIF comme on cherche une vidéo
+    var gifs = favorites.filter(function(f){ return isGifUrl(f.url); });
+    var videos = favorites.filter(function(f){ return !isGifUrl(f.url); });
+
+    if(gifs.length) list.appendChild(favoriteGroup("Mes GIFs", gifs));
+    if(videos.length) list.appendChild(favoriteGroup("Mes vidéos", videos));
   }
 
   function addFavorite(url, label){
