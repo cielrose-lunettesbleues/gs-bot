@@ -28,7 +28,9 @@ const manifestSchema = z.object({
   /** Flies alongside the mascot, at its own pace. */
   sidekick: spriteSchema.optional(),
   ring: spriteSchema.optional(),
-  ground: spriteSchema.optional()
+  ground: spriteSchema.optional(),
+  /** Distant scenery, fixed at the foot of the window behind everything. */
+  backdrop: spriteSchema.optional()
 });
 
 export type SpriteDefinition = z.infer<typeof spriteSchema>;

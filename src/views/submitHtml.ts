@@ -110,6 +110,23 @@ ${sheetKeyframes("mascot-sheet", mascot)}`);
 ${sheetKeyframes("sidekick-sheet", sidekick)}`);
   }
 
+  if (sprites.backdrop) {
+    const backdrop = sprites.backdrop;
+    const { w, h } = displaySize(backdrop);
+    blocks.push(`
+.backdrop{height:${h}px}
+.backdrop::before{
+  content:"";position:absolute;left:0;bottom:0;height:${h}px;width:calc(100% + ${w}px);
+  background-image:url("/sprites/${backdrop.file}");
+  background-size:${w}px ${h}px;
+  background-repeat:repeat-x;
+  animation:backdrop-scroll 100s linear infinite;
+}
+/* Un tour complet fait exactement la largeur de la tuile: le motif retombe
+   sur lui-même, donc la boucle ne se voit pas. */
+@keyframes backdrop-scroll{from{transform:translateX(0)}to{transform:translateX(-${w}px)}}`);
+  }
+
   if (sprites.mascot || sprites.sidekick) {
     // Les deux dérives vont en sens inverse sur des durées premières entre
     // elles: l'écart entre les personnages ne se répète jamais à l'identique,
@@ -122,10 +139,10 @@ ${sheetKeyframes("sidekick-sheet", sidekick)}`);
   if (blocks.length === 0) return "";
   return `<style>
 /* Sprites fournis par l'opérateur */
-.ring,.mascot,.sidekick,.ground .checks::before{image-rendering:pixelated}
+.ring,.mascot,.sidekick,.ground .checks::before,.backdrop::before{image-rendering:pixelated}
 ${blocks.join("\n")}
 @media (prefers-reduced-motion: reduce){
-  .ground .checks::before{animation:none}
+  .ground .checks::before,.backdrop::before{animation:none}
 }
 </style>`;
 }
@@ -220,6 +237,14 @@ h1 .chan{color:var(--gold)}
   15%{opacity:.9}
   100%{transform:translateX(115vw);opacity:0}
 }
+/* Décor lointain: bande fixée au bas de la fenêtre, derrière tout le contenu.
+   Fixe plutôt qu'en flux, pour qu'il ne bouge pas au défilement comme le ferait
+   un horizon. L'opacité le tient au second plan. */
+.backdrop{
+  position:fixed;left:0;right:0;bottom:0;z-index:-1;
+  overflow:hidden;pointer-events:none;opacity:.3;
+}
+
 /* Scène de fin de page: le sol court sur toute la largeur, les personnages s'y
    tiennent, et le ciel au-dessus est à eux. */
 .scene{position:relative;height:180px;margin-top:24px}
@@ -439,6 +464,7 @@ footer{
 ${spriteStyles(props.sprites ?? {})}
 </head>
 <body>
+<div class="backdrop" aria-hidden="true"${props.sprites?.backdrop ? "" : " hidden"}></div>
 <header>
   <div class="speed" aria-hidden="true"><i></i><i></i><i></i></div>
   <div class="wrap title-row">

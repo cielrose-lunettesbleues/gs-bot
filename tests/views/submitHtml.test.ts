@@ -192,8 +192,11 @@ describe("getSubmitHtml", () => {
     const reduced = html.slice(html.lastIndexOf("@media (prefers-reduced-motion"));
 
     // The loading indicator is a ring: freezing it would freeze the feedback
-    expect(reduced).toContain(".ground .checks::before{animation:none}");
+    expect(reduced).toContain(".ground .checks::before");
+    expect(reduced).toContain(".backdrop::before");
+    expect(reduced).toContain("{animation:none}");
     expect(reduced).not.toContain(".ring,");
+    expect(reduced).not.toContain(".mascot");
   });
 
   it("drifts the two characters apart on periods that never line up", () => {
@@ -210,6 +213,20 @@ describe("getSubmitHtml", () => {
     // Opposite directions, so the gap between them opens and closes
     expect(html).toContain("@keyframes drift-a{from{transform:translateX(7px)}to{transform:translateX(-13px)}}");
     expect(html).toContain("@keyframes drift-b{from{transform:translateX(-11px)}to{transform:translateX(15px)}}");
+  });
+
+  it("scrolls the distant scenery by exactly one tile, so the loop cannot show", () => {
+    const html = getSubmitHtml(props({
+      sprites: { backdrop: { file: "backdrop.png", frames: 1, fps: 12, width: 512, height: 256 } }
+    }));
+
+    expect(html).toContain('url("/sprites/backdrop.png")');
+    expect(html).toContain("background-repeat:repeat-x");
+    // One turn equals the tile width: the pattern lands back on itself
+    expect(html).toContain("background-size:512px 256px");
+    expect(html).toContain("to{transform:translateX(-512px)}");
+    // Far away means slow: a hundred seconds for one tile
+    expect(html).toContain("backdrop-scroll 100s linear infinite");
   });
 
   it("leaves a still sprite unanimated", () => {
