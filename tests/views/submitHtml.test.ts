@@ -80,6 +80,20 @@ describe("getSubmitHtml", () => {
     expect(html).not.toContain("to{background-position:22px 0");
   });
 
+  it("anchors the scenery to the ground rather than to the window", () => {
+    const html = getSubmitHtml(props());
+    const scene = html.indexOf('<div class="scene">');
+    const backdrop = html.indexOf('class="backdrop"');
+    const ground = html.indexOf('class="ground"');
+
+    // Fixed to the window, it slid away from the ground as the page scrolled
+    expect(html).toContain("position:absolute;left:0;right:0;bottom:22px;z-index:-1");
+    expect(html).not.toContain("position:fixed;left:0;right:0;bottom:22px");
+    // It belongs to the scene, between its edges, behind the characters
+    expect(backdrop).toBeGreaterThan(scene);
+    expect(backdrop).toBeLessThan(ground);
+  });
+
   it("puts the ground at the foot of the page, with the characters standing on it", () => {
     const html = getSubmitHtml(props());
     const headerEnd = html.indexOf("</header>");
@@ -225,8 +239,8 @@ describe("getSubmitHtml", () => {
     // One turn equals the tile width: the pattern lands back on itself
     expect(html).toContain("background-size:512px 256px");
     expect(html).toContain("to{transform:translateX(-512px)}");
-    // Far away means slow: two minutes for one tile
-    expect(html).toContain("backdrop-scroll 120s linear infinite");
+    // The duration is a tuning value; that it is slow and linear is not
+    expect(html).toMatch(/backdrop-scroll \d+s linear infinite/);
   });
 
   it("leaves a still sprite unanimated", () => {

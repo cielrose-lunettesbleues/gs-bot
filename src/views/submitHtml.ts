@@ -52,9 +52,9 @@ function sheetKeyframes(name: string, sprite: SpriteDefinition): string {
 }
 
 // Un tour de décor dure ce temps-là, quelle que soit la taille de la tuile. À
-// 1024px affichés cela fait environ 8,5 px/s, contre 16 px/s pour le sol: c'est
+// 1536px affichés cela fait environ 10 px/s, contre 16 px/s pour le sol: c'est
 // l'écart entre les deux qui donne la profondeur.
-const BACKDROP_SCROLL_SECONDS = 120;
+const BACKDROP_SCROLL_SECONDS = 150;
 
 // Emitted after the base stylesheet so these rules win, while every untouched
 // slot keeps its drawn fallback. Deleting a sprite file is therefore enough to
@@ -242,12 +242,12 @@ h1 .chan{color:var(--gold)}
   15%{opacity:.9}
   100%{transform:translateX(115vw);opacity:0}
 }
-/* Décor lointain: bande fixée au bas de la fenêtre, derrière tout le contenu.
-   Fixe plutôt qu'en flux, pour qu'il ne bouge pas au défilement comme le ferait
-   un horizon. L'opacité le tient au second plan, et sa base est calée sur la
-   ligne de course: le décor s'élève au-dessus d'elle au lieu de s'y enfoncer. */
+/* Décor lointain, ancré au sol et non à la fenêtre: fixé à la fenêtre, il
+   glissait au défilement au lieu de rester posé sur la ligne de course. Sa base
+   est à la hauteur des pieds du personnage, et il déborde vers le haut derrière
+   le contenu, que l'opacité et le z-index laissent au premier plan. */
 .backdrop{
-  position:fixed;left:0;right:0;bottom:22px;z-index:-1;
+  position:absolute;left:0;right:0;bottom:22px;z-index:-1;
   overflow:hidden;pointer-events:none;opacity:.3;
 }
 
@@ -470,7 +470,6 @@ footer{
 ${spriteStyles(props.sprites ?? {})}
 </head>
 <body>
-<div class="backdrop" aria-hidden="true"${props.sprites?.backdrop ? "" : " hidden"}></div>
 <header>
   <div class="speed" aria-hidden="true"><i></i><i></i><i></i></div>
   <div class="wrap title-row">
@@ -547,6 +546,7 @@ ${spriteStyles(props.sprites ?? {})}
 </div>
 
 <div class="scene">
+  <div class="backdrop" aria-hidden="true"${props.sprites?.backdrop ? "" : " hidden"}></div>
   <div class="mascot" aria-hidden="true"${props.sprites?.mascot ? "" : " hidden"}></div>
   <div class="sidekick" aria-hidden="true"${props.sprites?.sidekick ? "" : " hidden"}></div>
   <div class="ground" aria-hidden="true">

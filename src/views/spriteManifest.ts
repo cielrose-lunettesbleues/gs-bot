@@ -13,14 +13,17 @@ const spriteSchema = z.object({
   frames: z.number().int().min(1).max(64).default(1),
   fps: z.number().int().min(1).max(60).default(12),
   /** Size of one frame in the file. */
-  width: z.number().int().min(1).max(1024).default(64),
-  height: z.number().int().min(1).max(1024).default(64),
+  width: z.number().int().min(1).max(4096).default(64),
+  height: z.number().int().min(1).max(4096).default(64),
   /**
    * Size on the page, when it should differ from the file. The sheet is scaled
    * as a whole and the frame step follows, so the animation stays in register.
+   * The ceiling is generous: a backdrop enlarged several times over is a normal
+   * use, and a value above it would reject the whole manifest, taking every
+   * other slot down with it.
    */
-  displayWidth: z.number().int().min(1).max(1024).optional(),
-  displayHeight: z.number().int().min(1).max(1024).optional()
+  displayWidth: z.number().int().min(1).max(4096).optional(),
+  displayHeight: z.number().int().min(1).max(4096).optional()
 });
 
 const manifestSchema = z.object({

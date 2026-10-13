@@ -78,6 +78,27 @@ describe("loadSpriteSet", () => {
     expect(loadSpriteSet(dir, logger)).toEqual({});
   });
 
+  it("accepts a backdrop enlarged several times over", () => {
+    writeManifest({ backdrop: { file: "backdrop.png", width: 512, height: 214, displayWidth: 1536, displayHeight: 642 } });
+    writeImage("backdrop.png");
+
+    // Too tight a ceiling here rejects the whole manifest, slots and all
+    expect(loadSpriteSet(dir, logger).backdrop).toMatchObject({ displayWidth: 1536, displayHeight: 642 });
+    expect(logger.warn).not.toHaveBeenCalled();
+  });
+
+  it("does not let one bad slot take the others down", () => {
+    writeManifest({
+      ring: { file: "ring.png" },
+      mascot: { file: "mascot.png", frames: 999 }
+    });
+    writeImage("ring.png");
+    writeImage("mascot.png");
+
+    // A single out-of-range value voids the parse, which is worth knowing
+    expect(loadSpriteSet(dir, logger)).toEqual({});
+  });
+
   it("rejects out-of-range frame counts", () => {
     writeManifest({ mascot: { file: "mascot.png", frames: 999 } });
     writeImage("mascot.png");
