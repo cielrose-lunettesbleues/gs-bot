@@ -166,10 +166,22 @@ export interface InstagramResolved {
 
 // Reels, posts and IGTV, with or without a leading /<username>/ segment
 const INSTAGRAM_POST_RE =
-  /^https:\/\/(?:www\.)?instagram\.com\/(?:[^/?#]+\/)?(?:reel|reels|p|tv)\/[A-Za-z0-9_-]+/i;
+  /^https:\/\/(?:www\.)?instagram\.com\/(?:[^/?#]+\/)?(reel|reels|p|tv)\/([A-Za-z0-9_-]+)/i;
 
 export function isInstagramPostUrl(url: string): boolean {
   return INSTAGRAM_POST_RE.test(url);
+}
+
+// Share menus append tracking parameters (?igsh=, ?cplk=, ...). They are
+// dropped before the API call: they carry no meaning for the lookup, and a
+// base64 value with padding is a needless thing to hand to a parser. It also
+// means the same post shared twice hits one cache entry, hence one credit.
+export function canonicalInstagramUrl(url: string): string | null {
+  const match = INSTAGRAM_POST_RE.exec(url);
+  if (!match) return null;
+
+  const kind = match[1].toLowerCase() === "reels" ? "reel" : match[1].toLowerCase();
+  return `https://www.instagram.com/${kind}/${match[2]}/`;
 }
 
 // The app also produces /share/<id> links, which only reveal the post after a
@@ -217,9 +229,6 @@ export async function sociavaultResolveInstagram(
   apiKey: string,
   log?: SimpleLogger
 ): Promise<InstagramResolved | null> {
-  const cached = instagramCache.get(instagramUrl);
-  if (cached && Date.now() - cached.at < INSTAGRAM_CACHE_TTL_MS) return cached.value;
-
   let target = instagramUrl;
   if (!isInstagramPostUrl(target)) {
     if (!isInstagramShareUrl(target)) {
@@ -227,31 +236,42 @@ export async function sociavaultResolveInstagram(
       return null;
     }
     target = await expandShortLink(target, log);
-    if (!isInstagramPostUrl(target)) {
-      log?.warn({ instagramUrl, expanded: target }, "SociaVault: share link did not lead to a post");
-      return null;
-    }
   }
+
+  const canonical = canonicalInstagramUrl(target);
+  if (!canonical) {
+    log?.warn({ instagramUrl, expanded: target }, "SociaVault: link did not lead to an Instagram post");
+    return null;
+  }
+
+  const cached = instagramCache.get(canonical);
+  if (cached && Date.now() - cached.at < INSTAGRAM_CACHE_TTL_MS) return cached.value;
 
   let res: Response;
   try {
     res = await fetch(
-      `${INSTAGRAM_BASE}/post-info?url=${encodeURIComponent(target)}`,
+      `${INSTAGRAM_BASE}/post-info?url=${encodeURIComponent(canonical)}`,
       { headers: { "X-API-Key": apiKey }, signal: AbortSignal.timeout(10000) }
     );
   } catch (err) {
-    log?.warn({ instagramUrl, err: String(err) }, "SociaVault Instagram fetch failed");
+    log?.warn({ instagramUrl, canonical, err: String(err) }, "SociaVault Instagram fetch failed");
     return null;
   }
+  // The status goes in the message, not only in the fields: log viewers show
+  // the message alone, and this status is the whole diagnosis (402 out of
+  // credits, 401/403 bad key, 404 unknown post, 400 rejected url).
   if (!res.ok) {
-    log?.warn({ instagramUrl, status: res.status }, "SociaVault Instagram non-OK response");
+    log?.warn(
+      { instagramUrl, canonical, status: res.status },
+      `SociaVault Instagram refused with HTTP ${res.status}`
+    );
     return null;
   }
 
   const media = findShortcodeMedia(await res.json());
   const videoUrl = media && typeof media.video_url === "string" ? media.video_url : "";
   if (!videoUrl) {
-    log?.warn({ instagramUrl }, "SociaVault Instagram: post carries no video");
+    log?.warn({ instagramUrl, canonical }, "SociaVault Instagram: post carries no video");
     return null;
   }
 
@@ -273,6 +293,6 @@ export async function sociavaultResolveInstagram(
   };
 
   if (instagramCache.size >= INSTAGRAM_CACHE_MAX) instagramCache.clear();
-  instagramCache.set(instagramUrl, { value: resolved, at: Date.now() });
+  instagramCache.set(canonical, { value: resolved, at: Date.now() });
   return resolved;
 }

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  canonicalInstagramUrl,
   clearInstagramCache,
   isInstagramShareUrl,
   isTiktokShortLink,
@@ -70,6 +71,73 @@ describe("sociavaultResolve", () => {
 
     expect(await sociavaultResolve("https://example.com/whatever", API_KEY)).toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("canonicalInstagramUrl", () => {
+  it("drops the tracking parameters a share menu appends", () => {
+    expect(canonicalInstagramUrl("https://www.instagram.com/p/Ddn1p6FMwTV/?cplk=MTUxanN1anlpaHV4dw=="))
+      .toBe("https://www.instagram.com/p/Ddn1p6FMwTV/");
+    expect(canonicalInstagramUrl("https://www.instagram.com/reel/ABC123/?igsh=MTE0cjZhbGZ6"))
+      .toBe("https://www.instagram.com/reel/ABC123/");
+  });
+
+  it("normalises reels to reel and strips a username segment", () => {
+    expect(canonicalInstagramUrl("https://www.instagram.com/reels/ABC123"))
+      .toBe("https://www.instagram.com/reel/ABC123/");
+    expect(canonicalInstagramUrl("https://instagram.com/someone/reel/ABC123"))
+      .toBe("https://www.instagram.com/reel/ABC123/");
+  });
+
+  it("returns null for anything that is not a post", () => {
+    expect(canonicalInstagramUrl("https://www.instagram.com/someone/")).toBeNull();
+  });
+});
+
+describe("sociavaultResolveInstagram url handling", () => {
+  function stubApi(payload: unknown, status = 200) {
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) =>
+      new Response(JSON.stringify(payload), { status })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  const PAYLOAD = {
+    data: {
+      data: {
+        xdt_shortcode_media: {
+          video_url: "https://cdn.test/v.mp4",
+          video_duration: 5,
+          dimensions: { width: 720, height: 1280 }
+        }
+      }
+    }
+  };
+
+  it("asks the API for the canonical url, not the one with tracking parameters", async () => {
+    const fetchMock = stubApi(PAYLOAD);
+    const shared = "https://www.instagram.com/p/Ddn1p6FMwTV/?cplk=MTUxanN1anlpaHV4dw==";
+
+    await sociavaultResolveInstagram(shared, API_KEY);
+
+    const calledUrl = String(fetchMock.mock.calls[0][0]);
+    expect(calledUrl).toContain(encodeURIComponent("https://www.instagram.com/p/Ddn1p6FMwTV/"));
+    expect(calledUrl).not.toContain("cplk");
+  });
+
+  it("serves the same post shared with different parameters from one credit", async () => {
+    const fetchMock = stubApi(PAYLOAD);
+
+    await sociavaultResolveInstagram("https://www.instagram.com/p/Ddn1p6FMwTV/?cplk=aaa", API_KEY);
+    await sociavaultResolveInstagram("https://www.instagram.com/p/Ddn1p6FMwTV/?igsh=bbb", API_KEY);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns null when the API refuses", async () => {
+    stubApi({}, 402);
+    expect(await sociavaultResolveInstagram("https://www.instagram.com/p/ABC123/", API_KEY)).toBeNull();
   });
 });
 
