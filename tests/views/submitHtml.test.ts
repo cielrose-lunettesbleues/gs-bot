@@ -70,6 +70,16 @@ describe("getSubmitHtml", () => {
     expect(html).toContain("min-height:44px");
   });
 
+  it("animates with transform, not with properties that force layout or repaint", () => {
+    const html = getSubmitHtml(props());
+
+    expect(html).toContain("transform:translateX(-30vw)");
+    expect(html).toContain("transform:translateX(-22px)");
+    // Animating left re-runs layout, and background-position repaints, each frame
+    expect(html).not.toContain("100%{left:");
+    expect(html).not.toContain("to{background-position:22px 0");
+  });
+
   it("keeps the decoration out of the way of screen readers and motion settings", () => {
     const html = getSubmitHtml(props());
 

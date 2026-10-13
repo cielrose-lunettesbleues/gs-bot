@@ -67,15 +67,15 @@ ${sheetKeyframes("ring-sheet", ring)}`);
     const { w, h } = displaySize(ground);
     blocks.push(`
 .ground{height:${12 + h}px}
-.ground .checks{
-  height:${h}px;
-  background-color:transparent;
+.ground .checks{height:${h}px;background-color:transparent}
+.ground .checks::before{
+  width:calc(100% + ${w}px);
   background-image:url("/sprites/${ground.file}");
   background-size:${w}px ${h}px;
   background-position:0 0;
   animation:ground-sheet 1.4s linear infinite;
 }
-@keyframes ground-sheet{to{background-position:-${w}px 0}}`);
+@keyframes ground-sheet{from{transform:translateX(0)}to{transform:translateX(-${w}px)}}`);
   }
 
   if (sprites.mascot) {
@@ -91,10 +91,10 @@ ${sheetKeyframes("mascot-sheet", mascot)}`);
   if (blocks.length === 0) return "";
   return `<style>
 /* Sprites fournis par l'opérateur */
-.ring,.mascot,.ground .checks{image-rendering:pixelated}
+.ring,.mascot,.ground .checks::before{image-rendering:pixelated}
 ${blocks.join("\n")}
 @media (prefers-reduced-motion: reduce){
-  .ring,.mascot,.ground .checks{animation:none}
+  .ring,.mascot,.ground .checks::before{animation:none}
 }
 </style>`;
 }
@@ -169,17 +169,20 @@ h1{
 h1 .chan{color:var(--gold)}
 /* Lignes de vitesse: pur décor, cachées aux lecteurs d'écran */
 .speed{position:absolute;inset:0;z-index:1;opacity:.28;pointer-events:none}
+/* Animé en transform et non en left: left force un recalcul de mise en page à
+   chaque image, ce qui saccade dès que le navigateur a autre chose à faire. */
 .speed i{
-  position:absolute;height:3px;border-radius:3px;background:#fff;
+  position:absolute;left:0;height:3px;border-radius:3px;background:#fff;
+  will-change:transform,opacity;
   animation:dash 1.5s linear infinite;
 }
 .speed i:nth-child(1){top:18%;width:70px;animation-delay:0s}
 .speed i:nth-child(2){top:46%;width:46px;animation-delay:.35s}
 .speed i:nth-child(3){top:72%;width:96px;animation-delay:.7s}
 @keyframes dash{
-  0%{left:-30%;opacity:0}
+  0%{transform:translateX(-30vw);opacity:0}
   15%{opacity:.9}
-  100%{left:115%;opacity:0}
+  100%{transform:translateX(115vw);opacity:0}
 }
 /* Sol: bande d'herbe + damier défilant */
 .ground{position:relative;margin-top:16px;height:34px}
@@ -188,19 +191,23 @@ h1 .chan{color:var(--gold)}
   background:linear-gradient(180deg,var(--grass),var(--grass-dark));
   box-shadow:inset 0 2px 0 rgba(255,255,255,.25);
 }
-.ground .checks{
-  height:22px;
-  background-color:var(--dirt);
+/* Le motif vit dans une couche plus large que son cadre, déplacée en transform.
+   Animer background-position repeindrait la bande à chaque image. */
+.ground .checks{height:22px;position:relative;overflow:hidden;background-color:var(--dirt)}
+.ground .checks::before{
+  content:"";position:absolute;top:0;left:0;height:100%;width:calc(100% + 22px);
   background-image:
     linear-gradient(45deg,var(--dirt-dark) 25%,transparent 25%,transparent 75%,var(--dirt-dark) 75%),
     linear-gradient(45deg,var(--dirt-dark) 25%,transparent 25%,transparent 75%,var(--dirt-dark) 75%);
   background-size:22px 22px;
   background-position:0 0,11px 11px;
+  will-change:transform;
   animation:roll 1.4s linear infinite;
 }
+/* Vers la gauche: le sol défile dans le sens de la course */
 @keyframes roll{
-  from{background-position:0 0,11px 11px}
-  to{background-position:22px 0,33px 11px}
+  from{transform:translateX(0)}
+  to{transform:translateX(-22px)}
 }
 
 /* ── Anneaux ────────────────────────────────────────────────────────────── */
@@ -329,7 +336,7 @@ footer{
 @media (max-width:520px){.mascot{display:none}}
 
 @media (prefers-reduced-motion: reduce){
-  .ground .checks,.ring,.speed i{animation:none}
+  .ground .checks::before,.ring,.speed i{animation:none}
   .speed{display:none}
 }
 </style>

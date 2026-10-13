@@ -3,16 +3,16 @@
     "file": "ring.png",
     "frames": 4,
     "fps": 12,
-    "width": 16,
+    "width": 20,
     "height": 16
   },
   "mascot": {
     "file": "mascot.png",
     "frames": 4,
     "fps": 16,
-    "width": 31,
+    "width": 35,
     "height": 43,
-    "displayWidth": 62,
+    "displayWidth": 70,
     "displayHeight": 86
   }
 }
