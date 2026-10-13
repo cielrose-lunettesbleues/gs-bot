@@ -25,6 +25,8 @@ const spriteSchema = z.object({
 
 const manifestSchema = z.object({
   mascot: spriteSchema.optional(),
+  /** Flies alongside the mascot, at its own pace. */
+  sidekick: spriteSchema.optional(),
   ring: spriteSchema.optional(),
   ground: spriteSchema.optional()
 });

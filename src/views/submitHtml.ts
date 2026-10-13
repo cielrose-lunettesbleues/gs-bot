@@ -31,11 +31,17 @@ function sheetBackground(sprite: SpriteDefinition): string {
 }
 
 // A sheet animation walks the strip one frame at a time; a single frame is
-// simply left still.
-function sheetAnimation(name: string, sprite: SpriteDefinition): string {
-  if (sprite.frames <= 1) return "";
-  const seconds = (sprite.frames / sprite.fps).toFixed(2);
-  return `animation:${name} ${seconds}s steps(${sprite.frames}) infinite;`;
+// simply left still. A second animation can ride along, as long as it drives
+// another property: the sheet owns background-position, the drift owns
+// transform.
+function sheetAnimation(name: string, sprite: SpriteDefinition, extra = ""): string {
+  const parts: string[] = [];
+  if (sprite.frames > 1) {
+    const seconds = (sprite.frames / sprite.fps).toFixed(2);
+    parts.push(`${name} ${seconds}s steps(${sprite.frames}) infinite`);
+  }
+  if (extra) parts.push(extra);
+  return parts.length ? `animation:${parts.join(",")};` : "";
 }
 
 function sheetKeyframes(name: string, sprite: SpriteDefinition): string {
@@ -87,15 +93,34 @@ ${sheetKeyframes("ring-sheet", ring)}`);
     blocks.push(`
 .mascot{
   ${sheetBackground(mascot)}
-  ${sheetAnimation("mascot-sheet", mascot)}
+  ${sheetAnimation("mascot-sheet", mascot, "drift-a 3.7s ease-in-out infinite alternate")}
 }
 ${sheetKeyframes("mascot-sheet", mascot)}`);
+  }
+
+  if (sprites.sidekick) {
+    const sidekick = sprites.sidekick;
+    blocks.push(`
+.sidekick{
+  ${sheetBackground(sidekick)}
+  ${sheetAnimation("sidekick-sheet", sidekick, "drift-b 2.9s ease-in-out infinite alternate")}
+}
+${sheetKeyframes("sidekick-sheet", sidekick)}`);
+  }
+
+  if (sprites.mascot || sprites.sidekick) {
+    // Les deux dérives vont en sens inverse sur des durées premières entre
+    // elles: l'écart entre les personnages ne se répète jamais à l'identique,
+    // ce qui donne cette impression d'avancer à vitesse inégale.
+    blocks.push(`
+@keyframes drift-a{from{transform:translateX(7px)}to{transform:translateX(-13px)}}
+@keyframes drift-b{from{transform:translateX(-11px)}to{transform:translateX(15px)}}`);
   }
 
   if (blocks.length === 0) return "";
   return `<style>
 /* Sprites fournis par l'opérateur */
-.ring,.mascot,.ground .checks::before{image-rendering:pixelated}
+.ring,.mascot,.sidekick,.ground .checks::before{image-rendering:pixelated}
 ${blocks.join("\n")}
 @media (prefers-reduced-motion: reduce){
   .ground .checks::before{animation:none}
@@ -338,9 +363,12 @@ footer{
    il passe à gauche, où il ne gêne pas le badge d'identité, et le sol descend
    pour lui ouvrir la hauteur de ciel qu'il occupe. */
 .mascot{position:absolute;right:16px;bottom:22px;z-index:3;pointer-events:none}
+/* Le comparse vole, donc un peu plus haut, et se tient à côté du personnage */
+.sidekick{position:absolute;right:104px;bottom:44px;z-index:3;pointer-events:none}
 @media (max-width:520px){
   .mascot{left:12px;right:auto}
-  .ground{margin-top:76px}
+  .sidekick{left:96px;right:auto}
+  .ground{margin-top:96px}
 }
 
 /* Le mouvement à neutraliser est celui qui balaie de grandes surfaces: les
@@ -361,6 +389,7 @@ ${spriteStyles(props.sprites ?? {})}
     <div class="who" id="who"></div>
   </div>
   <div class="mascot" aria-hidden="true"${props.sprites?.mascot ? "" : " hidden"}></div>
+  <div class="sidekick" aria-hidden="true"${props.sprites?.sidekick ? "" : " hidden"}></div>
   <div class="ground" aria-hidden="true">
     <div class="grass"></div>
     <div class="checks"></div>

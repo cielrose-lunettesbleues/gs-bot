@@ -14,5 +14,14 @@
     "height": 43,
     "displayWidth": 70,
     "displayHeight": 86
+  },
+  "sidekick": {
+    "file": "sidekick.png",
+    "frames": 4,
+    "fps": 14,
+    "width": 43,
+    "height": 48,
+    "displayWidth": 86,
+    "displayHeight": 96
   }
 }

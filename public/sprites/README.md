@@ -12,6 +12,7 @@ modification de code n'est nécessaire.
 | Clé | Rôle sur la page |
 |-----|------------------|
 | `mascot` | Personnage affiché dans l'en-tête, à droite du titre |
+| `sidekick` | Second personnage, qui vole à côté du premier et dérive à son propre rythme |
 | `ring` | Remplace l'anneau doré dessiné en CSS (titres, favoris, indicateur de chargement) |
 | `ground` | Texture du sol défilant sous l'en-tête (se répète horizontalement) |
 

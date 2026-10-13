@@ -148,6 +148,22 @@ describe("getSubmitHtml", () => {
     expect(reduced).not.toContain(".ring,");
   });
 
+  it("drifts the two characters apart on periods that never line up", () => {
+    const html = getSubmitHtml(props({
+      sprites: {
+        mascot: { file: "mascot.png", frames: 4, fps: 16, width: 35, height: 43 },
+        sidekick: { file: "sidekick.png", frames: 4, fps: 14, width: 43, height: 48 }
+      }
+    }));
+
+    // Sheet and drift ride together because they drive different properties
+    expect(html).toContain("animation:mascot-sheet 0.25s steps(4) infinite,drift-a 3.7s ease-in-out infinite alternate");
+    expect(html).toContain("animation:sidekick-sheet 0.29s steps(4) infinite,drift-b 2.9s ease-in-out infinite alternate");
+    // Opposite directions, so the gap between them opens and closes
+    expect(html).toContain("@keyframes drift-a{from{transform:translateX(7px)}to{transform:translateX(-13px)}}");
+    expect(html).toContain("@keyframes drift-b{from{transform:translateX(-11px)}to{transform:translateX(15px)}}");
+  });
+
   it("leaves a still sprite unanimated", () => {
     const html = getSubmitHtml(props({
       sprites: { ground: { file: "ground.png", frames: 1, fps: 12, width: 32, height: 22 } }
