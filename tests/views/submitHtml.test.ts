@@ -127,6 +127,27 @@ describe("getSubmitHtml", () => {
     expect(html).not.toContain("560px");
   });
 
+  it("restates the ring size on the small variant, which the base rule out-specifies", () => {
+    const html = getSubmitHtml(props({
+      sprites: { ring: { file: "ring.png", frames: 4, fps: 12, width: 20, height: 16 } }
+    }));
+
+    // Without this, .ring.sm{width:12px} from the base sheet wins on specificity
+    // and crops the frame, since every ring on the page carries .sm
+    expect(html).toContain(".ring.sm{border:none;transform:none;width:20px;height:16px}");
+  });
+
+  it("keeps the small sprite motion under reduced motion, stopping only the sweeping kind", () => {
+    const html = getSubmitHtml(props({
+      sprites: { ring: { file: "ring.png", frames: 4, fps: 12, width: 20, height: 16 } }
+    }));
+    const reduced = html.slice(html.lastIndexOf("@media (prefers-reduced-motion"));
+
+    // The loading indicator is a ring: freezing it would freeze the feedback
+    expect(reduced).toContain(".ground .checks::before{animation:none}");
+    expect(reduced).not.toContain(".ring,");
+  });
+
   it("leaves a still sprite unanimated", () => {
     const html = getSubmitHtml(props({
       sprites: { ground: { file: "ground.png", frames: 1, fps: 12, width: 32, height: 22 } }

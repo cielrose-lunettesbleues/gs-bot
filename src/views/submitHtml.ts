@@ -51,14 +51,18 @@ function spriteStyles(sprites: SpriteSet): string {
 
   if (sprites.ring) {
     const ring = sprites.ring;
+    const size = displaySize(ring);
     blocks.push(`
 .ring{
   border:none;box-shadow:none;border-radius:0;
   ${sheetBackground(ring)}
   ${sheetAnimation("ring-sheet", ring)}
 }
-/* Pas de mise à l'échelle fractionnaire: elle brouillerait du pixel art */
-.ring.sm{border:none;transform:none}
+/* La taille est redonnée ici: .ring.sm de la feuille de base est plus
+   spécifique que .ring, donc elle gagnerait malgré l'ordre des règles et
+   rognerait l'image. Pas de mise à l'échelle non plus, elle brouille le
+   pixel art. */
+.ring.sm{border:none;transform:none;width:${size.w}px;height:${size.h}px}
 ${sheetKeyframes("ring-sheet", ring)}`);
   }
 
@@ -94,7 +98,7 @@ ${sheetKeyframes("mascot-sheet", mascot)}`);
 .ring,.mascot,.ground .checks::before{image-rendering:pixelated}
 ${blocks.join("\n")}
 @media (prefers-reduced-motion: reduce){
-  .ring,.mascot,.ground .checks::before{animation:none}
+  .ground .checks::before{animation:none}
 }
 </style>`;
 }
@@ -330,13 +334,20 @@ footer{
   text-transform:uppercase;letter-spacing:.08em;
 }
 
-/* Emplacement du personnage: debout sur le sol, à droite de l'en-tête.
-   Masqué sur écran étroit, où il chevaucherait le badge d'identité. */
+/* Le personnage se tient debout sur le sol, à droite de l'en-tête. En portrait
+   il passe à gauche, où il ne gêne pas le badge d'identité, et le sol descend
+   pour lui ouvrir la hauteur de ciel qu'il occupe. */
 .mascot{position:absolute;right:16px;bottom:22px;z-index:3;pointer-events:none}
-@media (max-width:520px){.mascot{display:none}}
+@media (max-width:520px){
+  .mascot{left:12px;right:auto}
+  .ground{margin-top:76px}
+}
 
+/* Le mouvement à neutraliser est celui qui balaie de grandes surfaces: les
+   lignes de vitesse et le sol. Un anneau de 20px qui tourne sur lui-même n'est
+   pas en cause, et c'est lui qui porte l'indicateur de chargement. */
 @media (prefers-reduced-motion: reduce){
-  .ground .checks::before,.ring,.speed i{animation:none}
+  .ground .checks::before,.speed i{animation:none}
   .speed{display:none}
 }
 </style>
