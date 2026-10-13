@@ -42,6 +42,22 @@ describe("TenantManager", () => {
     expect(manager.get(USER_ID)).toBeUndefined();
   });
 
+  it("keeps a tenant alive while an overlay is attached", async () => {
+    const tenant = manager.getOrCreate(USER_ID);
+    const remove = tenant.overlayBroadcaster.addClient(async () => undefined);
+
+    await manager.reconcileTenant(USER_ID);
+
+    // Not live, no dashboard, nothing playing: only the overlay holds it
+    expect(manager.get(USER_ID)).toBe(tenant);
+    expect(manager.getRuntimeState(USER_ID).activeReasons).toContain("overlay");
+
+    remove();
+    await manager.reconcileTenant(USER_ID);
+
+    expect(manager.get(USER_ID)).toBeUndefined();
+  });
+
   it("gives a restarted tenant a fresh broadcaster", async () => {
     const first = manager.getOrCreate(USER_ID).overlayBroadcaster;
     await manager.stop(USER_ID);

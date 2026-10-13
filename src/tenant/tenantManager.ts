@@ -37,7 +37,7 @@ export interface TenantRuntimeState {
   queueBusy: boolean;
   overlayClients: number;
   twitchConnected: boolean;
-  activeReasons: Array<"dashboard" | "live" | "queue_busy">;
+  activeReasons: Array<"dashboard" | "live" | "queue_busy" | "overlay">;
 }
 
 interface TenantActivity {
@@ -152,6 +152,10 @@ export class TenantManager {
     const activity = this.activity.get(userId) ?? { dashboardLastSeenAt: 0, isLive: false };
     if (activity.isLive || this.isDashboardActive(userId)) return;
     if (tenant.queue.getState().busy) return;
+    // An attached overlay keeps the tenant alive. Without this, a submission
+    // arriving off-stream broadcasts into a freshly created tenant whose OBS
+    // client has not reconnected yet, and the video is never shown.
+    if (tenant.overlayBroadcaster.clientCount() > 0) return;
 
     await this.stop(userId);
   }
@@ -161,10 +165,12 @@ export class TenantManager {
     const tenant = this.tenants.get(userId);
     const dashboardActive = this.isDashboardActive(userId);
     const queueBusy = tenant?.queue.getState().busy ?? false;
-    const activeReasons: Array<"dashboard" | "live" | "queue_busy"> = [];
+    const overlayClients = tenant?.overlayBroadcaster.clientCount() ?? 0;
+    const activeReasons: Array<"dashboard" | "live" | "queue_busy" | "overlay"> = [];
     if (dashboardActive) activeReasons.push("dashboard");
     if (activity.isLive) activeReasons.push("live");
     if (queueBusy) activeReasons.push("queue_busy");
+    if (overlayClients > 0) activeReasons.push("overlay");
     const dashboardExpiresAt = activity.dashboardLastSeenAt > 0
       ? activity.dashboardLastSeenAt + DASHBOARD_ACTIVE_TTL_MS
       : 0;
@@ -176,7 +182,7 @@ export class TenantManager {
       dashboardExpiresAt: toIsoOrNull(dashboardExpiresAt),
       live: activity.isLive,
       queueBusy,
-      overlayClients: tenant?.overlayBroadcaster.clientCount() ?? 0,
+      overlayClients,
       twitchConnected: tenant?.twitchBotManager.status().connected ?? false,
       activeReasons
     };

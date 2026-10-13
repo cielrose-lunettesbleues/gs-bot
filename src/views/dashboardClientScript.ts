@@ -176,6 +176,7 @@ export function getDashboardClientScript(overlayPath: string): string {
       if(reason === 'dashboard') return 'Dashboard';
       if(reason === 'live') return 'Live Twitch';
       if(reason === 'queue_busy') return 'Lecture en cours';
+      if(reason === 'overlay') return 'Overlay connecté';
       return reason;
     }).join(' · ');
   }

@@ -186,18 +186,27 @@ describe("publicRoutes", () => {
     expect(response.status).toBe(403);
   });
 
-  it("returns inactive overlay SSE when tenant runtime is missing", async () => {
+  it("brings the tenant up when an overlay connects", async () => {
     const { app, tenantManager } = createApp();
-    (tenantManager.get as unknown as { mockImplementation: (fn: () => undefined) => void }).mockImplementation(() => undefined);
+    const broadcaster = new OverlayBroadcaster();
+    (tenantManager.getOrCreate as unknown as { mockImplementation: (fn: () => unknown) => void }).mockImplementation(() => ({
+      overlayBroadcaster: broadcaster
+    }));
+
     const response = await app.request("http://example.com/overlay/streamer/events?token=overlay-token");
-    expect(response.status).toBe(404);
-    expect(await response.text()).toContain("Overlay inactif");
+
+    expect(response.status).toBe(200);
+    // An overlay attaching off-stream must create the tenant, otherwise a
+    // later submission would play into nothing
+    expect(tenantManager.getOrCreate).toHaveBeenCalledWith(42);
+    broadcaster.close();
+    await response.text();
   });
 
   it("ends the overlay SSE stream when the tenant stops", async () => {
     const { app, tenantManager } = createApp();
     const broadcaster = new OverlayBroadcaster();
-    (tenantManager.get as unknown as { mockImplementation: (fn: () => unknown) => void }).mockImplementation(() => ({
+    (tenantManager.getOrCreate as unknown as { mockImplementation: (fn: () => unknown) => void }).mockImplementation(() => ({
       overlayBroadcaster: broadcaster
     }));
     const response = await app.request("http://example.com/overlay/streamer/events?token=overlay-token");

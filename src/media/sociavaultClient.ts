@@ -42,6 +42,26 @@ function embedUrl(awemeId: string): string {
   return `https://www.tiktok.com/embed/v2/${awemeId}?autoplay=1`;
 }
 
+const BROWSER_UA =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+
+// The Share button in the mobile apps hands out short links that carry no id.
+// Following the redirect reveals the canonical URL and costs no API credit.
+export async function expandShortLink(url: string, log?: SimpleLogger): Promise<string> {
+  try {
+    const res = await fetch(url, {
+      method: "GET",
+      redirect: "follow",
+      headers: { "User-Agent": BROWSER_UA },
+      signal: AbortSignal.timeout(8000)
+    });
+    return res.url || url;
+  } catch (err) {
+    log?.warn({ url, err: String(err) }, "Short link expansion failed");
+    return url;
+  }
+}
+
 function videoDuration(v: AwemeInfo): number {
   const d = v.video?.duration ?? v.music?.video_duration ?? v.music?.duration ?? 0;
   return normalizeDuration(d);
@@ -104,18 +124,36 @@ export async function sociavaultSearch(
   };
 }
 
+// Covers photo posts too: they carry an id of the same shape and TikTok embeds
+// them through the same player.
+const TIKTOK_ID_RE = /\/(?:video|photo)\/(\d+)/;
+const TIKTOK_SHORT_RE = /^https:\/\/(?:vm|vt|m)\.tiktok\.com\/|^https:\/\/(?:www\.)?tiktok\.com\/t\//i;
+
+export function isTiktokShortLink(url: string): boolean {
+  return TIKTOK_SHORT_RE.test(url);
+}
+
 export async function sociavaultResolve(
   tiktokUrl: string,
   apiKey: string,
   log?: SimpleLogger
 ): Promise<TiktokResolved | null> {
-  const m = tiktokUrl.match(/\/video\/(\d+)/);
-  if (!m) {
-    log?.warn({ tiktokUrl }, "SociaVault: cannot extract aweme_id from URL");
+  let target = tiktokUrl;
+  let match = TIKTOK_ID_RE.exec(target);
+
+  // A phone share link (vm./vt./m. or /t/) has to be expanded first
+  if (!match && isTiktokShortLink(target)) {
+    target = await expandShortLink(target, log);
+    match = TIKTOK_ID_RE.exec(target);
+  }
+
+  if (!match) {
+    log?.warn({ tiktokUrl, expanded: target }, "SociaVault: cannot extract aweme_id from URL");
     return null;
   }
+
   // Embed URL bypasses the H.265 codec issue — TikTok's own player handles it
-  return { url: embedUrl(m[1]), durationSeconds: 0, portrait: true };
+  return { url: embedUrl(match[1]), durationSeconds: 0, portrait: true };
 }
 
 // ─── Instagram ────────────────────────────────────────────────────────────────
@@ -132,6 +170,14 @@ const INSTAGRAM_POST_RE =
 
 export function isInstagramPostUrl(url: string): boolean {
   return INSTAGRAM_POST_RE.test(url);
+}
+
+// The app also produces /share/<id> links, which only reveal the post after a
+// redirect.
+const INSTAGRAM_SHARE_RE = /^https:\/\/(?:www\.)?instagram\.com\/share\//i;
+
+export function isInstagramShareUrl(url: string): boolean {
+  return INSTAGRAM_SHARE_RE.test(url);
 }
 
 // Successful resolutions are memoised briefly so a submit-page preview and the
@@ -171,18 +217,26 @@ export async function sociavaultResolveInstagram(
   apiKey: string,
   log?: SimpleLogger
 ): Promise<InstagramResolved | null> {
-  if (!isInstagramPostUrl(instagramUrl)) {
-    log?.warn({ instagramUrl }, "SociaVault: not an Instagram post or reel URL");
-    return null;
-  }
-
   const cached = instagramCache.get(instagramUrl);
   if (cached && Date.now() - cached.at < INSTAGRAM_CACHE_TTL_MS) return cached.value;
+
+  let target = instagramUrl;
+  if (!isInstagramPostUrl(target)) {
+    if (!isInstagramShareUrl(target)) {
+      log?.warn({ instagramUrl }, "SociaVault: not an Instagram post or reel URL");
+      return null;
+    }
+    target = await expandShortLink(target, log);
+    if (!isInstagramPostUrl(target)) {
+      log?.warn({ instagramUrl, expanded: target }, "SociaVault: share link did not lead to a post");
+      return null;
+    }
+  }
 
   let res: Response;
   try {
     res = await fetch(
-      `${INSTAGRAM_BASE}/post-info?url=${encodeURIComponent(instagramUrl)}`,
+      `${INSTAGRAM_BASE}/post-info?url=${encodeURIComponent(target)}`,
       { headers: { "X-API-Key": apiKey }, signal: AbortSignal.timeout(10000) }
     );
   } catch (err) {

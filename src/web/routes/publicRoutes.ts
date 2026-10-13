@@ -188,8 +188,9 @@ export function registerPublicRoutes({ app, db, oauthConfig, config, logger, ten
     if (!token || token !== tenantConfig.overlay_token) {
       return c.text("Overlay token invalide", 403);
     }
-    const tenant = tenantManager.get(dbUser.id);
-    if (!tenant) return c.text("Overlay inactif", 404);
+    // Created on connect, not merely fetched: an overlay attaching off-stream
+    // must bring the tenant up, so a later submission has somewhere to play.
+    const tenant = tenantManager.getOrCreate(dbUser.id);
     if (tenant.overlayBroadcaster.clientCount() >= MAX_OVERLAY_CLIENTS_PER_TENANT) {
       return c.text("Trop de clients overlay", 429);
     }

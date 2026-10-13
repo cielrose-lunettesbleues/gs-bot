@@ -1,5 +1,5 @@
 import { isPageUrl, resolveMediaUrl } from "./urlResolver";
-import { isInstagramPostUrl } from "./sociavaultClient";
+import { isInstagramPostUrl, isInstagramShareUrl } from "./sociavaultClient";
 
 // What the submit page needs in order to show the viewer what they are about
 // to send, without reimplementing the overlay player.
@@ -44,7 +44,7 @@ export async function buildMediaPreview(url: string, deps: PreviewDeps = {}): Pr
     return { kind: "iframe", url: resolved.url, portrait: true };
   }
 
-  if (isInstagramPostUrl(url)) {
+  if (isInstagramPostUrl(url) || isInstagramShareUrl(url)) {
     if (!deps.instagramResolve) return { kind: "unsupported", reason: "instagram_not_configured" };
     const resolved = await deps.instagramResolve(url);
     if (!resolved) return { kind: "unsupported", reason: "instagram_unresolved" };
