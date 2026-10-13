@@ -168,7 +168,8 @@ body{
   font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
   line-height:1.5;
   -webkit-text-size-adjust:100%;
-  padding:0 0 28px;
+  /* Aucune marge en bas: le sol est le dernier élément et touche le bord */
+  padding:0;
   background:var(--sky-mid);
 }
 /* Couche de ciel séparée et réellement fixe: background-attachment:fixed est
@@ -184,7 +185,7 @@ body::before{
 .wrap{max-width:720px;margin:0 auto;padding:0 16px}
 
 /* ── Bandeau titre ──────────────────────────────────────────────────────── */
-header{position:relative;padding:22px 0 0;margin-bottom:18px;overflow:hidden}
+header{position:relative;padding:22px 0 16px;margin-bottom:18px;overflow:hidden}
 .title-row{
   display:flex;align-items:center;justify-content:space-between;
   gap:12px;flex-wrap:wrap;position:relative;z-index:2;
@@ -215,8 +216,11 @@ h1 .chan{color:var(--gold)}
   15%{opacity:.9}
   100%{transform:translateX(115vw);opacity:0}
 }
+/* Scène de fin de page: le sol court sur toute la largeur, les personnages s'y
+   tiennent, et le ciel au-dessus est à eux. */
+.scene{position:relative;height:180px;margin-top:24px}
 /* Sol: bande d'herbe + damier défilant */
-.ground{position:relative;margin-top:16px;height:34px}
+.ground{position:absolute;left:0;right:0;bottom:0;height:34px}
 .ground .grass{
   height:12px;
   background:linear-gradient(180deg,var(--grass),var(--grass-dark));
@@ -387,12 +391,11 @@ footer{
    il passe à gauche, où il ne gêne pas le badge d'identité, et le sol descend
    pour lui ouvrir la hauteur de ciel qu'il occupe. */
 .mascot{position:absolute;right:16px;bottom:22px;z-index:3;pointer-events:none}
-/* Le comparse vole, donc un peu plus haut, et se tient à côté du personnage */
-.sidekick{position:absolute;right:104px;bottom:44px;z-index:3;pointer-events:none}
+/* Le comparse vole: il tient le haut de la scène, bien au-dessus du sol */
+.sidekick{position:absolute;right:104px;bottom:82px;z-index:3;pointer-events:none}
 @media (max-width:520px){
   .mascot{left:12px;right:auto}
-  .sidekick{left:96px;right:auto}
-  .ground{margin-top:96px}
+  .sidekick{left:92px;right:auto}
 }
 
 /* Le mouvement à neutraliser est celui qui balaie de grandes surfaces: les
@@ -411,12 +414,6 @@ ${spriteStyles(props.sprites ?? {})}
   <div class="wrap title-row">
     <h1>Envoyer une vidéo<br><span class="chan">${props.channel}</span></h1>
     <div class="who" id="who"></div>
-  </div>
-  <div class="mascot" aria-hidden="true"${props.sprites?.mascot ? "" : " hidden"}></div>
-  <div class="sidekick" aria-hidden="true"${props.sprites?.sidekick ? "" : " hidden"}></div>
-  <div class="ground" aria-hidden="true">
-    <div class="grass"></div>
-    <div class="checks"></div>
   </div>
 </header>
 
@@ -475,6 +472,15 @@ ${spriteStyles(props.sprites ?? {})}
   </div>
 
   <footer>Mêmes règles que le chat</footer>
+</div>
+
+<div class="scene">
+  <div class="mascot" aria-hidden="true"${props.sprites?.mascot ? "" : " hidden"}></div>
+  <div class="sidekick" aria-hidden="true"${props.sprites?.sidekick ? "" : " hidden"}></div>
+  <div class="ground" aria-hidden="true">
+    <div class="grass"></div>
+    <div class="checks"></div>
+  </div>
 </div>
 
 <script>

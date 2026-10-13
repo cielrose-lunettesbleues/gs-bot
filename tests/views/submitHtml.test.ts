@@ -80,6 +80,20 @@ describe("getSubmitHtml", () => {
     expect(html).not.toContain("to{background-position:22px 0");
   });
 
+  it("puts the ground at the foot of the page, with the characters standing on it", () => {
+    const html = getSubmitHtml(props());
+    const headerEnd = html.indexOf("</header>");
+    const footer = html.indexOf("<footer>");
+    const ground = html.indexOf('class="ground"');
+    const mascot = html.indexOf('class="mascot"');
+
+    expect(html).toContain('<div class="scene">');
+    // The ground used to sit under the title; it now closes the page
+    expect(ground).toBeGreaterThan(headerEnd);
+    expect(ground).toBeGreaterThan(footer);
+    expect(mascot).toBeGreaterThan(headerEnd);
+  });
+
   it("keeps the decoration out of the way of screen readers and motion settings", () => {
     const html = getSubmitHtml(props());
 
