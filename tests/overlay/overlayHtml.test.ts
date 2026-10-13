@@ -28,6 +28,25 @@ describe("getOverlayHtml", () => {
     expect(html).toContain("hqdefault.jpg)");
   });
 
+  it("never leaves the YouTube player paused, where it shows its own button", () => {
+    const html = getOverlayHtml();
+
+    // The button lives inside the iframe: it cannot be styled or cropped away
+    expect(html).toContain("func:'playVideo'");
+    expect(html).toContain("d.info === 2");
+    // The player only reports to a parent that announced itself
+    expect(html).toContain("event:'listening'");
+  });
+
+  it("waits for YouTube to report playing before revealing anything", () => {
+    const html = getOverlayHtml();
+
+    expect(html).toContain("d.info === 1");
+    expect(html).toContain("revealTimer = setTimeout(reveal, 1500)");
+    // Other media have nothing to hide and appear at once
+    expect(html).toContain("requestAnimationFrame(reveal)");
+  });
+
   it("still ends playback on the native video ended event", () => {
     expect(getOverlayHtml()).toContain("addEventListener('ended', hide)");
   });

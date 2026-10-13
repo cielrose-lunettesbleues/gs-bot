@@ -146,13 +146,34 @@ iframe{
     return m ? m[1] : null;
   }
 
+  // Le lecteur YouTube affiche son bouton au centre dès qu'il quitte la lecture.
+  // Il est dans l'iframe, donc ni masquable au CSS ni rognable comme la barre de
+  // titre: la seule issue est de ne jamais le laisser en pause.
+  var ytFrame = null;
+
+  function ytSend(message){
+    if(!ytFrame || !ytFrame.contentWindow) return;
+    try {
+      ytFrame.contentWindow.postMessage(JSON.stringify(message), 'https://www.youtube.com');
+    } catch(e){}
+  }
+
+  function ytPlay(){
+    ytSend({ event:'command', func:'playVideo', args:[] });
+  }
+
   // Listen for YouTube state changes (enablejsapi=1 sends postMessage to parent)
-  // info === 0 means ended
+  // info === 0 means ended, 2 means paused
   window.addEventListener('message', function(ev){
     if(ev.origin !== 'https://www.youtube.com') return;
     try {
       var d = JSON.parse(ev.data);
-      if(d.event === 'onStateChange' && d.info === 0) hide();
+      if(d.event === 'onReady') ytPlay();
+      if(d.event === 'onStateChange'){
+        if(d.info === 0) hide();
+        else if(d.info === 1) reveal();
+        else if(d.info === 2) ytPlay();
+      }
     } catch(e){}
   });
 
@@ -164,10 +185,17 @@ iframe{
       var isShort = /youtube\\.com\\/shorts\\//.test(url) || portrait === true;
       var f=document.createElement('iframe');
       f.src='https://www.youtube.com/embed/'+id
-        +'?autoplay=1&controls=0&modestbranding=1&rel=0'
+        +'?autoplay=1&controls=0&modestbranding=1&rel=0&fs=0'
         +'&enablejsapi=1&origin='+encodeURIComponent(location.origin)
         +'&iv_load_policy=3&disablekb=1&loop=1&playlist='+id;
       f.allow='autoplay; fullscreen';
+      ytFrame = f;
+      // Le lecteur n'envoie ses évènements qu'à qui s'annonce, et on relance la
+      // lecture au cas où le navigateur aurait retenu le démarrage automatique.
+      f.addEventListener('load', function(){
+        ytSend({ event:'listening', id:1, channel:'widget' });
+        ytPlay();
+      });
       var w=document.createElement('div');
       w.className='yt-wrap';
       if(isShort){
@@ -222,12 +250,28 @@ iframe{
   }
 
   var hideTimer = null;
+  var revealTimer = null;
+
+  function reveal(){
+    if(revealTimer){ clearTimeout(revealTimer); revealTimer=null; }
+    wrap.classList.add('visible');
+  }
 
   function show(data){
     if(hideTimer){ clearTimeout(hideTimer); hideTimer=null; }
+    if(revealTimer){ clearTimeout(revealTimer); revealTimer=null; }
     mediaEl.innerHTML='';
+    ytFrame = null;
     mediaEl.appendChild(buildMedia(data.url, data.portrait));
-    requestAnimationFrame(function(){wrap.classList.add('visible');});
+
+    if(ytFrame){
+      // Rien ne s'affiche tant que le lecteur n'a pas confirmé qu'il joue:
+      // révéler plus tôt, c'est montrer son bouton pendant le démarrage. Le
+      // repli couvre le cas où l'évènement n'arrive jamais.
+      revealTimer = setTimeout(reveal, 1500);
+    } else {
+      requestAnimationFrame(reveal);
+    }
     if(showInfo){
       infoUser.textContent='@'+data.username;
       info.classList.add('visible');
@@ -249,10 +293,16 @@ iframe{
 
   function hide(){
     if(hideTimer){ clearTimeout(hideTimer); hideTimer=null; }
+    if(revealTimer){ clearTimeout(revealTimer); revealTimer=null; }
     wrap.classList.remove('visible');
     info.classList.remove('visible');
     captionEl.classList.remove('visible');
-    setTimeout(function(){mediaEl.innerHTML='';captionEl.textContent='';},500);
+    setTimeout(function(){
+      mediaEl.innerHTML='';
+      captionEl.textContent='';
+      // Plus d'iframe: inutile de continuer à lui parler
+      ytFrame = null;
+    },500);
   }
 
   var ttsHideTimer = null;
