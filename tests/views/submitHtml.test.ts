@@ -98,11 +98,20 @@ describe("getSubmitHtml", () => {
     const ground = html.indexOf('class="ground"');
 
     // Fixed to the window, it slid away from the ground as the page scrolled
-    expect(html).toContain("position:absolute;left:0;right:0;bottom:22px;z-index:-1");
-    expect(html).not.toContain("position:fixed;left:0;right:0;bottom:22px");
+    expect(html).toContain("position:absolute;left:0;right:0;bottom:48px;z-index:-1");
+    expect(html).not.toContain("position:fixed;left:0;right:0;bottom:48px");
     // It belongs to the scene, between its edges, behind the characters
     expect(backdrop).toBeGreaterThan(scene);
     expect(backdrop).toBeLessThan(ground);
+  });
+
+  it("keeps the ground at the bottom even when the content is short", () => {
+    const html = getSubmitHtml(props());
+
+    // Without this the page ends above the fold and the ground floats mid-screen
+    expect(html).toContain("min-height:100vh");
+    expect(html).toContain("flex-direction:column");
+    expect(html).toContain("margin-top:auto");
   });
 
   it("puts the ground at the foot of the page, with the characters standing on it", () => {
@@ -224,7 +233,7 @@ describe("getSubmitHtml", () => {
     expect(reduced).not.toContain(".mascot");
   });
 
-  it("drifts the two characters apart on periods that never line up", () => {
+  it("walks the two characters across the screen at an uneven pace", () => {
     const html = getSubmitHtml(props({
       sprites: {
         mascot: { file: "mascot.png", frames: 4, fps: 16, width: 35, height: 43 },
@@ -232,12 +241,20 @@ describe("getSubmitHtml", () => {
       }
     }));
 
-    // Sheet and drift ride together because they drive different properties
-    expect(html).toContain("animation:mascot-sheet 0.25s steps(4) infinite,drift-a 3.7s ease-in-out infinite alternate");
-    expect(html).toContain("animation:sidekick-sheet 0.29s steps(4) infinite,drift-b 2.9s ease-in-out infinite alternate");
-    // Opposite directions, so the gap between them opens and closes
-    expect(html).toContain("@keyframes drift-a{from{transform:translateX(7px)}to{transform:translateX(-13px)}}");
-    expect(html).toContain("@keyframes drift-b{from{transform:translateX(-11px)}to{transform:translateX(15px)}}");
+    // Sheet and travel ride together because they drive different properties
+    expect(html).toContain("animation:mascot-sheet 0.25s steps(4) infinite,travel-a 23s ease-in-out infinite alternate");
+    expect(html).toContain("animation:sidekick-sheet 0.29s steps(4) infinite,travel-b 27s ease-in-out infinite alternate");
+
+    // Far enough to cross, in viewport units so it holds on any width
+    expect(html).toContain("100%{transform:translateX(62vw)}");
+    expect(html).toContain("100%{transform:translateX(55vw)}");
+
+    // Every stride gives a little back before pushing on: that is the unevenness
+    const travelA = html.slice(html.indexOf("@keyframes travel-a"), html.indexOf("@keyframes travel-b"));
+    const stops = [...travelA.matchAll(/translateX\((\d+)vw\)/g)].map((m) => Number(m[1]));
+    expect(stops.some((value, index) => index > 0 && value < stops[index - 1])).toBe(true);
+    // Durations that never line up, so the gap between them keeps changing
+    expect(23 % 27).not.toBe(0);
   });
 
   it("scrolls the distant scenery by exactly one tile, so the loop cannot show", () => {

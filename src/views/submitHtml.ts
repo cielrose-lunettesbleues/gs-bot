@@ -100,7 +100,7 @@ ${sheetKeyframes("ring-sheet", ring)}`);
     blocks.push(`
 .mascot{
   ${sheetBackground(mascot)}
-  ${sheetAnimation("mascot-sheet", mascot, "drift-a 3.7s ease-in-out infinite alternate")}
+  ${sheetAnimation("mascot-sheet", mascot, "travel-a 23s ease-in-out infinite alternate")}
 }
 ${sheetKeyframes("mascot-sheet", mascot)}`);
   }
@@ -110,7 +110,7 @@ ${sheetKeyframes("mascot-sheet", mascot)}`);
     blocks.push(`
 .sidekick{
   ${sheetBackground(sidekick)}
-  ${sheetAnimation("sidekick-sheet", sidekick, "drift-b 2.9s ease-in-out infinite alternate")}
+  ${sheetAnimation("sidekick-sheet", sidekick, "travel-b 27s ease-in-out infinite alternate")}
 }
 ${sheetKeyframes("sidekick-sheet", sidekick)}`);
   }
@@ -133,12 +133,30 @@ ${sheetKeyframes("sidekick-sheet", sidekick)}`);
   }
 
   if (sprites.mascot || sprites.sidekick) {
-    // Les deux dérives vont en sens inverse sur des durées premières entre
-    // elles: l'écart entre les personnages ne se répète jamais à l'identique,
-    // ce qui donne cette impression d'avancer à vitesse inégale.
+    // Une grande traversée qui n'avance pas d'un pas régulier: chaque étape
+    // revient un peu en arrière avant de repartir, ce qui garde l'allure
+    // inégale tout en couvrant l'écran. Les deux durées ne tombent jamais en
+    // phase, donc l'écart entre les personnages ne se répète pas non plus.
     blocks.push(`
-@keyframes drift-a{from{transform:translateX(7px)}to{transform:translateX(-13px)}}
-@keyframes drift-b{from{transform:translateX(-11px)}to{transform:translateX(15px)}}`);
+@keyframes travel-a{
+  0%{transform:translateX(0)}
+  14%{transform:translateX(11vw)}
+  26%{transform:translateX(8vw)}
+  44%{transform:translateX(28vw)}
+  58%{transform:translateX(24vw)}
+  76%{transform:translateX(48vw)}
+  88%{transform:translateX(44vw)}
+  100%{transform:translateX(62vw)}
+}
+@keyframes travel-b{
+  0%{transform:translateX(4vw)}
+  18%{transform:translateX(0)}
+  32%{transform:translateX(16vw)}
+  47%{transform:translateX(13vw)}
+  64%{transform:translateX(34vw)}
+  80%{transform:translateX(30vw)}
+  100%{transform:translateX(55vw)}
+}`);
   }
 
   if (blocks.length === 0) return "";
@@ -194,8 +212,13 @@ body{
   font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
   line-height:1.5;
   -webkit-text-size-adjust:100%;
-  /* Aucune marge en bas: le sol est le dernier élément et touche le bord */
+  /* Aucune marge en bas: le sol est le dernier élément et touche le bord. La
+     page occupe au moins l'écran entier et la scène est poussée tout en bas,
+     sinon le sol flotte au milieu quand le contenu est court. */
   padding:0;
+  min-height:100vh;
+  display:flex;
+  flex-direction:column;
   background:var(--sky-mid);
 }
 /* Couche de ciel séparée et réellement fixe: background-attachment:fixed est
@@ -253,15 +276,15 @@ h1 .chan{color:var(--gold)}
    est à la hauteur des pieds du personnage, et il déborde vers le haut derrière
    le contenu, que l'opacité et le z-index laissent au premier plan. */
 .backdrop{
-  position:absolute;left:0;right:0;bottom:22px;z-index:-1;
+  position:absolute;left:0;right:0;bottom:48px;z-index:-1;
   overflow:hidden;pointer-events:none;opacity:.3;
 }
 
 /* Scène de fin de page: le sol court sur toute la largeur, les personnages s'y
    tiennent, et le ciel au-dessus est à eux. */
-.scene{position:relative;height:180px;margin-top:24px}
-/* Sol: bande d'herbe + damier défilant */
-.ground{position:absolute;left:0;right:0;bottom:0;height:34px}
+.scene{position:relative;height:220px;margin-top:auto}
+/* Sol: bande d'herbe + damier défilant, épais pour tenir le bas de la page */
+.ground{position:absolute;left:0;right:0;bottom:0;height:60px}
 .ground .grass{
   height:12px;
   background:linear-gradient(180deg,var(--grass),var(--grass-dark));
@@ -269,7 +292,7 @@ h1 .chan{color:var(--gold)}
 }
 /* Le motif vit dans une couche plus large que son cadre, déplacée en transform.
    Animer background-position repeindrait la bande à chaque image. */
-.ground .checks{height:22px;position:relative;overflow:hidden;background-color:var(--dirt)}
+.ground .checks{height:48px;position:relative;overflow:hidden;background-color:var(--dirt)}
 .ground .checks::before{
   content:"";position:absolute;top:0;left:0;height:100%;width:calc(100% + 22px);
   background-image:
@@ -457,13 +480,11 @@ footer{
 /* Le personnage se tient debout sur le sol, à droite de l'en-tête. En portrait
    il passe à gauche, où il ne gêne pas le badge d'identité, et le sol descend
    pour lui ouvrir la hauteur de ciel qu'il occupe. */
-.mascot{position:absolute;right:16px;bottom:22px;z-index:3;pointer-events:none}
-/* Le comparse vole: il tient le haut de la scène, bien au-dessus du sol */
-.sidekick{position:absolute;right:104px;bottom:82px;z-index:3;pointer-events:none}
-@media (max-width:520px){
-  .mascot{left:12px;right:auto}
-  .sidekick{left:92px;right:auto}
-}
+/* Les deux partent de la gauche et traversent: la course est portée par
+   l'animation, pas par une position figée. */
+.mascot{position:absolute;left:12px;bottom:48px;z-index:3;pointer-events:none}
+/* Le comparse vole, donc plus haut, et légèrement en retrait */
+.sidekick{position:absolute;left:96px;bottom:108px;z-index:3;pointer-events:none}
 
 /* Le mouvement à neutraliser est celui qui balaie de grandes surfaces: les
    lignes de vitesse et le sol. Un anneau de 20px qui tourne sur lui-même n'est
