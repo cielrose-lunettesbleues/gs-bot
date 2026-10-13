@@ -94,6 +94,30 @@ describe("getSubmitHtml", () => {
     expect(mascot).toBeGreaterThan(headerEnd);
   });
 
+  it("offers the home screen tip only where it applies, and remembers a dismissal", () => {
+    const html = getSubmitHtml(props());
+
+    // Hidden in the markup: only the script may reveal it
+    expect(html).toContain('id="pin-tip" hidden');
+    expect(html).toContain("Sur l'écran d'accueil");
+    // iPadOS reports itself as a Mac, hence the touch check
+    expect(html).toContain("/iPad|iPhone|iPod/.test(ua)");
+    expect(html).toContain("navigator.maxTouchPoints > 1");
+    // Pointless once pinned, and never shown again once waved away
+    expect(html).toContain("isPinned()");
+    expect(html).toContain("pinDismissed()");
+    // Private browsing throws on storage, which must not break the page
+    expect(html).toContain("try { localStorage.setItem(PIN_KEY");
+  });
+
+  it("does not ask iOS for standalone mode, which would break the Twitch return", () => {
+    const html = getSubmitHtml(props());
+
+    expect(html).toContain('name="apple-mobile-web-app-title"');
+    // The tag itself, not the comment that explains why it is absent
+    expect(html).not.toContain('name="apple-mobile-web-app-capable"');
+  });
+
   it("keeps the decoration out of the way of screen readers and motion settings", () => {
     const html = getSubmitHtml(props());
 

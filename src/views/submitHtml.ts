@@ -148,6 +148,10 @@ export function getSubmitHtml(props: SubmitPageProps): string {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#0b1d6e">
+<!-- Nom proposé lors de l'ajout à l'écran d'accueil. Volontairement sans
+     apple-mobile-web-app-capable: en mode autonome, le retour de la connexion
+     Twitch sort du contexte et la session se perd. -->
+<meta name="apple-mobile-web-app-title" content="GS Bot">
 <title>Envoyer une vidéo — ${props.channel}</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -348,6 +352,23 @@ input:focus{outline:3px solid var(--gold);outline-offset:1px}
 #messages li.ok{border-left-color:var(--ok)}
 #messages li.err{border-left-color:var(--err)}
 
+/* ── Conseil d'épinglage iOS ─────────────────────────────────────────────── */
+.pin-tip{
+  display:flex;align-items:flex-start;gap:10px;
+  background:linear-gradient(180deg,var(--panel-top),var(--panel-low));
+  border:3px solid var(--panel-edge);border-radius:12px;
+  box-shadow:inset 0 0 0 2px rgba(255,255,255,.12), 0 7px 0 rgba(0,0,0,.32);
+  padding:12px 14px;margin-bottom:18px;font-size:14px;
+}
+.pin-tip p{flex:1;margin:0}
+.pin-tip strong{color:var(--gold)}
+.pin-icon{flex:0 0 auto;vertical-align:-4px;margin:0 2px}
+.pin-close{
+  flex:0 0 auto;background:transparent;border:none;color:var(--muted);
+  font-size:20px;line-height:1;cursor:pointer;padding:4px 6px;min-height:36px;
+}
+.pin-close:hover{color:var(--text)}
+
 /* ── Parcours de GIF ─────────────────────────────────────────────────────── */
 .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
 .chip{
@@ -418,6 +439,16 @@ ${spriteStyles(props.sprites ?? {})}
 </header>
 
 <div class="wrap">
+  <div class="pin-tip" id="pin-tip" hidden>
+    <p>Garde ce lien sous la main : appuie sur
+      <svg class="pin-icon" viewBox="0 0 24 24" width="17" height="17" aria-hidden="true">
+        <path d="M12 3l4.2 4.2-1.4 1.4L13 6.8V15h-2V6.8L9.2 8.6 7.8 7.2 12 3z" fill="currentColor"/>
+        <path d="M5 11h3v2H7v6h10v-6h-1v-2h3v10H5V11z" fill="currentColor"/>
+      </svg>
+      <strong>Partager</strong>, puis <strong>Sur l'écran d'accueil</strong>.</p>
+    <button class="pin-close" id="pin-close" type="button" aria-label="Masquer ce conseil">×</button>
+  </div>
+
   <div class="panel">
     <div class="panel-title"><span class="ring sm" aria-hidden="true"></span>La vidéo</div>
     <div class="panel-body">
@@ -727,6 +758,39 @@ ${spriteStyles(props.sprites ?? {})}
       .then(function(){ busy(btn, false); });
   }
 
+  // ── Conseil d'épinglage iOS ───────────────────────────────────────────────
+  var PIN_KEY = "gs-pin-tip-dismissed";
+
+  function isIos(){
+    var ua = navigator.userAgent || "";
+    // iPadOS se présente comme un Mac: le tactile le trahit
+    return /iPad|iPhone|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+  }
+
+  function isPinned(){
+    if(navigator.standalone === true) return true;
+    try { return window.matchMedia("(display-mode: standalone)").matches; }
+    catch(e){ return false; }
+  }
+
+  // Le stockage peut lever en navigation privée: le conseil doit survivre à ça
+  function pinDismissed(){
+    try { return localStorage.getItem(PIN_KEY) === "1"; }
+    catch(e){ return false; }
+  }
+
+  function setupPinTip(){
+    var tip = el("pin-tip");
+    // Inutile ailleurs que sur iOS, et absurde une fois la page déjà épinglée
+    if(!isIos() || isPinned() || pinDismissed()) return;
+
+    tip.hidden = false;
+    el("pin-close").onclick = function(){
+      tip.hidden = true;
+      try { localStorage.setItem(PIN_KEY, "1"); } catch(e){}
+    };
+  }
+
   // ── Parcours de GIF ───────────────────────────────────────────────────────
   var GIF_SUGGESTIONS = ["lol", "danse", "chat", "wow", "fail", "applaudir"];
 
@@ -889,6 +953,7 @@ ${spriteStyles(props.sprites ?? {})}
 
   el("gif-panel").hidden = !BOOT.gifsEnabled;
 
+  setupPinTip();
   renderWho();
   renderRules();
   renderChips();
