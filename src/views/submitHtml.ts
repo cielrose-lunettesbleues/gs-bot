@@ -1,3 +1,5 @@
+import type { SpriteDefinition, SpriteSet } from "./spriteManifest";
+
 export interface SubmitPageProps {
   channel: string;
   token: string;
@@ -10,6 +12,77 @@ export interface SubmitPageProps {
   maxDurationSeconds: number;
   allowedDomains: string[];
   favorites: Array<{ id: number; url: string; label: string }>;
+  /** Optional images that take over from the CSS artwork when present. */
+  sprites?: SpriteSet;
+}
+
+// A sheet animation walks the strip one frame at a time; a single frame is
+// simply left still.
+function sheetAnimation(name: string, sprite: SpriteDefinition): string {
+  if (sprite.frames <= 1) return "";
+  const seconds = (sprite.frames / sprite.fps).toFixed(2);
+  return `animation:${name} ${seconds}s steps(${sprite.frames}) infinite;`;
+}
+
+function sheetKeyframes(name: string, sprite: SpriteDefinition): string {
+  if (sprite.frames <= 1) return "";
+  return `@keyframes ${name}{to{background-position:-${sprite.width * sprite.frames}px 0}}`;
+}
+
+// Emitted after the base stylesheet so these rules win, while every untouched
+// slot keeps its drawn fallback. Deleting a sprite file is therefore enough to
+// restore the original look.
+function spriteStyles(sprites: SpriteSet): string {
+  const blocks: string[] = [];
+
+  if (sprites.ring) {
+    const ring = sprites.ring;
+    blocks.push(`
+.ring{
+  width:${ring.width}px;height:${ring.height}px;
+  border:none;box-shadow:none;border-radius:0;
+  background:url("/sprites/${ring.file}") 0 0/auto 100% no-repeat;
+  ${sheetAnimation("ring-sheet", ring)}
+}
+.ring.sm{width:${ring.width}px;height:${ring.height}px;border:none;transform:scale(.78)}
+${sheetKeyframes("ring-sheet", ring)}`);
+  }
+
+  if (sprites.ground) {
+    const ground = sprites.ground;
+    blocks.push(`
+.ground{height:${12 + ground.height}px}
+.ground .checks{
+  height:${ground.height}px;
+  background-color:transparent;
+  background-image:url("/sprites/${ground.file}");
+  background-size:auto ${ground.height}px;
+  background-position:0 0;
+  animation:ground-sheet 1.4s linear infinite;
+}
+@keyframes ground-sheet{to{background-position:-${ground.width}px 0}}`);
+  }
+
+  if (sprites.mascot) {
+    const mascot = sprites.mascot;
+    blocks.push(`
+.mascot{
+  width:${mascot.width}px;height:${mascot.height}px;
+  background:url("/sprites/${mascot.file}") 0 0/auto 100% no-repeat;
+  ${sheetAnimation("mascot-sheet", mascot)}
+}
+${sheetKeyframes("mascot-sheet", mascot)}`);
+  }
+
+  if (blocks.length === 0) return "";
+  return `<style>
+/* Sprites fournis par l'opérateur */
+.ring,.mascot,.ground .checks{image-rendering:pixelated}
+${blocks.join("\n")}
+@media (prefers-reduced-motion: reduce){
+  .ring,.mascot,.ground .checks{animation:none}
+}
+</style>`;
 }
 
 // Serialised into a <script> tag, so "<" must never survive as itself.
@@ -236,11 +309,15 @@ footer{
   text-transform:uppercase;letter-spacing:.08em;
 }
 
+/* Emplacement du personnage: debout sur le sol, à droite de l'en-tête */
+.mascot{position:absolute;right:16px;bottom:22px;z-index:3;pointer-events:none}
+
 @media (prefers-reduced-motion: reduce){
   .ground .checks,.ring,.speed i{animation:none}
   .speed{display:none}
 }
 </style>
+${spriteStyles(props.sprites ?? {})}
 </head>
 <body>
 <header>
@@ -249,6 +326,7 @@ footer{
     <h1>Envoyer une vidéo<br><span class="chan">${props.channel}</span></h1>
     <div class="who" id="who"></div>
   </div>
+  <div class="mascot" aria-hidden="true"${props.sprites?.mascot ? "" : " hidden"}></div>
   <div class="ground" aria-hidden="true">
     <div class="grass"></div>
     <div class="checks"></div>

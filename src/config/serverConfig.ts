@@ -19,7 +19,8 @@ const schema = z.object({
   GS_KLIPY_API_KEY: z.string().default(""),
   GS_SOCIAVAULT_API_KEY: z.string().default(""),
   GS_SETUP_TOKEN: z.string().default(""),
-  GS_PUBLIC_URL: z.string().default("")
+  GS_PUBLIC_URL: z.string().default(""),
+  GS_SPRITES_DIR: z.string().default("./public/sprites")
 });
 
 export interface ServerConfig {
@@ -28,6 +29,8 @@ export interface ServerConfig {
   dataDir: string;
   /** Absolute base URL used to build links handed to viewers. */
   publicUrl: string;
+  /** Directory holding the optional sprites of the viewer page. */
+  spritesDir: string;
   logLevel: string;
   youtubeApiKey: string;
   klipyApiKey: string;
@@ -86,6 +89,7 @@ export function loadServerConfig(): ServerConfig {
     host: env.HOST,
     dataDir: env.GS_DATA_DIR,
     publicUrl: resolvePublicUrl(env.GS_PUBLIC_URL, env.TWITCH_REDIRECT_URI),
+    spritesDir: env.GS_SPRITES_DIR,
     logLevel: env.LOG_LEVEL,
     youtubeApiKey: env.GS_YOUTUBE_API_KEY,
     klipyApiKey: env.GS_KLIPY_API_KEY,

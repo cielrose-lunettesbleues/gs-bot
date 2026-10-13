@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync } from "fs";
+import { mkdirSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { Hono } from "hono";
@@ -72,7 +72,7 @@ function createApp() {
     app,
     db,
     oauthConfig: { clientId: "cid", clientSecret: "cs", redirectUri: `${ORIGIN}/auth/twitch/callback` },
-    config: { sociavaultApiKey: "" } as never,
+    config: { sociavaultApiKey: "", spritesDir: join(testDir, "sprites") } as never,
     logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } as never,
     tenantManager: tenantManager as never
   });
@@ -299,6 +299,23 @@ describe("viewer favorites", () => {
     expect(stolen.status).toBe(404);
     const stillThere = await (await app.request(`${ORIGIN}/viewer/favorites`, { headers: { Cookie: mine } })).json();
     expect(stillThere.favorites).toHaveLength(1);
+  });
+});
+
+describe("sprite files", () => {
+  it("serves a sprite, and refuses a name that could climb out of the folder", async () => {
+    const spritesDir = join(testDir, "sprites");
+    mkdirSync(spritesDir, { recursive: true });
+    writeFileSync(join(spritesDir, "ring.png"), "png-bytes");
+    const { app } = createApp();
+
+    const served = await app.request(`${ORIGIN}/sprites/ring.png`);
+    expect(served.status).toBe(200);
+    expect(served.headers.get("content-type")).toBe("image/png");
+
+    expect((await app.request(`${ORIGIN}/sprites/missing.png`)).status).toBe(404);
+    expect((await app.request(`${ORIGIN}/sprites/${encodeURIComponent("../../.env")}`)).status).toBe(404);
+    expect((await app.request(`${ORIGIN}/sprites/sprites.json`)).status).toBe(404);
   });
 });
 

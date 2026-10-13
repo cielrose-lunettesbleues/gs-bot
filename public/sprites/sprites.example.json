@@ -1,0 +1,5 @@
+{
+  "mascot": { "file": "mascot.png", "frames": 8, "fps": 12, "width": 64, "height": 64 },
+  "ring": { "file": "ring.png", "frames": 4, "fps": 8, "width": 16, "height": 16 },
+  "ground": { "file": "ground.png", "width": 32, "height": 22 }
+}

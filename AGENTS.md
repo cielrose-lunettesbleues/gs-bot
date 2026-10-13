@@ -183,6 +183,9 @@ LOG_LEVEL=info
 # Déduite de TWITCH_REDIRECT_URI si absente.
 GS_PUBLIC_URL=
 
+# Dossier des sprites optionnels de la page viewers (défaut ./public/sprites).
+GS_SPRITES_DIR=
+
 # Optionnel si configuré via /setup :
 TWITCH_CLIENT_ID=
 TWITCH_CLIENT_SECRET=
@@ -281,6 +284,7 @@ Principes :
 - **En sub-only ou mod-only, les invités sont refusés** : leur statut est invérifiable faute d'identité. Les viewers connectés sont vérifiés via l'API Twitch (portées `channel:read:subscriptions` et `moderation:read`), avec un cache de 5 minutes.
 - **La validation d'URL précède tout fetch** côté prévisualisation, pour que la route ne devienne pas un moyen de faire requêter des hôtes arbitraires au serveur.
 - Limites par IP : 5 envois et 20 prévisualisations par minute (`RateLimiter`).
+- **Sprites optionnels** : `public/sprites/sprites.json` décrit les emplacements `mascot`, `ring` et `ground`, servis par `GET /sprites/:file`. Chaque emplacement est opt-in et la page garde son dessin CSS quand le fichier est absent — supprimer une image suffit à revenir au rendu d'origine, sans toucher au code. Le manifeste est lu au démarrage, les noms de fichiers sont restreints pour empêcher toute traversée de répertoire.
 
 ---
 

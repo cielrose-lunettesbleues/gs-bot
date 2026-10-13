@@ -1,3 +1,5 @@
+import fs from "fs";
+import path from "path";
 import type { Context, Hono } from "hono";
 import type { Logger } from "pino";
 import type { OAuthConfig } from "../../auth/oauthHandler";
@@ -23,6 +25,7 @@ import { dbConfigToRuntime } from "../../tenant/runtimeConfig";
 import { TenantManager } from "../../tenant/tenantManager";
 import { UrlValidator } from "../../validation/urlValidator";
 import { getSubmitHtml } from "../../views/submitHtml";
+import { isAllowedSpriteFile, loadSpriteSet } from "../../views/spriteManifest";
 import { resolveSubmitterIdentity } from "../../viewer/viewerIdentity";
 import { beginViewerLogin } from "../../viewer/viewerLogin";
 import { clearViewerCookie, getViewerFromRequest, VIEWER_COOKIE } from "../../viewer/viewerSession";
@@ -51,6 +54,8 @@ export function registerViewerRoutes({ app, db, oauthConfig, config, logger, ten
   const sendLimiter = new RateLimiter(SEND_LIMIT.hits, SEND_LIMIT.windowMs);
   const previewLimiter = new RateLimiter(PREVIEW_LIMIT.hits, PREVIEW_LIMIT.windowMs);
   const urlValidator = new UrlValidator();
+  // Read once at startup: sprites arrive with a deployment, like any other file
+  const sprites = loadSpriteSet(config.spritesDir, logger);
 
   // Resolves and authorises the channel behind a submit link. The token is
   // separate from the overlay token so the streamer can revoke the public page
@@ -90,6 +95,35 @@ export function registerViewerRoutes({ app, db, oauthConfig, config, logger, ten
     };
   }
 
+  // ─── Sprites ────────────────────────────────────────────────────────────────
+
+  const SPRITE_TYPES: Record<string, string> = {
+    ".png": "image/png",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg"
+  };
+
+  app.get("/sprites/:file", (c) => {
+    const file = c.req.param("file") ?? "";
+    // The allowed pattern has no slash and no dot beyond the extension, so a
+    // crafted name cannot climb out of the sprites directory.
+    if (!isAllowedSpriteFile(file)) return c.body(null, 404);
+
+    let data: Buffer;
+    try {
+      data = fs.readFileSync(path.join(config.spritesDir, file));
+    } catch {
+      return c.body(null, 404);
+    }
+
+    return c.body(new Uint8Array(data), 200, {
+      "Content-Type": SPRITE_TYPES[path.extname(file).toLowerCase()] ?? "application/octet-stream",
+      "Cache-Control": "public, max-age=86400"
+    });
+  });
+
   // ─── Page ───────────────────────────────────────────────────────────────────
 
   app.get("/submit/:channel", (c) => {
@@ -118,7 +152,8 @@ export function registerViewerRoutes({ app, db, oauthConfig, config, logger, ten
       defaultDurationSeconds: runtime.playback.durationSeconds,
       maxDurationSeconds: runtime.validation.maxDurationSeconds,
       allowedDomains: runtime.validation.allowedDomains,
-      favorites: viewer ? listFavorites(db, viewer.id).map((f) => ({ id: f.id, url: f.url, label: f.label })) : []
+      favorites: viewer ? listFavorites(db, viewer.id).map((f) => ({ id: f.id, url: f.url, label: f.label })) : [],
+      sprites
     }));
   });
 

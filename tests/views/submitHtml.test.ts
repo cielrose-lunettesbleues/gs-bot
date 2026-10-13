@@ -79,6 +79,39 @@ describe("getSubmitHtml", () => {
     expect(html).toContain("@media (prefers-reduced-motion: reduce)");
   });
 
+  it("keeps the drawn artwork when no sprite is supplied", () => {
+    const html = getSubmitHtml(props());
+
+    expect(html).not.toContain("/sprites/");
+    expect(html).toContain('class="mascot" aria-hidden="true" hidden');
+  });
+
+  it("lets a supplied sprite take over, without losing the fallback rules", () => {
+    const html = getSubmitHtml(props({
+      sprites: {
+        ring: { file: "ring.png", frames: 4, fps: 8, width: 16, height: 16 },
+        mascot: { file: "mascot.png", frames: 8, fps: 12, width: 64, height: 64 }
+      }
+    }));
+
+    expect(html).toContain('url("/sprites/ring.png")');
+    expect(html).toContain("steps(4)");
+    // One strip of 4 frames of 16px
+    expect(html).toContain("background-position:-64px 0");
+    expect(html).toContain('class="mascot" aria-hidden="true"></div>');
+    // The base stylesheet is still there, so deleting the file restores it
+    expect(html).toContain("border:5px solid var(--gold)");
+  });
+
+  it("leaves a still sprite unanimated", () => {
+    const html = getSubmitHtml(props({
+      sprites: { ground: { file: "ground.png", frames: 1, fps: 12, width: 32, height: 22 } }
+    }));
+
+    expect(html).toContain('url("/sprites/ground.png")');
+    expect(html).not.toContain("steps(1)");
+  });
+
   it("shows the viewer handle once connected", () => {
     const html = getSubmitHtml(props({ viewer: { login: "viewer1", displayName: "Viewer1" } }));
     expect(html).toContain("Viewer1");

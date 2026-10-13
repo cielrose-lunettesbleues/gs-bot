@@ -23,6 +23,8 @@ WORKDIR /app
 COPY package*.json ./
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
+# Operator-supplied sprites for the viewer page, served from /sprites
+COPY public/ ./public/
 ENV NODE_ENV=production
 ENV GS_DATA_DIR=/data
 EXPOSE 4317
