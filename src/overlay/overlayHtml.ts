@@ -193,7 +193,9 @@ iframe{
       f.src='https://www.youtube.com/embed/'+id
         +'?autoplay=1&controls=0&modestbranding=1&rel=0&fs=0'
         +'&enablejsapi=1&origin='+encodeURIComponent(location.origin)
-        +'&iv_load_policy=3&disablekb=1&loop=1&playlist='+id;
+        // Pas de loop: une vidéo qui redémarre ne signale jamais sa fin, et on
+        // la verrait repartir au lieu de s'arrêter.
+        +'&iv_load_policy=3&disablekb=1';
       f.allow='autoplay; fullscreen';
       ytFrame = f;
       // Le lecteur n'envoie ses évènements qu'à qui s'annonce, et on relance la

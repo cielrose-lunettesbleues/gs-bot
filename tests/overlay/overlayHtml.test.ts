@@ -59,6 +59,15 @@ describe("getOverlayHtml", () => {
     expect(html).toContain("font-size:13px");
   });
 
+  it("lets a YouTube video end instead of restarting it", () => {
+    const html = getOverlayHtml();
+
+    // Looping meant the player never reported the end, so it was seen starting over
+    expect(html).not.toContain("loop=1");
+    expect(html).not.toContain("playlist=");
+    expect(html).toContain("d.info === 0) hide()");
+  });
+
   it("still ends playback on the native video ended event", () => {
     expect(getOverlayHtml()).toContain("addEventListener('ended', hide)");
   });

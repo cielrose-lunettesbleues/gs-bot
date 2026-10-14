@@ -29,12 +29,17 @@ function buildTtsGenerate(
 
 const URL_RE = /^https?:\/\//i;
 const GIF_URL_RE = /\.gif(\?.*)?$/i;
+const YOUTUBE_URL_RE = /(?:youtube\.com|youtu\.be)\//i;
 
-/** A looping image has no natural end, so it gets a short default instead. */
-export const GIF_DEFAULT_DURATION_SECONDS = 10;
+/** Media with no end we can know of gets a short pass rather than the tenant length. */
+export const UNTIMED_DEFAULT_SECONDS = 10;
 
 function isGifUrl(url: string): boolean {
   return GIF_URL_RE.test(url);
+}
+
+function isYoutubeUrl(url: string): boolean {
+  return YOUTUBE_URL_RE.test(url);
 }
 
 export function createGreenScreenCommand(
@@ -107,6 +112,9 @@ export function createGreenScreenCommand(
       let playDuration = deps.config.playback.durationSeconds;
       let portrait: boolean | undefined;
       let cutAfterSeconds: number | undefined;
+      // Vrai seulement quand la longueur réelle du média a été obtenue, et non
+      // héritée de la durée de lecture du tenant.
+      let durationKnown = false;
 
       if (URL_RE.test(firstArg)) {
         // ── URL mode ────────────────────────────────────────────────────────
@@ -129,6 +137,7 @@ export function createGreenScreenCommand(
           }
           videoUrl = resolved.url;
           playDuration = resolved.durationSeconds || playDuration;
+          durationKnown = resolved.durationSeconds > 0;
           portrait = resolved.portrait;
         } else if (/instagram\.com/i.test(firstArg)) {
           if (!deps.instagramResolve) {
@@ -149,6 +158,7 @@ export function createGreenScreenCommand(
           }
           videoUrl = resolved.url;
           playDuration = resolved.durationSeconds || playDuration;
+          durationKnown = resolved.durationSeconds > 0;
           portrait = resolved.portrait;
         } else {
           videoUrl = await resolveMediaUrl(firstArg);
@@ -208,6 +218,8 @@ export function createGreenScreenCommand(
           }
           videoUrl = searchResult.url;
           playDuration = searchResult.durationSeconds;
+          // La recherche connaît la longueur réelle de la vidéo
+          durationKnown = searchResult.durationSeconds > 0;
           portrait = searchResult.portrait;
           deps.logger.info(
             { username: context.user.username, query, url: videoUrl, title: searchResult.title, durationSeconds: playDuration },
@@ -219,9 +231,12 @@ export function createGreenScreenCommand(
       const maxRequestable = deps.config.validation.maxDurationSeconds;
       const capped = (seconds: number) => (maxRequestable > 0 ? Math.min(seconds, maxRequestable) : seconds);
 
-      // ── A GIF loops, so the tenant video length means nothing to it ──────
-      if (!requestedSeconds && isGifUrl(videoUrl)) {
-        playDuration = capped(GIF_DEFAULT_DURATION_SECONDS);
+      // ── Sans longueur connue, la durée vidéo du tenant ne veut rien dire ──
+      // Un GIF boucle, et une URL YouTube collée n'apporte aucune durée: dans
+      // les deux cas on s'en tient à un passage court plutôt qu'à un réglage
+      // pensé pour des vidéos dont on connaît la fin.
+      if (!requestedSeconds && (isGifUrl(videoUrl) || (!durationKnown && isYoutubeUrl(videoUrl)))) {
+        playDuration = capped(UNTIMED_DEFAULT_SECONDS);
       }
 
       // ── Requested cut overrides the resolved length ──────────────────────

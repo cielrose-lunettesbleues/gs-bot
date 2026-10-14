@@ -166,12 +166,39 @@ describe("greenScreenCommand", () => {
     expect(deps.queue.enqueue).toHaveBeenCalledWith(expect.objectContaining({ durationSeconds: 4 }));
   });
 
-  it("leaves a video on the tenant length", async () => {
+  it("gives a pasted youtube link the short pass, its length being unknown", async () => {
     const deps = makeDeps();
     const command = createGreenScreenCommand(deps, "!gs");
     const ctx = modCtx("quentin");
 
     await command.execute(ctx, ["https://youtube.com/watch?v=1"]);
+
+    // The tenant length is meant for videos whose end we know
+    expect(deps.queue.enqueue).toHaveBeenCalledWith(expect.objectContaining({ durationSeconds: 10 }));
+  });
+
+  it("plays a searched video for its real length", async () => {
+    const deps = makeDeps();
+    const youtubeSearch = vi.fn(async () => ({
+      url: "https://youtube.com/watch?v=abc",
+      title: "clip",
+      durationSeconds: 42
+    }));
+    const command = createGreenScreenCommand({ ...deps, youtubeSearch }, "!gs");
+    const ctx = modCtx("rosa");
+
+    await command.execute(ctx, ["un", "clip"]);
+
+    // The search knows the duration, so it is played to its end rather than cut at ten
+    expect(deps.queue.enqueue).toHaveBeenCalledWith(expect.objectContaining({ durationSeconds: 42 }));
+  });
+
+  it("leaves a direct file on the tenant length", async () => {
+    const deps = makeDeps();
+    const command = createGreenScreenCommand(deps, "!gs");
+    const ctx = modCtx("samir");
+
+    await command.execute(ctx, ["https://cdn.test/clip.mp4"]);
 
     expect(deps.queue.enqueue).toHaveBeenCalledWith(expect.objectContaining({ durationSeconds: 15 }));
   });
@@ -318,7 +345,7 @@ describe("greenScreenCommand", () => {
     const command = createGreenScreenCommand(deps, "!gs");
     const ctx = modCtx("marc");
 
-    await command.execute(ctx, ["https://youtube.com/watch?v=1"]);
+    await command.execute(ctx, ["https://cdn.test/clip.mp4"]);
 
     expect(deps.queue.enqueue).toHaveBeenCalledWith(
       expect.objectContaining({ durationSeconds: 15, cutAfterSeconds: undefined })
