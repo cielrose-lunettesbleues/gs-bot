@@ -141,6 +141,27 @@ describe("apiRoutes", () => {
     expect(json).toEqual({ ok: true, overlayUrl: "/overlay/streamer?token=rotated-token" });
   });
 
+  it("persists boosted TTS volume and exposes it in status", async () => {
+    const { app, tenantManager, tenant } = createApp(sessionUser);
+
+    const patchResponse = await requestJson(app, "/api/tts/config", {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        origin: "http://example.com"
+      },
+      body: JSON.stringify({ ttsVolume: 1.5 })
+    });
+
+    expect(patchResponse.response.status).toBe(200);
+    expect(tenantManager.persistConfig).toHaveBeenCalledWith(42, { tts_volume: 1.5 });
+
+    tenant.runtimeConfig.tts.volume = 1.5;
+    const statusResponse = await requestJson(app, "/api/status");
+    expect(statusResponse.response.status).toBe(200);
+    expect(statusResponse.json.config.tts.volume).toBe(1.5);
+  });
+
   it("simulates a chat message and returns replies", async () => {
     const { app, tenant } = createApp(sessionUser);
     const { response, json } = await requestJson(app, "/api/simulate", {

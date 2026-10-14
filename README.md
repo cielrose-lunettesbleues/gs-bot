@@ -42,6 +42,7 @@ Le wizard est protégé:
 - `src/tenant/*`: lifecycle tenant, config runtime, factory runtime, poller live
 - `src/db/database.ts`: persistence SQLite
 - `src/commands/*`: logique de commandes Twitch
+- `src/moderation/*`: mots interdits dans les textes soumis
 - `src/overlay/*`: page OBS et SSE
 - `src/views/*`: pages HTML server-rendered
 
@@ -75,6 +76,7 @@ Des tests ciblés existent maintenant pour:
 - `tests/web/apiRoutes.test.ts`
 - `tests/web/publicRoutes.test.ts`
 - `tests/commands/*`
+- `tests/moderation/*`
 - `tests/queue/*`
 - `tests/overlay/*`
 
@@ -85,6 +87,7 @@ Ils couvrent notamment:
 - rotation du token overlay
 - payload `/api/status`
 - dashboard/logout/overlay inactif
+- refus d'un texte contenant un mot interdit, casse et accents compris
 
 ## Legacy Supprimé
 

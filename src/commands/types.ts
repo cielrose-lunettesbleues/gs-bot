@@ -1,4 +1,5 @@
 import type { IBlacklistService } from "../blacklist/blacklistService";
+import type { IBannedWordsService } from "../moderation/bannedWordsService";
 import type { IHistoryService } from "../history/historyService";
 import type { PlaybackItem, EnqueueResult, TtsPlaybackEvent } from "../queue/playbackQueue";
 import type { CommandContext } from "../twitch/twitchTypes";
@@ -34,6 +35,7 @@ export interface CommandDependencies {
   };
   queue: QueueService;
   blacklistService: IBlacklistService;
+  bannedWordsService?: IBannedWordsService;
   historyService: IHistoryService;
   youtubeDurationValidator?: { check: (url: string) => Promise<DurationCheckResult> };
   youtubeSearch?: (query: string, maxDurationSeconds: number) => Promise<{ url: string; title: string; durationSeconds: number; portrait?: boolean } | null>;

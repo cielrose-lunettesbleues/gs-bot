@@ -21,6 +21,12 @@ export function createTtsCommand(deps: CommandDependencies, commandName: string)
         return;
       }
 
+      // Filtré avant la synthèse, qui serait facturée pour un texte refusé
+      if (deps.bannedWordsService?.find(text)) {
+        await context.reply(`@${context.user.username} Texte refusé : il contient un mot interdit.`);
+        return;
+      }
+
       const channel = (deps.channelLogin || context.channel.replace(/^#/, "")).toLowerCase();
       const volume = deps.config.tts?.volume ?? 1.0;
 

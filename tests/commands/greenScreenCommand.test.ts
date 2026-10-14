@@ -79,6 +79,33 @@ describe("greenScreenCommand", () => {
     expect(deps.queue.enqueue).not.toHaveBeenCalled();
   });
 
+  it("refuses a caption carrying a banned word, before spending anything", async () => {
+    const deps = makeDeps();
+    const bannedWordsService = { find: vi.fn(() => "interdit"), add: vi.fn(), remove: vi.fn(), list: vi.fn(() => []) };
+    const youtubeDuration = vi.fn(async () => 42);
+    const command = createGreenScreenCommand({ ...deps, bannedWordsService, youtubeDuration }, "!gs");
+    const ctx = modCtx("xavier");
+
+    await command.execute(ctx, ["https://youtube.com/watch?v=1", "|un", "mot", "interdit"]);
+
+    expect(ctx.reply).toHaveBeenCalledWith(expect.stringContaining("mot interdit"));
+    expect(deps.queue.enqueue).not.toHaveBeenCalled();
+    // Refused before any paid lookup
+    expect(youtubeDuration).not.toHaveBeenCalled();
+  });
+
+  it("lets a clean caption through", async () => {
+    const deps = makeDeps();
+    const bannedWordsService = { find: vi.fn(() => null), add: vi.fn(), remove: vi.fn(), list: vi.fn(() => []) };
+    const command = createGreenScreenCommand({ ...deps, bannedWordsService }, "!gs");
+    const ctx = modCtx("yanis");
+
+    await command.execute(ctx, ["https://youtube.com/watch?v=1", "|bonjour"]);
+
+    expect(bannedWordsService.find).toHaveBeenCalledWith("bonjour");
+    expect(deps.queue.enqueue).toHaveBeenCalledWith(expect.objectContaining({ caption: "bonjour" }));
+  });
+
   it("blocks blacklisted user", async () => {
     const deps = makeDeps();
     deps.blacklistService.isBlocked = vi.fn(() => true);

@@ -94,7 +94,7 @@ src/
     configPatches.ts          — patchs typés de config tenant
     liveStatusPoller.ts       — polling live Twitch (3 min)
   db/
-    database.ts               — schéma SQLite + fonctions CRUD (users, sessions, tenant_configs, history, blacklist)
+    database.ts               — schéma SQLite + fonctions CRUD (users, sessions, tenant_configs, history, blacklist, banned_words)
   web/
     routes/
       publicRoutes.ts         — setup, auth, dashboard, overlay, TTS public
@@ -137,6 +137,8 @@ src/
     approvalService.ts        — file d'attente d'approbation mod
   blacklist/
     blacklistService.ts       — liste noire par tenant (interface IBlacklistService)
+  moderation/
+    bannedWordsService.ts     — mots interdits par tenant (interface IBannedWordsService)
   history/
     historyService.ts         — historique de lecture par tenant (interface IHistoryService)
   validation/
@@ -151,6 +153,7 @@ src/
     logger.ts                 — pino logger
 tests/
   blacklist/
+  moderation/
   history/
   commands/
   control/
@@ -299,6 +302,7 @@ PlaybackQueue          — file de lecture avec modes queue/replace/drop
 CooldownService        — cooldown global en mémoire
 ApprovalService        — file d'attente d'approbation (en mémoire)
 BlacklistService       — liste noire persistée en SQLite
+BannedWordsService     — mots interdits persistés en SQLite
 HistoryService         — historique persisté en SQLite
 OverlayBroadcaster     — diffusion SSE vers OBS
 TwitchBotManager       — connexion IRC tmi.js
@@ -367,6 +371,9 @@ tmi.js → twitchMessageHandler → CommandRouter → GreenScreenCommand → Pla
 !gs history [n]        — affiche les n dernières URLs jouées
 !gs blacklist add <user>    — blackliste un user (mod)
 !gs blacklist remove <user> — retire du blacklist (mod)
+!gs banword <mot|expression>   — interdit un mot dans le texte (mod)
+!gs unbanword <mot|expression> — retire un mot interdit (mod)
+!gs banwords                   — liste les mots interdits (mod)
 ```
 
 ---
@@ -381,7 +388,7 @@ Couverture principale actuelle :
 - `permissionService`, `cooldownService`, `urlValidator`
 - `commandRouter`, `greenScreenCommand`, `adminCommands`, `stopAction`
 - `playbackQueue`, `approvalService`, `overlayBroadcaster`
-- `blacklistService`, `historyService` (avec SQLite réel en mémoire)
+- `blacklistService`, `historyService`, `bannedWordsService` (avec SQLite réel)
 - `publicRoutes`, `apiRoutes` (tests d'intégration SaaS ciblés, sans SQLite native)
 - `twitchEventSubClient`, `youtubeDurationValidator`
 
@@ -428,6 +435,7 @@ Couverture principale actuelle :
 - [x] Cooldown global configurable
 - [x] Contrôle d'accès (sub-only, mod-only)
 - [x] Blacklist utilisateurs (persistée en DB)
+- [x] Mots interdits dans le texte affiché et lu par le TTS (persistés en DB)
 - [x] Historique de lecture (persisté en DB)
 - [x] File d'approbation mod
 - [x] OBS Browser Source via SSE (sans WebSocket)

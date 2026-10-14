@@ -6,6 +6,7 @@ import { createTtsCommand } from "../commands/ttsCommand";
 import { CommandRouter } from "../commands/commandRouter";
 import { ApprovalService } from "../approval/approvalService";
 import { BlacklistService } from "../blacklist/blacklistService";
+import { BannedWordsService } from "../moderation/bannedWordsService";
 import { HistoryService } from "../history/historyService";
 import { CooldownService } from "../cooldown/cooldownService";
 import { PermissionService } from "../permissions/permissionService";
@@ -71,6 +72,7 @@ export function createTenantServices({
   const cooldownService = new CooldownService();
   const urlValidator = new UrlValidator();
   const blacklistService = new BlacklistService(db, userId);
+  const bannedWordsService = new BannedWordsService(db, userId);
   const historyService = new HistoryService(db, userId);
   const approvalService = new ApprovalService({ queue, config: runtimeConfig.approval, logger });
   const adminService = new AdminService({
@@ -78,6 +80,7 @@ export function createTenantServices({
     persistRuntimeConfig,
     cooldownService,
     blacklistService,
+    bannedWordsService,
     historyService,
     approvalService,
     logger
@@ -92,6 +95,7 @@ export function createTenantServices({
     urlValidator,
     queue,
     blacklistService,
+    bannedWordsService,
     historyService,
     youtubeDurationValidator: undefined,
     tiktokSearch: undefined,
@@ -156,6 +160,7 @@ export function createTenantServices({
     cooldownService,
     approvalService,
     blacklistService,
+    bannedWordsService,
     historyService,
     overlayBroadcaster,
     twitchBotManager,

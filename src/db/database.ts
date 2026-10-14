@@ -69,6 +69,14 @@ CREATE TABLE IF NOT EXISTS blacklist (
   PRIMARY KEY (user_id, blocked_username)
 );
 
+-- Mots interdits dans les textes affichés ou lus à voix haute. Stockés
+-- normalisés (minuscules, sans accents) pour que la comparaison le soit aussi.
+CREATE TABLE IF NOT EXISTS banned_words (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  word    TEXT    NOT NULL,
+  PRIMARY KEY (user_id, word)
+);
+
 CREATE TABLE IF NOT EXISTS tenant_tts_voices (
   id                INTEGER PRIMARY KEY AUTOINCREMENT,
   tenant_id         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -363,6 +371,28 @@ export function unblockUser(db: Database, userId: number, username: string): boo
 export function listBlocked(db: Database, userId: number): string[] {
   return (db.prepare("SELECT blocked_username FROM blacklist WHERE user_id=? ORDER BY blocked_username").all(userId) as
     Array<{ blocked_username: string }>).map((r) => r.blocked_username);
+}
+
+// ─── Mots interdits ───────────────────────────────────────────────────────────
+
+/** Le mot est attendu déjà normalisé par le service appelant. */
+export function addBannedWord(db: Database, userId: number, word: string): boolean {
+  try {
+    db.prepare("INSERT INTO banned_words (user_id, word) VALUES (?,?)").run(userId, word);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function removeBannedWord(db: Database, userId: number, word: string): boolean {
+  const result = db.prepare("DELETE FROM banned_words WHERE user_id=? AND word=?").run(userId, word);
+  return result.changes > 0;
+}
+
+export function listBannedWords(db: Database, userId: number): string[] {
+  return (db.prepare("SELECT word FROM banned_words WHERE user_id=? ORDER BY word").all(userId) as
+    Array<{ word: string }>).map((r) => r.word);
 }
 
 // ─── TTS Voices ───────────────────────────────────────────────────────────────

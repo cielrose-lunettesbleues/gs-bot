@@ -84,6 +84,18 @@ export function createGreenScreenCommand(
         return;
       }
 
+      // Le texte part à l'écran et dans la voix de synthèse: il est filtré
+      // avant toute résolution, qui coûterait un crédit pour rien.
+      const bannedWord = caption ? deps.bannedWordsService?.find(caption) : null;
+      if (bannedWord) {
+        await context.reply(`@${context.user.username} Texte refusé : il contient un mot interdit.`);
+        deps.logger.warn(
+          { username: context.user.username, word: bannedWord },
+          "Caption refused for a banned word"
+        );
+        return;
+      }
+
       if (deps.blacklistService.isBlocked(context.user.username)) {
         await context.reply(`@${context.user.username} Vous n'êtes pas autorisé à utiliser cette commande.`);
         deps.logger.warn({ username: context.user.username }, "Blacklisted user attempted command");

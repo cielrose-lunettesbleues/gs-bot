@@ -36,4 +36,23 @@ describe("ttsCommand", () => {
       audioUrl: "/tts/audio/streamer/audio-123?token=signed"
     }));
   });
+
+  it("refuses a banned word before paying for the synthesis", async () => {
+    const deps = makeDeps();
+    const bannedWordsService = { find: vi.fn(() => "interdit"), add: vi.fn(), remove: vi.fn(), list: vi.fn(() => []) };
+    const command = createTtsCommand({ ...deps, bannedWordsService } as never, "!tts");
+    const reply = vi.fn(async () => undefined);
+
+    await command.execute({
+      channel: "#streamer",
+      rawMessage: "!tts un mot interdit",
+      user: { username: "alice", isMod: false, isBroadcaster: false, isSubscriber: true },
+      reply
+    }, ["un", "mot", "interdit"]);
+
+    expect(reply).toHaveBeenCalledWith(expect.stringContaining("mot interdit"));
+    // Neither spoken nor shown, and no synthesis billed
+    expect(deps.ttsService.synthesize).not.toHaveBeenCalled();
+    expect(deps.broadcastOverlay).not.toHaveBeenCalled();
+  });
 });

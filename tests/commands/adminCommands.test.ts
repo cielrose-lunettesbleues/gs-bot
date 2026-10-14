@@ -27,14 +27,20 @@ function makeDeps() {
     record: vi.fn(),
     getLast: vi.fn(() => [])
   };
+  const bannedWordsService = {
+    find: vi.fn(() => null as string | null),
+    add: vi.fn(() => true),
+    remove: vi.fn(() => true),
+    list: vi.fn(() => [] as string[])
+  };
   const logger = { info: vi.fn(), warn: vi.fn() };
-  return { runtimeConfig, cooldownService, blacklistService, historyService, logger };
+  return { runtimeConfig, cooldownService, blacklistService, bannedWordsService, historyService, logger };
 }
 
 describe("AdminService.isAdminKeyword", () => {
   it("recognizes all admin keywords", () => {
     const service = new AdminService(makeDeps());
-    for (const kw of ["subonly", "modonly", "cooldown", "reset", "block", "unblock", "blocklist", "history"]) {
+    for (const kw of ["subonly", "modonly", "cooldown", "reset", "block", "unblock", "blocklist", "history", "banword", "unbanword", "banwords"]) {
       expect(service.isAdminKeyword(kw)).toBe(true);
       expect(service.isAdminKeyword(kw.toUpperCase())).toBe(true);
     }
@@ -204,6 +210,62 @@ describe("AdminService — block / unblock", () => {
     const ctx = makeContext();
     await new AdminService(deps).execute(ctx, ["unblock", "nobody"]);
     expect(ctx.reply).toHaveBeenCalledWith(expect.stringContaining("n'est pas"));
+  });
+
+  it("bans a word, several words included", async () => {
+    const deps = makeDeps();
+    const ctx = makeContext();
+
+    await new AdminService(deps).execute(ctx, ["banword", "sale", "type"]);
+
+    // Joined back together: an expression is a legitimate thing to ban
+    expect(deps.bannedWordsService.add).toHaveBeenCalledWith("sale type");
+    expect(ctx.reply).toHaveBeenCalledWith(expect.stringContaining("ajouté"));
+  });
+
+  it("says so when the word is already banned", async () => {
+    const deps = makeDeps();
+    deps.bannedWordsService.add = vi.fn(() => false);
+    const ctx = makeContext();
+
+    await new AdminService(deps).execute(ctx, ["banword", "merde"]);
+
+    expect(ctx.reply).toHaveBeenCalledWith(expect.stringContaining("déjà"));
+  });
+
+  it("unbans a word, and says when there was nothing to remove", async () => {
+    const deps = makeDeps();
+    const ctx = makeContext();
+    await new AdminService(deps).execute(ctx, ["unbanword", "merde"]);
+    expect(ctx.reply).toHaveBeenCalledWith(expect.stringContaining("retiré"));
+
+    deps.bannedWordsService.remove = vi.fn(() => false);
+    const other = makeContext();
+    await new AdminService(deps).execute(other, ["unbanword", "absent"]);
+    expect(other.reply).toHaveBeenCalledWith(expect.stringContaining("n'est pas"));
+  });
+
+  it("lists the banned words, and says when there are none", async () => {
+    const deps = makeDeps();
+    deps.bannedWordsService.list = vi.fn(() => ["merde", "sale type"]);
+    const ctx = makeContext();
+    await new AdminService(deps).execute(ctx, ["banwords"]);
+    expect(ctx.reply).toHaveBeenCalledWith(expect.stringContaining("sale type"));
+
+    deps.bannedWordsService.list = vi.fn(() => []);
+    const empty = makeContext();
+    await new AdminService(deps).execute(empty, ["banwords"]);
+    expect(empty.reply).toHaveBeenCalledWith(expect.stringContaining("Aucun mot interdit"));
+  });
+
+  it("refuses an empty banword rather than storing nothing", async () => {
+    const deps = makeDeps();
+    const ctx = makeContext();
+
+    await new AdminService(deps).execute(ctx, ["banword"]);
+
+    expect(deps.bannedWordsService.add).not.toHaveBeenCalled();
+    expect(ctx.reply).toHaveBeenCalledWith(expect.stringContaining("Usage"));
   });
 
   it("shows blocklist", async () => {

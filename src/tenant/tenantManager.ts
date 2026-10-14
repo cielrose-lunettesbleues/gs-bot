@@ -5,6 +5,7 @@ import { getTenantConfig, rotateOverlayToken, rotateWebToken, updateTenantConfig
 import { CommandRouter } from "../commands/commandRouter";
 import { ApprovalService } from "../approval/approvalService";
 import { BlacklistService } from "../blacklist/blacklistService";
+import { BannedWordsService } from "../moderation/bannedWordsService";
 import { HistoryService } from "../history/historyService";
 import { CooldownService } from "../cooldown/cooldownService";
 import { OverlayBroadcaster } from "../overlay/overlayBroadcaster";
@@ -21,6 +22,7 @@ export interface TenantServices {
   cooldownService: CooldownService;
   approvalService: ApprovalService;
   blacklistService: BlacklistService;
+  bannedWordsService: BannedWordsService;
   historyService: HistoryService;
   overlayBroadcaster: OverlayBroadcaster;
   twitchBotManager: TwitchBotManager;

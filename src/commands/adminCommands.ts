@@ -1,6 +1,7 @@
 import type { ApprovalService } from "../approval/approvalService";
 import type { IBlacklistService } from "../blacklist/blacklistService";
 import type { IHistoryService } from "../history/historyService";
+import type { IBannedWordsService } from "../moderation/bannedWordsService";
 import type { TenantAdminConfigPatch } from "../tenant/configPatches";
 import type { CommandContext } from "../twitch/twitchTypes";
 import type { Command } from "./types";
@@ -13,6 +14,9 @@ const ADMIN_KEYWORDS = new Set([
   "block",
   "unblock",
   "blocklist",
+  "banword",
+  "unbanword",
+  "banwords",
   "history",
   "approve",
   "deny"
@@ -28,6 +32,7 @@ interface AdminDeps {
   persistRuntimeConfig?: (patch: TenantAdminConfigPatch) => void;
   cooldownService: { reset: (username?: string) => void };
   blacklistService: IBlacklistService;
+  bannedWordsService?: IBannedWordsService;
   historyService: IHistoryService;
   approvalService?: ApprovalService;
   logger: {
@@ -78,6 +83,15 @@ export class AdminService {
         break;
       case "blocklist":
         await this.handleBlocklist(context);
+        break;
+      case "banword":
+        await this.handleBanWord(context, rest);
+        break;
+      case "unbanword":
+        await this.handleUnbanWord(context, rest);
+        break;
+      case "banwords":
+        await this.handleBanWords(context);
         break;
       case "history":
         await this.handleHistory(context, rest);
@@ -175,6 +189,46 @@ export class AdminService {
     } else {
       await context.reply(`@${context.user.username} ${target} n'est pas dans la liste noire.`);
     }
+  }
+
+  // Le mot peut en contenir plusieurs: "sale type" est une expression valable
+  private async handleBanWord(context: CommandContext, rest: string[]): Promise<void> {
+    const word = rest.join(" ").trim();
+    if (!word || !this.deps.bannedWordsService) {
+      await context.reply(`@${context.user.username} Usage: !gs banword <mot>`);
+      return;
+    }
+    const added = this.deps.bannedWordsService.add(word);
+    await context.reply(
+      added
+        ? `@${context.user.username} "${word}" ajouté aux mots interdits.`
+        : `@${context.user.username} "${word}" y est déjà.`
+    );
+    if (added) this.deps.logger.info({ mod: context.user.username }, "Admin: banned word added");
+  }
+
+  private async handleUnbanWord(context: CommandContext, rest: string[]): Promise<void> {
+    const word = rest.join(" ").trim();
+    if (!word || !this.deps.bannedWordsService) {
+      await context.reply(`@${context.user.username} Usage: !gs unbanword <mot>`);
+      return;
+    }
+    const removed = this.deps.bannedWordsService.remove(word);
+    await context.reply(
+      removed
+        ? `@${context.user.username} "${word}" retiré des mots interdits.`
+        : `@${context.user.username} "${word}" n'est pas dans la liste.`
+    );
+    if (removed) this.deps.logger.info({ mod: context.user.username }, "Admin: banned word removed");
+  }
+
+  private async handleBanWords(context: CommandContext): Promise<void> {
+    const list = this.deps.bannedWordsService?.list() ?? [];
+    await context.reply(
+      list.length === 0
+        ? `@${context.user.username} Aucun mot interdit.`
+        : `@${context.user.username} Mots interdits (${list.length}) : ${list.join(", ")}`
+    );
   }
 
   private async handleBlocklist(context: CommandContext): Promise<void> {
