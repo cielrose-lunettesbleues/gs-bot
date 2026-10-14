@@ -281,6 +281,77 @@ export async function sociavaultResolve(
   return { url: embedUrl(match[1]), durationSeconds: 0, portrait: true };
 }
 
+// ─── YouTube ──────────────────────────────────────────────────────────────────
+
+const YOUTUBE_ID_RE =
+  /(?:youtube\.com\/watch\?.*v=|youtu\.be\/|youtube\.com\/shorts\/|youtube\.com\/embed\/)([A-Za-z0-9_-]+)/i;
+
+const youtubeDurationCache = new Map<string, { value: number; at: number }>();
+const YOUTUBE_CACHE_TTL_MS = 10 * 60 * 1000;
+const YOUTUBE_CACHE_MAX = 200;
+
+export function clearYoutubeDurationCache(): void {
+  youtubeDurationCache.clear();
+}
+
+// durationMs peut être au premier niveau ou sous une enveloppe {success, data}
+function findDurationMs(payload: unknown): number {
+  let node: unknown = payload;
+  for (let depth = 0; depth < 5; depth += 1) {
+    if (!node || typeof node !== "object") return 0;
+    const value = (node as { durationMs?: unknown }).durationMs;
+    if (typeof value === "number" && value > 0) return value;
+    node = (node as { data?: unknown }).data;
+  }
+  return 0;
+}
+
+/**
+ * Longueur réelle d'une vidéo YouTube, en secondes. L'endpoint ne donne aucun
+ * flux lisible, seulement des métadonnées: c'est la durée qui nous intéresse,
+ * pour jouer la vidéo jusqu'à sa fin au lieu de la couper arbitrairement.
+ * Coûte un crédit, et renvoie null plutôt que d'échouer.
+ */
+export async function sociavaultYoutubeDuration(
+  youtubeUrl: string,
+  apiKey: string,
+  log?: SimpleLogger
+): Promise<number | null> {
+  const match = YOUTUBE_ID_RE.exec(youtubeUrl);
+  if (!match) return null;
+
+  const videoId = match[1];
+  const cached = youtubeDurationCache.get(videoId);
+  if (cached && Date.now() - cached.at < YOUTUBE_CACHE_TTL_MS) return cached.value;
+
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/youtube/video?url=${encodeURIComponent(youtubeUrl)}`, {
+      headers: { "X-API-Key": apiKey },
+      signal: AbortSignal.timeout(10000)
+    });
+  } catch (err) {
+    log?.warn({ youtubeUrl, err: String(err) }, "SociaVault YouTube fetch failed");
+    return null;
+  }
+  if (!res.ok) {
+    log?.warn({ youtubeUrl, status: res.status }, `SociaVault YouTube refused with HTTP ${res.status}`);
+    return null;
+  }
+
+  const durationMs = findDurationMs(await res.json());
+  if (durationMs <= 0) {
+    log?.warn({ youtubeUrl }, "SociaVault YouTube: no duration in response");
+    return null;
+  }
+
+  const seconds = Math.ceil(durationMs / 1000);
+  if (youtubeDurationCache.size >= YOUTUBE_CACHE_MAX) youtubeDurationCache.clear();
+  youtubeDurationCache.set(videoId, { value: seconds, at: Date.now() });
+  log?.info({ youtubeUrl, durationSeconds: seconds }, "SociaVault YouTube duration resolved");
+  return seconds;
+}
+
 // ─── Instagram ────────────────────────────────────────────────────────────────
 
 export interface InstagramResolved {

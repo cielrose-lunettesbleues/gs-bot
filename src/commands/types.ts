@@ -40,6 +40,8 @@ export interface CommandDependencies {
   tiktokSearch?: (query: string, maxDurationSeconds: number) => Promise<{ url: string; title: string; durationSeconds: number; portrait?: boolean } | null>;
   tiktokResolve?: (url: string) => Promise<{ url: string; durationSeconds: number; portrait: boolean } | null>;
   instagramResolve?: (url: string) => Promise<{ url: string; durationSeconds: number; portrait: boolean } | null>;
+  /** Real length of a YouTube video in seconds, when it can be obtained. */
+  youtubeDuration?: (url: string) => Promise<number | null>;
   gifSearch?: (query: string) => Promise<{ url: string; title: string } | null>;
   approvalService?: {
     config: { enabled: boolean };

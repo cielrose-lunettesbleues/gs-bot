@@ -177,6 +177,54 @@ describe("greenScreenCommand", () => {
     expect(deps.queue.enqueue).toHaveBeenCalledWith(expect.objectContaining({ durationSeconds: 10 }));
   });
 
+  it("plays a pasted link to its end once its length is looked up", async () => {
+    const deps = makeDeps();
+    const youtubeDuration = vi.fn(async () => 42);
+    const command = createGreenScreenCommand({ ...deps, youtubeDuration }, "!gs");
+    const ctx = modCtx("tania");
+
+    await command.execute(ctx, ["https://youtu.be/abc"]);
+
+    expect(youtubeDuration).toHaveBeenCalledWith("https://youtu.be/abc");
+    expect(deps.queue.enqueue).toHaveBeenCalledWith(expect.objectContaining({ durationSeconds: 42 }));
+  });
+
+  it("keeps the short pass when the length cannot be looked up", async () => {
+    const deps = makeDeps();
+    const youtubeDuration = vi.fn(async () => null);
+    const command = createGreenScreenCommand({ ...deps, youtubeDuration }, "!gs");
+    const ctx = modCtx("ugo");
+
+    await command.execute(ctx, ["https://youtu.be/abc"]);
+
+    expect(deps.queue.enqueue).toHaveBeenCalledWith(expect.objectContaining({ durationSeconds: 10 }));
+  });
+
+  it("spends no credit when a duration was asked for by hand", async () => {
+    const deps = makeDeps();
+    const youtubeDuration = vi.fn(async () => 42);
+    const command = createGreenScreenCommand({ ...deps, youtubeDuration }, "!gs");
+    const ctx = modCtx("vera");
+
+    await command.execute(ctx, ["https://youtu.be/abc", "/7"]);
+
+    expect(youtubeDuration).not.toHaveBeenCalled();
+    expect(deps.queue.enqueue).toHaveBeenCalledWith(expect.objectContaining({ durationSeconds: 7 }));
+  });
+
+  it("caps a looked-up length to the tenant maximum", async () => {
+    const deps = makeDeps();
+    deps.config.validation.maxDurationSeconds = 20;
+    const youtubeDuration = vi.fn(async () => 600);
+    const command = createGreenScreenCommand({ ...deps, youtubeDuration }, "!gs");
+    const ctx = modCtx("wassim");
+
+    await command.execute(ctx, ["https://youtu.be/abc"]);
+
+    // Ten minutes of overlay is not what a known length should buy
+    expect(deps.queue.enqueue).toHaveBeenCalledWith(expect.objectContaining({ durationSeconds: 20 }));
+  });
+
   it("plays a searched video for its real length", async () => {
     const deps = makeDeps();
     const youtubeSearch = vi.fn(async () => ({

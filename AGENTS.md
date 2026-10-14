@@ -419,6 +419,7 @@ Couverture principale actuelle :
 - [x] Résolution Instagram (reels, posts, IGTV) vers le MP4 direct via SociaVault
 - [x] Page viewers `/submit/:channel` (envoi sans chat, prévisualisation, favoris)
 - [x] Parcours de GIF Klipy depuis la page viewers, ajoutables en favoris
+- [x] Durée réelle d'une vidéo YouTube via SociaVault (1 crédit, mise en cache 10 min) ; sans elle, lecture courte de 10s comme un GIF
 - [x] Identité viewer séparée des streamers (table `viewers`, cookie `gs_viewer`)
 - [x] Vérification sub/mod des viewers via l'API Twitch
 - [x] Commande `!gstop` (stop d'urgence)
@@ -448,7 +449,6 @@ Couverture principale actuelle :
 - [ ] Queue système pour plusieurs requests simultanées (architecture prête)
 - [ ] Support Channel Points (EventSub)
 - [ ] Cooldown par utilisateur
-- [ ] Vérification durée YouTube
 - [ ] Déploiement Docker
 - [ ] Filtrage NSFW/spam
 - [ ] Profils de sources multiples

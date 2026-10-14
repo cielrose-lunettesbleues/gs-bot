@@ -176,6 +176,17 @@ export function createGreenScreenCommand(
               return;
             }
           }
+
+          // Une longueur réelle vaut mieux qu'un passage court arbitraire: elle
+          // laisse la vidéo aller jusqu'à sa fin. L'appel coûte un crédit, donc
+          // on s'en passe dès qu'une durée a été demandée à la main.
+          if (!requestedSeconds && isYoutubeUrl(videoUrl) && deps.youtubeDuration) {
+            const seconds = await deps.youtubeDuration(videoUrl);
+            if (seconds && seconds > 0) {
+              playDuration = seconds;
+              durationKnown = true;
+            }
+          }
         }
       } else {
         // ── Search mode ─────────────────────────────────────────────────────
@@ -237,6 +248,11 @@ export function createGreenScreenCommand(
       // pensé pour des vidéos dont on connaît la fin.
       if (!requestedSeconds && (isGifUrl(videoUrl) || (!durationKnown && isYoutubeUrl(videoUrl)))) {
         playDuration = capped(UNTIMED_DEFAULT_SECONDS);
+      }
+
+      // Même connue, une longueur reste bornée par le plafond du tenant
+      if (durationKnown) {
+        playDuration = capped(playDuration);
       }
 
       // ── Requested cut overrides the resolved length ──────────────────────
