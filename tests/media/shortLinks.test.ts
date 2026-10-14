@@ -11,7 +11,6 @@ import {
 
 const API_KEY = "sk_live_test";
 const CANONICAL_TIKTOK = "https://www.tiktok.com/@user/video/7123456789012345678";
-const EMBED = "https://www.tiktok.com/embed/v2/7123456789012345678?autoplay=1";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -95,14 +94,16 @@ describe("sociavaultResolve", () => {
     expect(resolved?.portrait).toBe(false);
   });
 
-  it("falls back to the embed when the API refuses, and does not cache it", async () => {
+  it("gives up when the API refuses, and does not cache the failure", async () => {
     const fetchMock = stubTiktokApi({}, 402);
 
     const first = await sociavaultResolve(CANONICAL_TIKTOK, API_KEY);
     const second = await sociavaultResolve(CANONICAL_TIKTOK, API_KEY);
 
-    expect(first?.url).toBe(EMBED);
-    expect(second?.url).toBe(EMBED);
+    // The embed would open muted behind a cookie banner, so a refusal is the
+    // honest answer and the caller says so in chat.
+    expect(first).toBeNull();
+    expect(second).toBeNull();
     // Retried, so a later call can still get a real file
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
@@ -113,7 +114,7 @@ describe("sociavaultResolve", () => {
 
     const resolved = await sociavaultResolve(CANONICAL_TIKTOK, "");
 
-    expect(resolved?.url).toBe(EMBED);
+    expect(resolved).toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 

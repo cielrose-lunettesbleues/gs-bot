@@ -21,7 +21,9 @@ interface AwemeInfo {
   aweme_id?: string;
   desc?: string;
   author?: { unique_id?: string };
-  video?: { duration?: number };
+  // The search payload often carries the full video object, play addresses
+  // included, so it is kept open rather than narrowed to the duration.
+  video?: Record<string, unknown> & { duration?: number };
   music?: { duration?: number; video_duration?: number };
   is_ads?: boolean;
 }
@@ -38,8 +40,26 @@ function toItems(v: unknown): AwemeInfo[] {
     .filter((a): a is AwemeInfo => !!a && typeof a === "object");
 }
 
-function embedUrl(awemeId: string): string {
-  return `https://www.tiktok.com/embed/v2/${awemeId}?autoplay=1`;
+// The embed player is muted and sits behind a cookie banner, which is worse
+// than nothing on a stream, so a TikTok that yields no real file is refused
+// rather than shown. Both callers already handle a null by saying so.
+async function playableFileFor(
+  chosen: AwemeInfo,
+  apiKey: string,
+  log?: SimpleLogger
+): Promise<{ url: string; portrait: boolean } | null> {
+  // Free when the payload already holds the addresses; a credit only if not.
+  const inline = chosen.video ? pickPlayableVideo(chosen.video) : null;
+  if (inline) return { url: inline.url, portrait: inline.height >= inline.width };
+
+  const author = chosen.author?.unique_id;
+  if (!author || !chosen.aweme_id) return null;
+  const direct = await fetchTiktokDirect(
+    `https://www.tiktok.com/@${author}/video/${chosen.aweme_id}`,
+    apiKey,
+    log
+  );
+  return direct ? { url: direct.url, portrait: direct.portrait } : null;
 }
 
 const BROWSER_UA =
@@ -129,10 +149,16 @@ export async function sociavaultSearch(
     desc: chosen.desc?.slice(0, 80)
   }, "SociaVault chosen video");
 
+  const file = await playableFileFor(chosen, apiKey, log);
+  if (!file) {
+    log?.warn({ query, aweme_id: chosen.aweme_id }, "SociaVault search: no playable file for the chosen video");
+    return null;
+  }
+
   return {
-    url: embedUrl(chosen.aweme_id!),
+    url: file.url,
     durationSeconds,
-    portrait: true,
+    portrait: file.portrait,
     title: `@${chosen.author!.unique_id}`
   };
 }
@@ -275,10 +301,10 @@ export async function sociavaultResolve(
     return direct;
   }
 
-  // Last resort, deliberately not cached so the next try can still get a file:
-  // the embed plays, but muted and possibly behind a cookie banner.
-  log?.warn({ tiktokUrl: canonical }, "SociaVault TikTok: falling back to the embed player");
-  return { url: embedUrl(match[1]), durationSeconds: 0, portrait: true };
+  // No file, no playback. The embed would open muted behind a cookie banner,
+  // so the caller is told it failed and can say so in chat instead.
+  log?.warn({ tiktokUrl: canonical }, "SociaVault TikTok: no playable file for this video");
+  return null;
 }
 
 // ─── YouTube ──────────────────────────────────────────────────────────────────

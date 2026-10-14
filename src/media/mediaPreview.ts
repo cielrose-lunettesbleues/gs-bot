@@ -7,7 +7,6 @@ export type MediaPreview =
   | { kind: "youtube"; embedUrl: string; thumbnailUrl: string; portrait: boolean }
   | { kind: "image"; url: string }
   | { kind: "video"; url: string; portrait: boolean; durationSeconds: number }
-  | { kind: "iframe"; url: string; portrait: boolean }
   | { kind: "unsupported"; reason: string };
 
 type Resolver = (url: string) => Promise<{ url: string; durationSeconds: number; portrait: boolean } | null>;
@@ -42,11 +41,9 @@ export async function buildMediaPreview(url: string, deps: PreviewDeps = {}): Pr
   if (/tiktok\.com/i.test(url)) {
     if (!deps.tiktokResolve) return { kind: "unsupported", reason: "tiktok_not_configured" };
     const resolved = await deps.tiktokResolve(url);
+    // A TikTok only resolves to a real file now, so there is nothing left that
+    // would need an iframe: no file means no preview and no send.
     if (!resolved) return { kind: "unsupported", reason: "tiktok_unresolved" };
-    // Only the embed fallback needs an iframe; a resolved file plays as video
-    if (/tiktok\.com\/embed/i.test(resolved.url)) {
-      return { kind: "iframe", url: resolved.url, portrait: resolved.portrait };
-    }
     return {
       kind: "video",
       url: resolved.url,

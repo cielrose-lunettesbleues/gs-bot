@@ -86,20 +86,30 @@ describe("buildMediaPreview", () => {
     });
   });
 
-  it("previews TikTok as its own embed", async () => {
+  it("previews a resolved TikTok as a plain video", async () => {
     const tiktokResolve = vi.fn(async () => ({
-      url: "https://www.tiktok.com/embed/v2/123?autoplay=1",
-      durationSeconds: 0,
+      url: "https://v16.tiktokcdn.com/video.mp4",
+      durationSeconds: 12,
       portrait: true
     }));
 
     const preview = await buildMediaPreview("https://www.tiktok.com/@a/video/123", { tiktokResolve });
 
     expect(preview).toEqual({
-      kind: "iframe",
-      url: "https://www.tiktok.com/embed/v2/123?autoplay=1",
-      portrait: true
+      kind: "video",
+      url: "https://v16.tiktokcdn.com/video.mp4",
+      portrait: true,
+      durationSeconds: 12
     });
+  });
+
+  it("says so when a TikTok yields no file, rather than offering the embed", async () => {
+    // The embed opens muted behind a cookie banner, which is useless on stream
+    const tiktokResolve = vi.fn(async () => null);
+
+    const preview = await buildMediaPreview("https://www.tiktok.com/@a/video/123", { tiktokResolve });
+
+    expect(preview).toEqual({ kind: "unsupported", reason: "tiktok_unresolved" });
   });
 
   it("resolves a Tenor page to its image", async () => {

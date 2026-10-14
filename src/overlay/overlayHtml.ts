@@ -222,15 +222,6 @@ iframe{
       }
       return w;
     }
-    if(/tiktok\\.com\\/embed/i.test(url)){
-      var c=document.createElement('div');
-      c.className='tk-short-inner';
-      var f=document.createElement('iframe');
-      f.src=url;
-      f.allow='autoplay; fullscreen';
-      c.appendChild(f);
-      return c;
-    }
     // Tenor/Giphy page URL — server-side resolution failed, embed as iframe fallback
     if(/tenor\\.com\\/view\\//i.test(url) || /giphy\\.com\\/gifs\\//i.test(url)){
       var f=document.createElement('iframe');

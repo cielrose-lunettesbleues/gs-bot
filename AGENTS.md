@@ -424,6 +424,7 @@ Couverture principale actuelle :
 - [x] Connexion Twitch chat via tmi.js
 - [x] Commande `!gs <url>` avec validation URL
 - [x] Résolution Instagram (reels, posts, IGTV) vers le MP4 direct via SociaVault
+- [x] Résolution TikTok vers le MP4 direct via SociaVault. **Pas de repli sur l'embed** : le lecteur embarqué démarre muet et derrière la bannière de cookies, ce qui est pire que rien sur un stream, donc un TikTok sans fichier lisible est refusé avec un message clair au lieu d'être affiché
 - [x] Page viewers `/submit/:channel` (envoi sans chat, prévisualisation, favoris)
 - [x] Parcours de GIF Klipy depuis la page viewers, ajoutables en favoris
 - [x] Durée réelle d'une vidéo YouTube via SociaVault (1 crédit, mise en cache 10 min) ; sans elle, lecture courte de 10s comme un GIF
