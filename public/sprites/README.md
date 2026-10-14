@@ -15,6 +15,7 @@ modification de code n'est nécessaire.
 | `sidekick` | Second personnage, qui vole à côté du premier. Les deux traversent l'écran sur la même durée, pour qu'ils restent un duo ; seules leurs étapes intermédiaires diffèrent, ce qui fait respirer l'écart |
 | `ring` | Remplace l'anneau doré dessiné en CSS (titres, favoris, indicateur de chargement) |
 | `ground` | Texture du sol défilant sous l'en-tête (se répète horizontalement) |
+| `skyline` | Couche la plus lointaine, derrière le `backdrop` : ciel, nuages et montagnes. Elle dérive à 45 % de la vitesse du `backdrop`, et c'est cet écart qui fait la parallaxe — la durée est calculée à partir de la couche proche, donc redimensionner une tuile ne fausse pas le rapport. Son haut s'efface en dégradé, pour qu'une découpe de ciel ne tire pas une ligne nette en travers de la page |
 | `backdrop` | Décor lointain qui défile derrière la scène. L'image doit être une **tuile en miroir** (moitié gauche recopiée inversée à droite) : sa première et sa dernière colonne sont alors identiques, donc la répétition ne montre aucune jointure. Attention aux liserés de séparation des planches d'origine : un seul rang de pixels parasite devient une ligne visible en travers du site |
 
 ## Exemple de `sprites.json`

@@ -33,7 +33,9 @@ const manifestSchema = z.object({
   ring: spriteSchema.optional(),
   ground: spriteSchema.optional(),
   /** Distant scenery, fixed at the foot of the window behind everything. */
-  backdrop: spriteSchema.optional()
+  backdrop: spriteSchema.optional(),
+  /** Further still, behind the backdrop, drifting slower to give depth. */
+  skyline: spriteSchema.optional()
 });
 
 export type SpriteDefinition = z.infer<typeof spriteSchema>;

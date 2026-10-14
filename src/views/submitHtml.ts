@@ -56,6 +56,11 @@ function sheetKeyframes(name: string, sprite: SpriteDefinition): string {
 // l'écart entre les deux qui donne la profondeur.
 const BACKDROP_SCROLL_SECONDS = 150;
 
+// Le ciel lointain dérive à cette fraction de la vitesse des palmiers. C'est
+// l'écart qui fait la parallaxe, donc on le garde en ratio: redimensionner
+// l'une ou l'autre tuile ne le fausse pas.
+const SKYLINE_SPEED_RATIO = 0.45;
+
 // Emitted after the base stylesheet so these rules win, while every untouched
 // slot keeps its drawn fallback. Deleting a sprite file is therefore enough to
 // restore the original look.
@@ -132,6 +137,26 @@ ${sheetKeyframes("sidekick-sheet", sidekick)}`);
 @keyframes backdrop-scroll{from{transform:translateX(0)}to{transform:translateX(-${w}px)}}`);
   }
 
+  if (sprites.skyline) {
+    const skyline = sprites.skyline;
+    const { w, h } = displaySize(skyline);
+    // Vitesse dérivée de celle des palmiers, pas choisie à part: sans couche
+    // proche à laquelle se comparer, la tuile sert de référence à elle-même.
+    const nearWidth = sprites.backdrop ? displaySize(sprites.backdrop).w : w;
+    const nearSpeed = nearWidth / BACKDROP_SCROLL_SECONDS;
+    const seconds = Math.max(1, Math.round(w / (nearSpeed * SKYLINE_SPEED_RATIO)));
+    blocks.push(`
+.skyline{height:${h}px}
+.skyline::before{
+  content:"";position:absolute;left:0;bottom:0;height:${h}px;width:calc(100% + ${w}px);
+  background-image:url("/sprites/${skyline.file}");
+  background-size:${w}px ${h}px;
+  background-repeat:repeat-x;
+  animation:skyline-scroll ${seconds}s linear infinite;
+}
+@keyframes skyline-scroll{from{transform:translateX(0)}to{transform:translateX(-${w}px)}}`);
+  }
+
   if (sprites.mascot || sprites.sidekick) {
     // Une grande traversée qui n'avance pas d'un pas régulier: chaque étape
     // revient un peu en arrière avant de repartir, ce qui garde l'allure
@@ -168,10 +193,10 @@ ${sheetKeyframes("sidekick-sheet", sidekick)}`);
   if (blocks.length === 0) return "";
   return `<style>
 /* Sprites fournis par l'opérateur */
-.ring,.mascot,.sidekick,.ground .checks::before,.backdrop::before{image-rendering:pixelated}
+.ring,.mascot,.sidekick,.ground .checks::before,.backdrop::before,.skyline::before{image-rendering:pixelated}
 ${blocks.join("\n")}
 @media (prefers-reduced-motion: reduce){
-  .ground .checks::before,.backdrop::before{animation:none}
+  .ground .checks::before,.backdrop::before,.skyline::before{animation:none}
 }
 </style>`;
 }
@@ -284,6 +309,15 @@ h1 .chan{color:var(--gold)}
 .backdrop{
   position:absolute;left:0;right:0;bottom:48px;z-index:-1;
   overflow:hidden;pointer-events:none;opacity:.3;
+}
+/* Encore derrière: le ciel et les montagnes. Plus pâle et plus lent que les
+   palmiers, c'est ce qui creuse la profondeur. Le haut s'efface en dégradé,
+   sinon la découpe du ciel tirerait une ligne nette en travers de la page. */
+.skyline{
+  position:absolute;left:0;right:0;bottom:48px;z-index:-2;
+  overflow:hidden;pointer-events:none;opacity:.18;
+  -webkit-mask-image:linear-gradient(to top,#000 55%,transparent);
+  mask-image:linear-gradient(to top,#000 55%,transparent);
 }
 
 /* Scène de fin de page: le sol court sur toute la largeur, les personnages s'y
@@ -578,6 +612,7 @@ ${spriteStyles(props.sprites ?? {})}
 </div>
 
 <div class="scene">
+  <div class="skyline" aria-hidden="true"${props.sprites?.skyline ? "" : " hidden"}></div>
   <div class="backdrop" aria-hidden="true"${props.sprites?.backdrop ? "" : " hidden"}></div>
   <div class="speed" aria-hidden="true"><i></i><i></i><i></i></div>
   <div class="mascot" aria-hidden="true"${props.sprites?.mascot ? "" : " hidden"}></div>

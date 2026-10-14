@@ -307,6 +307,45 @@ describe("getSubmitHtml", () => {
     expect(html).toMatch(/backdrop-scroll \d+s linear infinite/);
   });
 
+  it("drifts the far sky slower than the palms, which is the parallax", () => {
+    const html = getSubmitHtml(props({
+      sprites: {
+        backdrop: { file: "backdrop.png", frames: 1, fps: 12, width: 512, height: 213, displayWidth: 1524 },
+        skyline: { file: "skyline.png", frames: 1, fps: 12, width: 1024, height: 148, displayWidth: 3072 }
+      }
+    }));
+
+    expect(html).toContain('url("/sprites/skyline.png")');
+    // Its own loop still lands back on itself, tile for tile
+    expect(html).toContain("to{transform:translateX(-3072px)}");
+
+    const speed = (name: string, width: number) => {
+      const seconds = Number(new RegExp(`${name}-scroll (\\d+)s linear`).exec(html)?.[1]);
+      expect(seconds).toBeGreaterThan(0);
+      return width / seconds;
+    };
+    // Slower on screen, not merely a longer duration over a wider tile
+    expect(speed("skyline", 3072)).toBeLessThan(speed("backdrop", 1524));
+  });
+
+  it("keeps the far sky behind the palms, and leaves it out when absent", () => {
+    const withSky = getSubmitHtml(props({
+      sprites: {
+        backdrop: { file: "backdrop.png", frames: 1, fps: 12, width: 512, height: 213 },
+        skyline: { file: "skyline.png", frames: 1, fps: 12, width: 1024, height: 148 }
+      }
+    }));
+    // Painted first and further back, or it would hide the scenery it sits behind
+    expect(withSky.indexOf('class="skyline"')).toBeLessThan(withSky.indexOf('class="backdrop"'));
+    expect(withSky).toMatch(/\.skyline\{[^}]*z-index:-2/);
+    expect(withSky).toMatch(/\.backdrop\{[^}]*z-index:-1/);
+
+    // Opt-in like every other slot: no file, no layer
+    const without = getSubmitHtml(props({ sprites: {} }));
+    expect(without).toContain('class="skyline" aria-hidden="true" hidden');
+    expect(without).not.toContain("skyline-scroll");
+  });
+
   it("leaves a still sprite unanimated", () => {
     const html = getSubmitHtml(props({
       sprites: { ground: { file: "ground.png", frames: 1, fps: 12, width: 32, height: 22 } }
