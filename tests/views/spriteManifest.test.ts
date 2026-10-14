@@ -21,8 +21,8 @@ function writeManifest(content: unknown) {
   writeFileSync(join(dir, SPRITE_MANIFEST_NAME), typeof content === "string" ? content : JSON.stringify(content));
 }
 
-function writeImage(name: string) {
-  writeFileSync(join(dir, name), "not really an image");
+function writeImage(name: string, content = "not really an image") {
+  writeFileSync(join(dir, name), content);
 }
 
 describe("isAllowedSpriteFile", () => {
@@ -38,6 +38,24 @@ describe("isAllowedSpriteFile", () => {
 });
 
 describe("loadSpriteSet", () => {
+  it("stamps each sprite with its content, so a corrected image is not left cached", () => {
+    writeManifest({ ring: { file: "ring.png" } });
+    writeImage("ring.png", "first drawing");
+    const before = loadSpriteSet(dir, logger).ring?.version;
+
+    writeImage("ring.png", "corrected drawing");
+    const after = loadSpriteSet(dir, logger).ring?.version;
+
+    expect(before).toBeTruthy();
+    // Sprites are served with a long cache under a name that never changes, so
+    // the version is the only thing that can tell a browser to fetch again.
+    expect(after).not.toBe(before);
+
+    // And the same bytes keep the same stamp, or every deploy would refetch
+    writeImage("ring.png", "first drawing");
+    expect(loadSpriteSet(dir, logger).ring?.version).toBe(before);
+  });
+
   it("returns nothing when no manifest is present", () => {
     expect(loadSpriteSet(dir, logger)).toEqual({});
     expect(logger.warn).not.toHaveBeenCalled();
@@ -52,7 +70,8 @@ describe("loadSpriteSet", () => {
       frames: 1,
       fps: 12,
       width: 64,
-      height: 64
+      height: 64,
+      version: expect.any(String)
     });
   });
 

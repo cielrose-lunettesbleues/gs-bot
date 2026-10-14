@@ -27,9 +27,15 @@ function displaySize(sprite: SpriteDefinition): { w: number; h: number; sheet: n
   return { w, h, sheet: w * sprite.frames };
 }
 
+// A changed file must reach browsers that already hold the old one: the
+// content hash in the query makes it a different URL.
+function spriteUrl(sprite: SpriteDefinition): string {
+  return sprite.version ? `${sprite.file}?v=${sprite.version}` : sprite.file;
+}
+
 function sheetBackground(sprite: SpriteDefinition): string {
   const { w, h, sheet } = displaySize(sprite);
-  return `width:${w}px;height:${h}px;background:url("/sprites/${sprite.file}") 0 0/${sheet}px ${h}px no-repeat;`;
+  return `width:${w}px;height:${h}px;background:url("/sprites/${spriteUrl(sprite)}") 0 0/${sheet}px ${h}px no-repeat;`;
 }
 
 // A sheet animation walks the strip one frame at a time; a single frame is
@@ -92,7 +98,7 @@ ${sheetKeyframes("ring-sheet", ring)}`);
 .ground .checks{height:${h}px;background-color:transparent}
 .ground .checks::before{
   width:calc(100% + ${w}px);
-  background-image:url("/sprites/${ground.file}");
+  background-image:url("/sprites/${spriteUrl(ground)}");
   background-size:${w}px ${h}px;
   background-position:0 0;
   animation:ground-sheet 1.4s linear infinite;
@@ -127,7 +133,7 @@ ${sheetKeyframes("sidekick-sheet", sidekick)}`);
 .backdrop{height:${h}px}
 .backdrop::before{
   content:"";position:absolute;left:0;bottom:0;height:${h}px;width:calc(100% + ${w}px);
-  background-image:url("/sprites/${backdrop.file}");
+  background-image:url("/sprites/${spriteUrl(backdrop)}");
   background-size:${w}px ${h}px;
   background-repeat:repeat-x;
   animation:backdrop-scroll ${BACKDROP_SCROLL_SECONDS}s linear infinite;
@@ -149,7 +155,7 @@ ${sheetKeyframes("sidekick-sheet", sidekick)}`);
 .skyline{height:${h}px}
 .skyline::before{
   content:"";position:absolute;left:0;bottom:0;height:${h}px;width:calc(100% + ${w}px);
-  background-image:url("/sprites/${skyline.file}");
+  background-image:url("/sprites/${spriteUrl(skyline)}");
   background-size:${w}px ${h}px;
   background-repeat:repeat-x;
   animation:skyline-scroll ${seconds}s linear infinite;

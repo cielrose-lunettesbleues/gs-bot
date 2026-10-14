@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import { z } from "zod";
@@ -38,8 +39,15 @@ const manifestSchema = z.object({
   skyline: spriteSchema.optional()
 });
 
-export type SpriteDefinition = z.infer<typeof spriteSchema>;
-export type SpriteSet = z.infer<typeof manifestSchema>;
+export type SpriteDefinition = z.infer<typeof spriteSchema> & {
+  /**
+   * Short hash of the file's bytes, appended to its URL. Sprites are served
+   * with a long cache and their names never change, so without this a
+   * corrected image would keep showing the old one for a day.
+   */
+  version?: string;
+};
+export type SpriteSet = { [K in keyof z.infer<typeof manifestSchema>]?: SpriteDefinition };
 
 export const SPRITE_MANIFEST_NAME = "sprites.json";
 
@@ -81,11 +89,15 @@ export function loadSpriteSet(dir: string, log?: SimpleLogger): SpriteSet {
   const kept: SpriteSet = {};
   for (const [slot, definition] of Object.entries(result.data)) {
     if (!definition) continue;
-    if (!fs.existsSync(path.join(dir, definition.file))) {
+    let bytes: Buffer;
+    try {
+      bytes = fs.readFileSync(path.join(dir, definition.file));
+    } catch {
       log?.warn({ slot, file: definition.file }, "Sprite file listed in the manifest is missing");
       continue;
     }
-    kept[slot as keyof SpriteSet] = definition;
+    const version = crypto.createHash("sha1").update(bytes).digest("hex").slice(0, 10);
+    kept[slot as keyof SpriteSet] = { ...definition, version };
   }
   return kept;
 }

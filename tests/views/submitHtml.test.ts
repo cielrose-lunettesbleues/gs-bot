@@ -307,6 +307,33 @@ describe("getSubmitHtml", () => {
     expect(html).toMatch(/backdrop-scroll \d+s linear infinite/);
   });
 
+  it("puts the version of every sprite in its URL", () => {
+    const html = getSubmitHtml(props({
+      sprites: {
+        mascot: { file: "mascot.png", frames: 8, fps: 32, width: 31, height: 36, version: "aaaa111111" },
+        ground: { file: "ground.png", frames: 1, fps: 12, width: 32, height: 22, version: "bbbb222222" },
+        backdrop: { file: "backdrop.png", frames: 1, fps: 12, width: 508, height: 213, version: "cccc333333" },
+        skyline: { file: "skyline.png", frames: 1, fps: 12, width: 1024, height: 148, version: "dddd444444" }
+      }
+    }));
+
+    // A corrected image must not stay hidden behind the cached old one
+    for (const [file, version] of [
+      ["mascot.png", "aaaa111111"],
+      ["ground.png", "bbbb222222"],
+      ["backdrop.png", "cccc333333"],
+      ["skyline.png", "dddd444444"]
+    ]) {
+      expect(html).toContain(`/sprites/${file}?v=${version}`);
+    }
+
+    // Without a version the plain name still works, for a hand-written manifest
+    const bare = getSubmitHtml(props({
+      sprites: { ring: { file: "ring.png", frames: 4, fps: 12, width: 20, height: 16 } }
+    }));
+    expect(bare).toContain('/sprites/ring.png")');
+  });
+
   it("drifts the far sky slower than the palms, which is the parallax", () => {
     const html = getSubmitHtml(props({
       sprites: {
