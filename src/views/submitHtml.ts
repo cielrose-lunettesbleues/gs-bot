@@ -100,7 +100,7 @@ ${sheetKeyframes("ring-sheet", ring)}`);
     blocks.push(`
 .mascot{
   ${sheetBackground(mascot)}
-  ${sheetAnimation("mascot-sheet", mascot, "travel-a 23s ease-in-out infinite alternate")}
+  ${sheetAnimation("mascot-sheet", mascot, "travel-a 25s ease-in-out infinite alternate")}
 }
 ${sheetKeyframes("mascot-sheet", mascot)}`);
   }
@@ -110,7 +110,7 @@ ${sheetKeyframes("mascot-sheet", mascot)}`);
     blocks.push(`
 .sidekick{
   ${sheetBackground(sidekick)}
-  ${sheetAnimation("sidekick-sheet", sidekick, "travel-b 27s ease-in-out infinite alternate")}
+  ${sheetAnimation("sidekick-sheet", sidekick, "travel-b 25s ease-in-out infinite alternate")}
 }
 ${sheetKeyframes("sidekick-sheet", sidekick)}`);
   }
@@ -135,27 +135,33 @@ ${sheetKeyframes("sidekick-sheet", sidekick)}`);
   if (sprites.mascot || sprites.sidekick) {
     // Une grande traversée qui n'avance pas d'un pas régulier: chaque étape
     // revient un peu en arrière avant de repartir, ce qui garde l'allure
-    // inégale tout en couvrant l'écran. Les deux durées ne tombent jamais en
-    // phase, donc l'écart entre les personnages ne se répète pas non plus.
+    // inégale tout en couvrant l'écran.
+    //
+    // Les deux partent du même point, arrivent au même point et durent
+    // exactement aussi longtemps: c'est ce qui les garde ensemble. Seules les
+    // étapes intermédiaires sont décalées, donc l'écart s'ouvre et se referme
+    // de quelques vw et la tête change de main, sans jamais qu'ils se perdent
+    // de vue. Des durées différentes les déphaseraient indéfiniment.
     blocks.push(`
 @keyframes travel-a{
   0%{transform:translateX(0)}
-  14%{transform:translateX(11vw)}
-  26%{transform:translateX(8vw)}
-  44%{transform:translateX(28vw)}
-  58%{transform:translateX(24vw)}
-  76%{transform:translateX(48vw)}
-  88%{transform:translateX(44vw)}
-  100%{transform:translateX(62vw)}
+  13%{transform:translateX(9vw)}
+  24%{transform:translateX(6vw)}
+  42%{transform:translateX(26vw)}
+  55%{transform:translateX(22vw)}
+  74%{transform:translateX(44vw)}
+  86%{transform:translateX(40vw)}
+  100%{transform:translateX(58vw)}
 }
 @keyframes travel-b{
-  0%{transform:translateX(4vw)}
-  18%{transform:translateX(0)}
-  32%{transform:translateX(16vw)}
-  47%{transform:translateX(13vw)}
-  64%{transform:translateX(34vw)}
-  80%{transform:translateX(30vw)}
-  100%{transform:translateX(55vw)}
+  0%{transform:translateX(0)}
+  17%{transform:translateX(11vw)}
+  29%{transform:translateX(9vw)}
+  42%{transform:translateX(24vw)}
+  57%{transform:translateX(25vw)}
+  72%{transform:translateX(42vw)}
+  88%{transform:translateX(43vw)}
+  100%{transform:translateX(58vw)}
 }`);
   }
 

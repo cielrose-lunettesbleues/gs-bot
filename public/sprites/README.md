@@ -12,9 +12,10 @@ modification de code n'est nécessaire.
 | Clé | Rôle sur la page |
 |-----|------------------|
 | `mascot` | Personnage affiché dans l'en-tête, à droite du titre |
-| `sidekick` | Second personnage, qui vole à côté du premier et dérive à son propre rythme |
+| `sidekick` | Second personnage, qui vole à côté du premier. Les deux traversent l'écran sur la même durée, pour qu'ils restent un duo ; seules leurs étapes intermédiaires diffèrent, ce qui fait respirer l'écart |
 | `ring` | Remplace l'anneau doré dessiné en CSS (titres, favoris, indicateur de chargement) |
 | `ground` | Texture du sol défilant sous l'en-tête (se répète horizontalement) |
+| `backdrop` | Décor lointain qui défile derrière la scène. L'image doit être une **tuile en miroir** (moitié gauche recopiée inversée à droite) : sa première et sa dernière colonne sont alors identiques, donc la répétition ne montre aucune jointure. Attention aux liserés de séparation des planches d'origine : un seul rang de pixels parasite devient une ligne visible en travers du site |
 
 ## Exemple de `sprites.json`
 

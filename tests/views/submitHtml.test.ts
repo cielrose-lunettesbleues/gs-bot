@@ -242,19 +242,55 @@ describe("getSubmitHtml", () => {
     }));
 
     // Sheet and travel ride together because they drive different properties
-    expect(html).toContain("animation:mascot-sheet 0.25s steps(4) infinite,travel-a 23s ease-in-out infinite alternate");
-    expect(html).toContain("animation:sidekick-sheet 0.29s steps(4) infinite,travel-b 27s ease-in-out infinite alternate");
+    expect(html).toMatch(/animation:mascot-sheet 0\.25s steps\(4\) infinite,travel-a \d+s ease-in-out infinite alternate/);
+    expect(html).toMatch(/animation:sidekick-sheet 0\.29s steps\(4\) infinite,travel-b \d+s ease-in-out infinite alternate/);
+
+    const durationOf = (name: string) =>
+      Number(new RegExp(`${name} (\\d+)s ease-in-out`).exec(html)?.[1]);
+    // The shared duration is what keeps them a pair: different ones drift them
+    // apart indefinitely, however the stops in between are placed.
+    expect(durationOf("travel-a")).toBe(durationOf("travel-b"));
+
+    const stopsOf = (name: string): Array<[number, number]> => {
+      const start = html.indexOf(`@keyframes ${name}`);
+      const block = html.slice(start, html.indexOf("}\n", html.indexOf("100%", start)));
+      // The opening stop is a bare translateX(0), with no unit to match
+      return [...block.matchAll(/(\d+)%\{transform:translateX\((\d+)(?:vw)?\)/g)].map(
+        (m) => [Number(m[1]), Number(m[2])] as [number, number]
+      );
+    };
+    const a = stopsOf("travel-a");
+    const b = stopsOf("travel-b");
+    expect(a.length).toBeGreaterThan(3);
+    expect(b.length).toBeGreaterThan(3);
 
     // Far enough to cross, in viewport units so it holds on any width
-    expect(html).toContain("100%{transform:translateX(62vw)}");
-    expect(html).toContain("100%{transform:translateX(55vw)}");
+    expect(a[a.length - 1][1]).toBeGreaterThanOrEqual(50);
+    // Same start and same finish, so they set off and turn around together
+    expect(a[0][1]).toBe(b[0][1]);
+    expect(a[a.length - 1][1]).toBe(b[b.length - 1][1]);
 
     // Every stride gives a little back before pushing on: that is the unevenness
-    const travelA = html.slice(html.indexOf("@keyframes travel-a"), html.indexOf("@keyframes travel-b"));
-    const stops = [...travelA.matchAll(/translateX\((\d+)vw\)/g)].map((m) => Number(m[1]));
-    expect(stops.some((value, index) => index > 0 && value < stops[index - 1])).toBe(true);
-    // Durations that never line up, so the gap between them keeps changing
-    expect(23 % 27).not.toBe(0);
+    for (const stops of [a, b]) {
+      const values = stops.map(([, value]) => value);
+      expect(values.some((value, index) => index > 0 && value < values[index - 1])).toBe(true);
+    }
+
+    // And they never wander far from one another. Sampled linearly, which is
+    // close enough to the browser's easing to catch a gap that runs away.
+    const at = (stops: Array<[number, number]>, p: number) => {
+      for (let i = 0; i < stops.length - 1; i += 1) {
+        const [p0, v0] = stops[i];
+        const [p1, v1] = stops[i + 1];
+        if (p >= p0 && p <= p1) return v0 + ((v1 - v0) * (p - p0)) / (p1 - p0);
+      }
+      return stops[stops.length - 1][1];
+    };
+    let widest = 0;
+    for (let p = 0; p <= 100; p += 0.5) widest = Math.max(widest, Math.abs(at(b, p) - at(a, p)));
+    expect(widest).toBeLessThan(8);
+    // Still a gap that breathes, or they would look welded together
+    expect(widest).toBeGreaterThan(2);
   });
 
   it("scrolls the distant scenery by exactly one tile, so the loop cannot show", () => {

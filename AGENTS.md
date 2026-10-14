@@ -289,7 +289,7 @@ Principes :
 - **La validation d'URL précède tout fetch** côté prévisualisation, pour que la route ne devienne pas un moyen de faire requêter des hôtes arbitraires au serveur.
 - Limites par IP : 5 envois et 20 prévisualisations par minute (`RateLimiter`).
 - **Parcours de GIF** : la clé Klipy ne quitte jamais le serveur, la recherche est limitée comme la prévisualisation, et le panneau reste masqué quand `GS_KLIPY_API_KEY` est absente. Les GIF arrivant en lien direct vers un CDN, `.gif` fait désormais partie des extensions autorisées par défaut (migration incluse pour les tenants existants).
-- **Sprites optionnels** : `public/sprites/sprites.json` décrit les emplacements `mascot`, `sidekick`, `ring` et `ground`, servis par `GET /sprites/:file`. Chaque emplacement est opt-in et la page garde son dessin CSS quand le fichier est absent — supprimer une image suffit à revenir au rendu d'origine, sans toucher au code. Le manifeste est lu au démarrage, les noms de fichiers sont restreints pour empêcher toute traversée de répertoire.
+- **Sprites optionnels** : `public/sprites/sprites.json` décrit les emplacements `mascot`, `sidekick`, `ring`, `ground` et `backdrop`, servis par `GET /sprites/:file`. Le `backdrop` doit être une tuile en miroir : le défilement est dérivé de `displayWidth`, donc changer les dimensions du manifeste suffit à garder la boucle sans jointure. Chaque emplacement est opt-in et la page garde son dessin CSS quand le fichier est absent — supprimer une image suffit à revenir au rendu d'origine, sans toucher au code. Le manifeste est lu au démarrage, les noms de fichiers sont restreints pour empêcher toute traversée de répertoire.
 
 ---
 
