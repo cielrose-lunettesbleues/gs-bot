@@ -10,6 +10,7 @@ export function getOverlayHtml(): string {
 html,body{width:100%;height:100%;overflow:hidden;background:transparent}
 #wrap{
   position:absolute;inset:0;
+  container-type:inline-size;
   opacity:0;transition:opacity .4s ease;
   display:flex;align-items:center;justify-content:center;
   background:transparent;
@@ -46,10 +47,13 @@ video,img{
   background-size:cover;background-position:center;
   filter:blur(24px) brightness(.4);
 }
+/* La colonne 9:16 se mesure sur son conteneur, jamais sur la fenêtre: avec
+   100vh elle garderait la taille du plein écran à l'intérieur d'un cadre
+   réduit, et le placement choisi dans l'éditeur n'aurait aucun effet. */
 .yt-short-inner{
   position:absolute;
-  top:0;bottom:0;height:100%;
-  width:calc(100vh * 9 / 16);
+  top:0;height:100%;
+  aspect-ratio:9/16;width:auto;
   left:50%;transform:translateX(-50%);
   overflow:hidden;
 }
@@ -63,8 +67,8 @@ video,img{
 /* TikTok: same 9:16 column — video plays as <video> (no iframe) */
 .tk-short-inner{
   position:absolute;
-  top:0;bottom:0;height:100%;
-  width:calc(100vh * 9 / 16);
+  top:0;height:100%;
+  aspect-ratio:9/16;width:auto;
   left:50%;transform:translateX(-50%);
   overflow:hidden;
 }
@@ -82,12 +86,20 @@ iframe{
   pointer-events:none;
 }
 #info.visible{opacity:1}
+/* Dans #wrap, donc le texte suit le cadre choisi dans l'éditeur, exactement
+   comme la prévisualisation le montre. Taille mesurée sur le cadre (cqw) et
+   non sur la fenêtre: à pleine taille le résultat est le même qu'avant, mais
+   un clip réduit n'écope plus d'un texte géant. */
 #caption{
-  position:absolute;bottom:24px;left:0;right:0;
+  position:absolute;bottom:4%;left:0;right:0;
   text-align:center;
   font-family:Impact,'Arial Narrow',Arial,sans-serif;
   font-weight:bold;
+  /* Repli d'abord: un OBS dont le Chromium ignore les unités de conteneur
+     rejette la seconde déclaration et garde celle-ci, au lieu de retomber
+     sur la taille par défaut. */
   font-size:clamp(24px,6vw,72px);
+  font-size:clamp(14px,5cqw,72px);
   color:#fff;
   text-transform:uppercase;
   text-shadow:
@@ -126,9 +138,9 @@ iframe{
 <body>
 <div id="wrap">
   <div id="media"></div>
+  <div id="caption"></div>
 </div>
 <div id="info"><span id="info-user"></span></div>
-<div id="caption"></div>
 <div id="tts-caption"></div>
 
 <script>

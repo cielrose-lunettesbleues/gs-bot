@@ -102,3 +102,39 @@ describe("overlay, editor settings", () => {
     expect(html).toContain("v.currentTime >= end");
   });
 });
+
+describe("overlay, the frame actually holds what it frames", () => {
+  const html = getOverlayHtml();
+
+  it("measures the portrait column against its frame, not the window", () => {
+    // 100vh kept full-screen size inside a shrunken frame, so the placement
+    // chosen in the editor did nothing at all for portrait media
+    expect(html).not.toContain("calc(100vh * 9 / 16)");
+    for (const cls of [".yt-short-inner{", ".tk-short-inner{"]) {
+      const rule = html.slice(html.indexOf(cls), html.indexOf("}", html.indexOf(cls)));
+      expect(rule).toContain("aspect-ratio:9/16");
+      expect(rule).toContain("height:100%");
+    }
+  });
+
+  it("keeps the caption with the clip it belongs to", () => {
+    // The preview draws it over the media, so the overlay has to agree
+    const bodyStart = html.indexOf("<body>");
+    const wrap = html.slice(html.indexOf('<div id="wrap">', bodyStart), html.indexOf('<div id="info">', bodyStart));
+    expect(wrap).toContain('<div id="caption"></div>');
+
+    const wrapRule = html.slice(html.indexOf("#wrap{"), html.indexOf("}", html.indexOf("#wrap{")));
+    expect(wrapRule).toContain("container-type:inline-size");
+    // Sized on the frame: a clip shrunk into a corner must not get giant text
+    expect(html).toContain("font-size:clamp(14px,5cqw,72px)");
+    // With the window-based rule kept ahead of it, so an OBS whose Chromium
+    // predates container units keeps a readable size instead of the default
+    const capRule = html.slice(html.indexOf("#caption{"), html.indexOf("}", html.indexOf("#caption{")));
+    expect(capRule.indexOf("6vw")).toBeLessThan(capRule.indexOf("5cqw"));
+  });
+
+  it("leaves the spoken text alone, since it belongs to no clip", () => {
+    const ttsRule = html.slice(html.indexOf("#tts-caption{"), html.indexOf("}", html.indexOf("#tts-caption{")));
+    expect(ttsRule).toContain("4vw");
+  });
+});
