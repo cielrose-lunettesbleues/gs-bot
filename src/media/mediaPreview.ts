@@ -30,7 +30,7 @@ export async function buildMediaPreview(url: string, deps: PreviewDeps = {}): Pr
   if (videoId) {
     return {
       kind: "youtube",
-      embedUrl: `https://www.youtube.com/embed/${videoId}?autoplay=0&controls=1&rel=0`,
+      embedUrl: `https://www.youtube.com/embed/${videoId}?autoplay=0&controls=1&rel=0&enablejsapi=1`,
       // hqdefault rather than maxres: it exists for every video, Shorts included
       thumbnailUrl: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
       // Previewed in the shape the overlay will actually give it

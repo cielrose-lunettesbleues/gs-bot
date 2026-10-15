@@ -72,3 +72,33 @@ describe("getOverlayHtml", () => {
     expect(getOverlayHtml()).toContain("addEventListener('ended', hide)");
   });
 });
+
+describe("overlay, editor settings", () => {
+  const html = getOverlayHtml();
+
+  it("places the media in percentages of the browser source", () => {
+    // Percentages, so the same send lands identically whatever resolution the
+    // Browser Source is configured at
+    expect(html).toContain("wrap.style.left=(p.x || 0)+'%'");
+    expect(html).toContain("wrap.style.width=(p.width === undefined ? 100 : p.width)+'%'");
+  });
+
+  it("clears the placement when a send carries none", () => {
+    // Otherwise a framed send would leave its frame to the next one
+    const fn = html.slice(html.indexOf("function placeWrap"), html.indexOf("function show(data)"));
+    expect(fn).toContain("wrap.style.width=wrap.style.height=''");
+    expect(fn).toMatch(/if\(!has\)/);
+  });
+
+  it("asks the YouTube player for the clip, in whole seconds", () => {
+    expect(html).toContain("'&start='+start");
+    expect(html).toContain("'&end='+end");
+  });
+
+  it("starts a file on the clip rather than seeking into it", () => {
+    // A media fragment skips fetching what comes before the start
+    expect(html).toContain("'#t=' + start");
+    // and the player's own clock ends it, which the arrival-time timer cannot
+    expect(html).toContain("v.currentTime >= end");
+  });
+});

@@ -88,6 +88,7 @@ Ils couvrent notamment:
 - payload `/api/status`
 - dashboard/logout/overlay inactif
 - refus d'un texte contenant un mot interdit, casse et accents compris
+- extrait, place a l ecran et texte choisis avant envoi (mini-editeur)
 
 ## Legacy Supprimé
 

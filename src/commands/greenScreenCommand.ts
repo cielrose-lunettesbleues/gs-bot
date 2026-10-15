@@ -32,7 +32,14 @@ const GIF_URL_RE = /\.gif(\?.*)?$/i;
 const YOUTUBE_URL_RE = /(?:youtube\.com|youtu\.be)\//i;
 
 /** Media with no end we can know of gets a short pass rather than the tenant length. */
-export const UNTIMED_DEFAULT_SECONDS = 10;
+export /** Length of the clip an editor trim describes, when it describes one. */
+function clipSeconds(p?: { startSeconds?: number; endSeconds?: number }): number | undefined {
+  if (!p || p.endSeconds === undefined) return undefined;
+  const span = p.endSeconds - (p.startSeconds ?? 0);
+  return span > 0 ? Math.round(span) : undefined;
+}
+
+const UNTIMED_DEFAULT_SECONDS = 10;
 
 function isGifUrl(url: string): boolean {
   return GIF_URL_RE.test(url);
@@ -274,6 +281,16 @@ export function createGreenScreenCommand(
         cutAfterSeconds = playDuration;
       }
 
+      // ── A trim chosen in the editor is the most specific length there is ──
+      // It says where the clip starts and ends, so it wins over both the
+      // source's own length and a "/<seconds>" asked for alongside it.
+      const presentation = context.presentation;
+      const trimmed = clipSeconds(presentation);
+      if (trimmed) {
+        playDuration = capped(trimmed);
+        cutAfterSeconds = playDuration;
+      }
+
       // ── Build TTS generator (called at actual play time) ─────────────────
       const ttsGenerate = buildTtsGenerate(deps, caption, voiceLabel, context.channel);
 
@@ -287,6 +304,7 @@ export function createGreenScreenCommand(
             caption,
             portrait,
             cutAfterSeconds,
+            presentation,
             ttsGenerate,
             userReply: context.reply
           },
@@ -302,6 +320,7 @@ export function createGreenScreenCommand(
         caption,
         portrait,
         cutAfterSeconds,
+        presentation,
         reply: context.reply,
         ttsGenerate
       });

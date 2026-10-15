@@ -448,6 +448,65 @@ input:focus{outline:3px solid var(--gold);outline-offset:1px}
 .frame.portrait{aspect-ratio:9/16;max-width:300px;margin:0 auto}
 .frame>*{position:absolute;inset:0;width:100%;height:100%;border:none;object-fit:contain}
 
+/* Le texte tel qu'il partira à l'écran: même police et même contour que
+   l'overlay, pour que la prévisualisation ne mente pas sur le rendu. */
+.cap-preview{
+  position:absolute;left:0;right:0;bottom:5%;
+  padding:0 6%;
+  text-align:center;
+  font-family:Impact,'Arial Narrow',Arial,sans-serif;
+  font-weight:bold;
+  font-size:clamp(13px,4.4cqw,34px);
+  color:#fff;text-transform:uppercase;line-height:1.1;
+  word-break:break-word;pointer-events:none;
+  text-shadow:
+    -2px -2px 0 #000, 2px -2px 0 #000,
+    -2px  2px 0 #000, 2px  2px 0 #000,
+    -2px  0   0 #000, 2px  0   0 #000,
+     0   -2px 0 #000, 0    2px 0 #000;
+}
+/* Dimensionné sur le cadre et non sur la fenêtre, sinon le texte d'une
+   prévisualisation étroite paraîtrait énorme. */
+.frame{container-type:inline-size}
+
+/* ── Éditeur ───────────────────────────────────────────────────────────── */
+#editor{margin-top:14px;display:none}
+#editor.visible{display:block}
+.ed-head{
+  font-size:12px;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--muted);margin:14px 0 7px;
+}
+.ed-row{display:flex;align-items:center;gap:10px;margin-bottom:7px}
+.ed-row > span:first-child{min-width:58px;font-size:13px;color:var(--muted)}
+.ed-row input[type=range]{flex:1;min-width:0;accent-color:var(--gold)}
+.ed-time{font-variant-numeric:tabular-nums;font-size:13px;min-width:58px;text-align:right}
+.ed-note{font-size:12px;color:var(--muted);margin-top:4px}
+
+/* La source navigateur vue de dessus: le cadre se déplace dedans. */
+.stage{
+  position:relative;width:100%;aspect-ratio:16/9;
+  background:repeating-conic-gradient(#0a1030 0% 25%,#070c24 0% 50%) 50%/22px 22px;
+  border:3px solid var(--panel-edge);border-radius:10px;
+  overflow:hidden;touch-action:none;
+}
+.stage-box{
+  position:absolute;
+  border:2px solid var(--gold);
+  background:rgba(255,210,63,.16);
+  cursor:move;touch-action:none;
+}
+.stage-box .lbl{
+  position:absolute;left:4px;top:3px;
+  font-size:11px;color:var(--ink);background:var(--gold);
+  padding:1px 5px;border-radius:4px;pointer-events:none;white-space:nowrap;
+}
+/* Assez grosse pour être attrapée au doigt */
+.stage-handle{
+  position:absolute;right:-11px;bottom:-11px;width:22px;height:22px;
+  background:var(--gold);border:2px solid var(--ink);border-radius:5px;
+  cursor:nwse-resize;touch-action:none;
+}
+
 #messages{list-style:none;margin-top:12px}
 #messages li{
   display:flex;align-items:center;gap:9px;
@@ -587,6 +646,34 @@ ${spriteStyles(props.sprites ?? {})}
       </div>
       <div class="notice" id="rules"></div>
       <div id="preview"></div>
+
+      <div id="editor">
+        <div id="ed-trim" hidden>
+          <div class="ed-head">Extrait</div>
+          <div class="ed-row">
+            <span>Début</span>
+            <input type="range" id="ed-start" min="0" max="100" step="1" value="0">
+            <span class="ed-time" id="ed-start-t">0:00</span>
+          </div>
+          <div class="ed-row">
+            <span>Fin</span>
+            <input type="range" id="ed-end" min="0" max="100" step="1" value="100">
+            <span class="ed-time" id="ed-end-t">0:00</span>
+          </div>
+          <div class="ed-note" id="ed-trim-note"></div>
+        </div>
+
+        <div class="ed-head">Place sur l'écran</div>
+        <div class="stage" id="ed-stage">
+          <div class="stage-box" id="ed-box">
+            <span class="lbl" id="ed-box-lbl">100%</span>
+            <span class="stage-handle" id="ed-handle"></span>
+          </div>
+        </div>
+        <div class="actions" style="margin-top:9px">
+          <button class="btn btn-sm" id="ed-reset" type="button">Plein écran</button>
+        </div>
+      </div>
       <ul id="messages"></ul>
     </div>
   </div>
@@ -778,6 +865,7 @@ ${spriteStyles(props.sprites ?? {})}
   function renderPreview(preview){
     previewBox.innerHTML = "";
     previewBox.className = "visible";
+    resetEditor();
 
     if(preview.kind === "unsupported"){
       previewBox.className = "";
@@ -792,6 +880,17 @@ ${spriteStyles(props.sprites ?? {})}
       iframe.src = preview.embedUrl;
       iframe.allow = "encrypted-media";
       iframe.allowFullscreen = true;
+      // Le lecteur ne parle qu'à qui s'annonce. Sa durée arrive alors par
+      // message, et les poignées d'extrait apparaissent; sans réponse elles
+      // restent cachées plutôt que d'afficher une échelle inventée.
+      iframe.addEventListener("load", function(){
+        try {
+          iframe.contentWindow.postMessage(
+            JSON.stringify({ event:"listening", id:1, channel:"widget" }),
+            "https://www.youtube.com"
+          );
+        } catch(err){}
+      });
       box.appendChild(iframe);
     } else if(preview.kind === "image"){
       box = frame(false);
@@ -810,7 +909,14 @@ ${spriteStyles(props.sprites ?? {})}
       video.setAttribute("playsinline", "");
       video.preload = "metadata";
       box.appendChild(video);
+      previewVideo = video;
+      // La durée réelle du fichier prime sur celle annoncée: c'est elle qui
+      // borne les poignées de l'extrait.
+      video.addEventListener("loadedmetadata", function(){
+        setClipDuration(video.duration);
+      });
       if(preview.durationSeconds > 0){
+        setClipDuration(preview.durationSeconds);
         say("Durée détectée : " + preview.durationSeconds + "s.");
       }
     } else {
@@ -821,8 +927,178 @@ ${spriteStyles(props.sprites ?? {})}
       embed.allowFullscreen = true;
       box.appendChild(embed);
     }
+    // Le texte se superpose au média, comme il le fera sur le stream
+    capPreviewEl = document.createElement("div");
+    capPreviewEl.className = "cap-preview";
+    box.appendChild(capPreviewEl);
+    syncCaptionPreview();
+
     previewBox.appendChild(box);
+    editorEl.className = "visible";
   }
+
+  // ── Éditeur: extrait et place à l'écran ───────────────────────────────────
+  var editorEl = el("editor");
+  var trimEl = el("ed-trim");
+  var startRange = el("ed-start"), endRange = el("ed-end");
+  var startTime = el("ed-start-t"), endTime = el("ed-end-t");
+  var trimNote = el("ed-trim-note");
+  var stage = el("ed-stage"), stageBox = el("ed-box"), stageLbl = el("ed-box-lbl");
+
+  // Tout est en pourcentages de la source navigateur, comme ce qui part au
+  // serveur: le cadre tombe au même endroit quelle que soit sa résolution.
+  var place = { x:0, y:0, w:100, h:100 };
+  var clip = { duration:0, start:0, end:0 };
+  var previewVideo = null;
+  var capPreviewEl = null;
+
+  function clamp(n, lo, hi){ return n < lo ? lo : (n > hi ? hi : n); }
+  function round2(n){ return Math.round(n * 100) / 100; }
+
+  function fmtTime(s){
+    s = Math.max(0, Math.round(s));
+    var r = s % 60;
+    return Math.floor(s / 60) + ":" + (r < 10 ? "0" : "") + r;
+  }
+
+  function drawBox(){
+    stageBox.style.left = place.x + "%";
+    stageBox.style.top = place.y + "%";
+    stageBox.style.width = place.w + "%";
+    stageBox.style.height = place.h + "%";
+    stageLbl.textContent = Math.round(place.w) + "%";
+  }
+
+  function resetPlace(){
+    place = { x:0, y:0, w:100, h:100 };
+    drawBox();
+  }
+
+  function resetEditor(){
+    editorEl.className = "";
+    trimEl.hidden = true;
+    clip = { duration:0, start:0, end:0 };
+    previewVideo = null;
+    resetPlace();
+  }
+
+  function trimTouched(){
+    return clip.duration > 0 && (clip.start > 0 || clip.end < clip.duration - 0.5);
+  }
+  function placeTouched(){
+    return place.x !== 0 || place.y !== 0 || place.w !== 100 || place.h !== 100;
+  }
+
+  // Rien n'est envoyé tant que rien n'a été touché: un envoi sans réglage doit
+  // rester exactement ce qu'il était avant l'éditeur.
+  function collectPresentation(){
+    var p = null;
+    if(trimTouched()){
+      p = p || {};
+      p.startSeconds = round2(clip.start);
+      p.endSeconds = round2(clip.end);
+    }
+    if(placeTouched()){
+      p = p || {};
+      p.x = round2(place.x); p.y = round2(place.y);
+      p.width = round2(place.w); p.height = round2(place.h);
+    }
+    return p;
+  }
+
+  function syncTrim(){
+    var s = parseFloat(startRange.value) || 0;
+    var e = parseFloat(endRange.value);
+    if(isNaN(e)) e = clip.duration;
+    // Un extrait garde au moins une seconde, et la poignée poussée est celle
+    // qui cède, pour que la main de l'utilisateur gagne toujours.
+    if(e <= s){
+      if(document.activeElement === startRange){
+        s = Math.max(0, e - 1); startRange.value = String(s);
+      } else {
+        e = Math.min(clip.duration, s + 1); endRange.value = String(e);
+      }
+    }
+    clip.start = s; clip.end = e;
+    startTime.textContent = fmtTime(s);
+    endTime.textContent = fmtTime(e);
+    trimNote.textContent = "Extrait de " + fmtTime(Math.max(1, e - s)) + ".";
+    if(previewVideo && Math.abs(previewVideo.currentTime - s) > 0.4){
+      try { previewVideo.currentTime = s; } catch(err){}
+    }
+  }
+
+  function setClipDuration(d){
+    if(!(d > 0) || !isFinite(d)){ trimEl.hidden = true; clip.duration = 0; return; }
+    clip.duration = d;
+    var whole = Math.floor(d);
+    startRange.max = String(whole);
+    endRange.max = String(whole);
+    startRange.value = "0";
+    endRange.value = String(whole);
+    trimEl.hidden = false;
+    syncTrim();
+  }
+
+  startRange.oninput = syncTrim;
+  endRange.oninput = syncTrim;
+  el("ed-reset").onclick = resetPlace;
+
+  function beginDrag(ev, mode){
+    ev.preventDefault();
+    var r = stage.getBoundingClientRect();
+    var sx = ev.clientX, sy = ev.clientY;
+    var from = { x:place.x, y:place.y, w:place.w, h:place.h };
+    function move(e){
+      var dx = (e.clientX - sx) / r.width * 100;
+      var dy = (e.clientY - sy) / r.height * 100;
+      if(mode === "move"){
+        // On peut déborder, mais jamais au point de perdre le cadre de vue
+        place.x = clamp(from.x + dx, -80, 95);
+        place.y = clamp(from.y + dy, -80, 95);
+      } else {
+        place.w = clamp(from.w + dx, 5, 200);
+        place.h = clamp(from.h + dy, 5, 200);
+      }
+      drawBox();
+    }
+    function up(){
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
+    }
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
+  }
+
+  stageBox.addEventListener("pointerdown", function(ev){
+    if(ev.target === el("ed-handle")) return;
+    beginDrag(ev, "move");
+  });
+  el("ed-handle").addEventListener("pointerdown", function(ev){
+    ev.stopPropagation();
+    beginDrag(ev, "resize");
+  });
+
+  // Le texte par-dessus la prévisualisation, mis à jour à la frappe
+  function syncCaptionPreview(){
+    if(!capPreviewEl) return;
+    capPreviewEl.textContent = captionInput.value.trim();
+  }
+  captionInput.addEventListener("input", syncCaptionPreview);
+
+  // YouTube ne dit sa durée qu'à qui s'annonce, et seulement une fois lancé.
+  // Sans réponse, la section extrait reste cachée plutôt que de mentir.
+  window.addEventListener("message", function(ev){
+    if(!/^https:\\/\\/(www\\.)?youtube(-nocookie)?\\.com$/.test(ev.origin)) return;
+    var data = ev.data;
+    if(typeof data === "string"){
+      try { data = JSON.parse(data); } catch(err){ return; }
+    }
+    var d = data && data.info && data.info.duration;
+    if(d > 0 && clip.duration === 0 && editorEl.className === "visible") setClipDuration(d);
+  });
 
   function doPreview(){
     var url = urlInput.value.trim();
@@ -849,6 +1125,8 @@ ${spriteStyles(props.sprites ?? {})}
     if(caption) payload.caption = caption;
     var duration = parseInt(durationInput.value, 10);
     if(!isNaN(duration) && duration > 0) payload.durationSeconds = duration;
+    var presentation = collectPresentation();
+    if(presentation) payload.presentation = presentation;
 
     var btn = el("btn-send");
     busy(btn, true);

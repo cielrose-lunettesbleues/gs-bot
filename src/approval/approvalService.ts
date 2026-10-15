@@ -1,4 +1,4 @@
-import type { PlaybackItem, EnqueueResult, TtsPlaybackEvent } from "../queue/playbackQueue";
+import type { PlaybackItem, EnqueueResult, PlaybackPresentation, TtsPlaybackEvent } from "../queue/playbackQueue";
 
 export interface ApprovalConfig {
   enabled: boolean;
@@ -12,6 +12,8 @@ interface PendingRequest {
   caption?: string;
   portrait?: boolean;
   cutAfterSeconds?: number;
+  /** Carried across the wait, or an approved send would lose its editing. */
+  presentation?: PlaybackPresentation;
   ttsGenerate?: () => Promise<TtsPlaybackEvent | null>;
   userReply: (msg: string) => Promise<void>;
   timeoutHandle: NodeJS.Timeout;
@@ -44,7 +46,17 @@ export class ApprovalService {
   }
 
   public async submit(
-    item: { url: string; durationSeconds: number; username: string; caption?: string; portrait?: boolean; cutAfterSeconds?: number; ttsGenerate?: () => Promise<TtsPlaybackEvent | null>; userReply: (msg: string) => Promise<void> },
+    item: {
+      url: string;
+      durationSeconds: number;
+      username: string;
+      caption?: string;
+      portrait?: boolean;
+      cutAfterSeconds?: number;
+      presentation?: PlaybackPresentation;
+      ttsGenerate?: () => Promise<TtsPlaybackEvent | null>;
+      userReply: (msg: string) => Promise<void>;
+    },
     channelNotify: (msg: string) => Promise<void>
   ): Promise<void> {
     const key = item.username.toLowerCase();
@@ -91,6 +103,7 @@ export class ApprovalService {
       caption: req.caption,
       portrait: req.portrait,
       cutAfterSeconds: req.cutAfterSeconds,
+      presentation: req.presentation,
       ttsGenerate: req.ttsGenerate,
       reply: req.userReply
     });

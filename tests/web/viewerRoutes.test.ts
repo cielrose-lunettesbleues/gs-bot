@@ -57,8 +57,13 @@ function createApp(options?: { klipyApiKey?: string }) {
   const tenant = {
     runtimeConfig: { commands: { gs: "!gs" } },
     router: {
-      route: vi.fn(async (ctx: { rawMessage: string; reply: (t: string) => Promise<void>; user: unknown }) => {
-        routed.push({ rawMessage: ctx.rawMessage, user: ctx.user });
+      route: vi.fn(async (ctx: {
+        rawMessage: string;
+        reply: (t: string) => Promise<void>;
+        user: unknown;
+        presentation?: unknown;
+      }) => {
+        routed.push({ rawMessage: ctx.rawMessage, user: ctx.user, presentation: ctx.presentation });
         await ctx.reply("@invite En cours (30s).");
       })
     }
@@ -380,5 +385,46 @@ describe("viewer login entry point", () => {
     const { app } = createApp();
     expect((await app.request(`${ORIGIN}/viewer/auth/twitch?channel=streamer&token=wrong`)).status).toBe(403);
     expect((await app.request(`${ORIGIN}/viewer/auth/twitch?channel=nobody&token=${webToken}`)).status).toBe(404);
+  });
+});
+
+describe("viewer page, editor settings", () => {
+  it("passes trim and placement beside the message, not inside it", async () => {
+    const { app, routed } = createApp();
+    const presentation = { startSeconds: 3, endSeconds: 9, x: 55, y: 10, width: 40, height: 35 };
+
+    const res = await post(app, `/submit/streamer/send?token=${webToken}`, {
+      url: "https://youtu.be/abc",
+      presentation
+    });
+
+    expect(res.status).toBe(200);
+    expect(routed[0].presentation).toEqual(presentation);
+    // The chat grammar stays readable: none of it is encoded in the text
+    expect(routed[0].rawMessage).toBe("!gs https://youtu.be/abc");
+  });
+
+  it("refuses a clip that ends before it starts", async () => {
+    const { app, routed } = createApp();
+
+    const res = await post(app, `/submit/streamer/send?token=${webToken}`, {
+      url: "https://youtu.be/abc",
+      presentation: { startSeconds: 10, endSeconds: 4 }
+    });
+
+    expect(res.status).toBe(400);
+    expect(routed).toHaveLength(0);
+  });
+
+  it("refuses a field the editor never sends", async () => {
+    const { app, routed } = createApp();
+
+    const res = await post(app, `/submit/streamer/send?token=${webToken}`, {
+      url: "https://youtu.be/abc",
+      presentation: { startSeconds: 1, rotate: 90 }
+    });
+
+    expect(res.status).toBe(400);
+    expect(routed).toHaveLength(0);
   });
 });

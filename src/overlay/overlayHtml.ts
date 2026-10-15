@@ -183,7 +183,9 @@ iframe{
     } catch(e){}
   });
 
-  function buildMedia(url, portrait){
+  function buildMedia(url, portrait, trim){
+    var start = trim && trim.startSeconds > 0 ? Math.floor(trim.startSeconds) : 0;
+    var end = trim && trim.endSeconds > 0 ? Math.floor(trim.endSeconds) : 0;
     var id = ytId(url);
     if(id){
       // Le drapeau portrait vient de la recherche YouTube, qui connaît le
@@ -195,7 +197,10 @@ iframe{
         +'&enablejsapi=1&origin='+encodeURIComponent(location.origin)
         // Pas de loop: une vidéo qui redémarre ne signale jamais sa fin, et on
         // la verrait repartir au lieu de s'arrêter.
-        +'&iv_load_policy=3&disablekb=1';
+        +'&iv_load_policy=3&disablekb=1'
+        // Le lecteur YouTube sait se limiter à un extrait, en secondes entières
+        +(start?'&start='+start:'')
+        +(end?'&end='+end:'');
       f.allow='autoplay; fullscreen';
       ytFrame = f;
       // Le lecteur n'envoie ses évènements qu'à qui s'annonce, et on relance la
@@ -235,10 +240,25 @@ iframe{
       return i;
     }
     var v=document.createElement('video');
-    v.src=url;
+    // Le fragment de média fait sauter le téléchargement de ce qui précède,
+    // donc la lecture démarre sur l'extrait au lieu de s'y rendre.
+    v.src = start ? url + (url.indexOf('#') === -1 ? '#t=' + start : '') : url;
     v.autoplay=true;
     v.playsInline=true;
     v.addEventListener('ended', hide);
+    if(start){
+      // Repli quand le serveur ignore les fragments: on s'y place à la main.
+      v.addEventListener('loadedmetadata', function(){
+        if(v.currentTime < start - 0.5) v.currentTime = start;
+      });
+    }
+    if(end){
+      // Plus juste que le minuteur, qui compte depuis l'arrivée de l'évènement
+      // et non depuis le premier instant réellement joué.
+      v.addEventListener('timeupdate', function(){
+        if(v.currentTime >= end) hide();
+      });
+    }
     if(portrait){
       var c=document.createElement('div');
       c.className='tk-short-inner';
@@ -256,12 +276,32 @@ iframe{
     wrap.classList.add('visible');
   }
 
+  // Placement choisi dans l'éditeur, en pourcentages de la source navigateur,
+  // pour que le même envoi tombe au même endroit quelle que soit sa résolution.
+  // Toujours réappliqué, y compris à vide: sans remise à zéro, un envoi cadré
+  // laisserait son cadre au suivant.
+  function placeWrap(p){
+    var has = p && (p.x !== undefined || p.y !== undefined || p.width !== undefined || p.height !== undefined);
+    if(!has){
+      wrap.style.left=wrap.style.top=wrap.style.right=wrap.style.bottom='';
+      wrap.style.width=wrap.style.height='';
+      return;
+    }
+    wrap.style.left=(p.x || 0)+'%';
+    wrap.style.top=(p.y || 0)+'%';
+    wrap.style.right='auto';
+    wrap.style.bottom='auto';
+    wrap.style.width=(p.width === undefined ? 100 : p.width)+'%';
+    wrap.style.height=(p.height === undefined ? 100 : p.height)+'%';
+  }
+
   function show(data){
     if(hideTimer){ clearTimeout(hideTimer); hideTimer=null; }
     if(revealTimer){ clearTimeout(revealTimer); revealTimer=null; }
     mediaEl.innerHTML='';
     ytFrame = null;
-    mediaEl.appendChild(buildMedia(data.url, data.portrait));
+    placeWrap(data.presentation);
+    mediaEl.appendChild(buildMedia(data.url, data.portrait, data.presentation));
 
     if(ytFrame){
       // Rien ne s'affiche tant que le lecteur n'a pas confirmé qu'il joue:

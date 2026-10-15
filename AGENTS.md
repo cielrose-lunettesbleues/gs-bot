@@ -259,10 +259,15 @@ GET /tts/audio/:channel/:id?token=...   → audio TTS protégé par le même tok
 Events envoyés :
 
 ```ts
-{ type: "start"; url: string; durationSeconds: number }  // jouer
+// jouer. presentation ne vient que du mini-éditeur de la page viewers:
+// startSeconds/endSeconds pour l'extrait, x/y/width/height en pourcentages
+// de la source navigateur pour la place à l'écran.
+{ type: "start"; url: string; durationSeconds: number; presentation?: PlaybackPresentation }
 { type: "stop" }                                          // cacher
 { type: "connected" }                                     // connexion initiale
 ```
+
+L'overlay réapplique le placement à chaque envoi, **y compris à vide** : sans remise à zéro, un envoi cadré laisserait son cadre au suivant.
 
 ---
 
@@ -284,6 +289,7 @@ Principes :
 - **Le token `web_token` est distinct de `overlay_token`** : régénérer la page viewers ne casse pas la source OBS.
 - **Un viewer n'est pas un streamer.** Les viewers vivent dans `viewers` / `viewer_sessions` avec le cookie `gs_viewer`, et aucun token Twitch n'est stocké pour eux. Une session viewer ne satisfait jamais `requireAuth` : elle ne donne accès ni au dashboard ni à `/api/*`.
 - **Les envois repassent par `tenant.router`**, donc blacklist, permissions, cooldown, approbation et validation d'URL s'appliquent sans duplication de logique.
+- **Mini-éditeur avant envoi** : la prévisualisation affiche le texte par-dessus le média, tel qu'il partira à l'écran, et propose un extrait (début/fin) plus une place libre sur la source navigateur (glisser/redimensionner, au doigt comme à la souris). Ces réglages voyagent dans `CommandContext.presentation`, **à côté du message et non dedans** : encoder un rectangle et deux timecodes dans `!gs <url>` serait une grammaire illisible, et l'envoi continue de passer par le même routeur. Un extrait est la longueur la plus précise qui soit, donc il l'emporte sur un `/N` demandé en même temps, tout en restant borné par `max_video_duration_seconds`. Rien n'est envoyé tant que rien n'a été touché : un envoi sans éditeur reste exactement ce qu'il était. La durée vient des métadonnées du fichier, ou du lecteur YouTube qui l'annonce par message ; sans réponse, les poignées restent cachées plutôt que d'afficher une échelle inventée. Le placement est libre, plein écran compris : les garde-fous restent `!gstop` et la file d'approbation.
 - **Les invités partagent le pseudo `invite`**, ce qui fait porter le cooldown sur l'ensemble des invités et permet de les bloquer d'un seul `!gs blacklist add invite`.
 - **En sub-only ou mod-only, les invités sont refusés** : leur statut est invérifiable faute d'identité. Les viewers connectés sont vérifiés via l'API Twitch (portées `channel:read:subscriptions` et `moderation:read`), avec un cache de 5 minutes.
 - **La validation d'URL précède tout fetch** côté prévisualisation, pour que la route ne devienne pas un moyen de faire requêter des hôtes arbitraires au serveur.

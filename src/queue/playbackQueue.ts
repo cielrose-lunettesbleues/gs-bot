@@ -5,6 +5,26 @@ export interface PlaybackQueueConfig {
   maxSize: number;
 }
 
+/**
+ * Chosen in the viewer page's editor, for one send only. The chat has no way
+ * to express any of it, so every field is optional and the overlay falls back
+ * to playing the whole source, centred and full size.
+ */
+export interface PlaybackPresentation {
+  /** Trim, counted from the start of the source. */
+  startSeconds?: number;
+  endSeconds?: number;
+  /**
+   * Where the media sits in the browser source, as percentages of its width
+   * and height. Kept as percentages so the same send looks the same whatever
+   * resolution the Browser Source is set to.
+   */
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+}
+
 export interface PlaybackItem {
   url: string;
   durationSeconds: number;
@@ -13,6 +33,7 @@ export interface PlaybackItem {
   portrait?: boolean;
   /** Hard cut requested with "/<seconds>", applied even to native videos. */
   cutAfterSeconds?: number;
+  presentation?: PlaybackPresentation;
   reply: (message: string) => Promise<void>;
   /** Optional async callback that generates a TTS event at actual play time. */
   ttsGenerate?: () => Promise<TtsPlaybackEvent | null>;
@@ -33,7 +54,16 @@ export interface TtsPlaybackEvent {
 }
 
 export type PlaybackEvent =
-  | { type: "start"; url: string; durationSeconds: number; username: string; caption?: string; portrait?: boolean; cutAfterSeconds?: number }
+  | {
+      type: "start";
+      url: string;
+      durationSeconds: number;
+      username: string;
+      caption?: string;
+      portrait?: boolean;
+      cutAfterSeconds?: number;
+      presentation?: PlaybackPresentation;
+    }
   | { type: "stop" }
   | TtsPlaybackEvent;
 
@@ -101,7 +131,16 @@ export class PlaybackQueue {
     try {
       await this.obsController.setSourceUrl(item.url);
       await this.obsController.showSource();
-      this.onEvent?.({ type: "start", url: item.url, durationSeconds: item.durationSeconds, username: item.username, caption: item.caption, portrait: item.portrait, cutAfterSeconds: item.cutAfterSeconds });
+      this.onEvent?.({
+        type: "start",
+        url: item.url,
+        durationSeconds: item.durationSeconds,
+        username: item.username,
+        caption: item.caption,
+        portrait: item.portrait,
+        cutAfterSeconds: item.cutAfterSeconds,
+        presentation: item.presentation
+      });
 
       // Fire TTS generation non-blocking — broadcast when ready
       if (item.ttsGenerate) {

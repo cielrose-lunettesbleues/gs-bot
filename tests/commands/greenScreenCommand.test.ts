@@ -427,3 +427,67 @@ describe("greenScreenCommand", () => {
     );
   });
 });
+
+describe("greenScreenCommand, editor settings", () => {
+  const url = "https://youtube.com/watch?v=1";
+
+  async function send(presentation: unknown, rawMessage = `!gs ${url}`) {
+    const deps = makeDeps();
+    const command = createGreenScreenCommand(deps as never, "!gs");
+    await command.execute(
+      { ...modCtx(), rawMessage, presentation } as never,
+      rawMessage.split(" ").slice(1)
+    );
+    return deps;
+  }
+
+  it("carries trim and placement through to the overlay untouched", async () => {
+    const presentation = { startSeconds: 12, endSeconds: 20, x: 60, y: 5, width: 35, height: 30 };
+    const deps = await send(presentation);
+
+    expect(deps.queue.enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({ presentation })
+    );
+  });
+
+  it("takes the clip's length as the length to play", async () => {
+    const deps = await send({ startSeconds: 12, endSeconds: 20 });
+
+    // Eight seconds of video, and the cut that stops it there
+    expect(deps.queue.enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({ durationSeconds: 8, cutAfterSeconds: 8 })
+    );
+  });
+
+  it("lets a trim win over a /seconds asked for alongside it", async () => {
+    const deps = await send({ startSeconds: 0, endSeconds: 5 }, `!gs ${url} /30`);
+
+    // The trim says where the clip ends, which is more specific than a length
+    expect(deps.queue.enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({ durationSeconds: 5, cutAfterSeconds: 5 })
+    );
+  });
+
+  it("leaves a send without an editor exactly as it was", async () => {
+    const deps = await send(undefined);
+
+    expect(deps.queue.enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({ presentation: undefined })
+    );
+  });
+
+  it("keeps the tenant's ceiling above the editor", async () => {
+    const deps = makeDeps();
+    deps.config.validation.maxDurationSeconds = 6;
+    const command = createGreenScreenCommand(deps as never, "!gs");
+
+    await command.execute(
+      { ...modCtx(), rawMessage: `!gs ${url}`, presentation: { startSeconds: 0, endSeconds: 60 } } as never,
+      [url]
+    );
+
+    expect(deps.queue.enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({ durationSeconds: 6, cutAfterSeconds: 6 })
+    );
+  });
+});

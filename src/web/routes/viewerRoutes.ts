@@ -281,6 +281,8 @@ export function registerViewerRoutes({ app, db, oauthConfig, config, logger, ten
       },
       channel: dbUser.twitch_login,
       rawMessage: message,
+      // Beside the message, not inside it: see CommandContext.presentation
+      presentation: parsed.data.presentation,
       reply: async (text) => {
         replies.push(text);
       }

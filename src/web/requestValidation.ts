@@ -86,10 +86,32 @@ export async function parseJsonBody<T>(
 
 // ─── Viewer submit page ───────────────────────────────────────────────────────
 
+/**
+ * Trim and placement from the viewer page's editor. Percentages are allowed
+ * to run past the edges, because a send may deliberately sit half off-screen;
+ * what is not allowed is an end before its start, which would ask the overlay
+ * to play a negative clip.
+ */
+const presentationSchema = z
+  .object({
+    startSeconds: z.number().min(0).max(36000).optional(),
+    endSeconds: z.number().min(0).max(36000).optional(),
+    x: z.number().min(-100).max(200).optional(),
+    y: z.number().min(-100).max(200).optional(),
+    width: z.number().min(1).max(200).optional(),
+    height: z.number().min(1).max(200).optional()
+  })
+  .strict()
+  .refine(
+    (p) => p.endSeconds === undefined || p.endSeconds > (p.startSeconds ?? 0),
+    { message: "endSeconds must come after startSeconds" }
+  );
+
 export const viewerSubmitSchema = z.object({
   url: z.string().trim().min(1).max(500),
   caption: z.string().trim().max(200).optional(),
-  durationSeconds: z.number().int().min(1).max(300).optional()
+  durationSeconds: z.number().int().min(1).max(300).optional(),
+  presentation: presentationSchema.optional()
 }).strict();
 export type ViewerSubmitBody = z.infer<typeof viewerSubmitSchema>;
 

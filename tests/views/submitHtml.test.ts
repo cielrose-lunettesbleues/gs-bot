@@ -387,3 +387,52 @@ describe("getSubmitHtml", () => {
     expect(html).toContain("Viewer1");
   });
 });
+
+describe("getSubmitHtml, the editor", () => {
+  const html = getSubmitHtml(props({}));
+
+  it("shows the caption over the preview, drawn as the stream will draw it", () => {
+    // Built client-side and laid over the frame once a preview renders
+    expect(html).toContain('capPreviewEl.className = "cap-preview"');
+    expect(html).toContain("box.appendChild(capPreviewEl)");
+    expect(html).toContain(".cap-preview{");
+    // Same face and outline as the overlay, or the preview would mislead
+    expect(html).toContain("font-family:Impact,'Arial Narrow',Arial,sans-serif");
+    // Sized against the frame, not the window
+    expect(html).toContain("container-type:inline-size");
+    expect(html).toContain('captionInput.addEventListener("input", syncCaptionPreview)');
+  });
+
+  it("sends nothing extra when the editor was left alone", () => {
+    // An untouched send has to stay byte for byte what it was before
+    expect(html).toContain("var presentation = collectPresentation();");
+    expect(html).toContain("if(presentation) payload.presentation = presentation;");
+    const collect = html.slice(html.indexOf("function collectPresentation"), html.indexOf("function syncTrim"));
+    expect(collect).toContain("var p = null;");
+    expect(collect).toContain("if(trimTouched())");
+    expect(collect).toContain("if(placeTouched())");
+  });
+
+  it("keeps the dragged frame reachable on screen", () => {
+    const drag = html.slice(html.indexOf("function beginDrag"), html.indexOf("stageBox.addEventListener"));
+    // It may hang off the edge, but never so far it cannot be grabbed back
+    expect(drag).toContain("clamp(from.x + dx, -80, 95)");
+    expect(drag).toContain("clamp(from.w + dx, 5, 200)");
+    // Pointer events, so a finger drags it as well as a mouse
+    expect(drag).toContain('window.addEventListener("pointermove", move)');
+    expect(drag).toContain('window.addEventListener("pointercancel", up)');
+  });
+
+  it("only offers a trim once something told it the length", () => {
+    const set = html.slice(html.indexOf("function setClipDuration"), html.indexOf("startRange.oninput"));
+    expect(set).toContain("if(!(d > 0) || !isFinite(d)){ trimEl.hidden = true;");
+    // The file's own metadata is the authority, above any announced length
+    expect(html).toContain('video.addEventListener("loadedmetadata"');
+  });
+
+  it("believes only YouTube about a YouTube duration", () => {
+    const listener = html.slice(html.indexOf('window.addEventListener("message"'), html.indexOf("function doPreview"));
+    expect(listener).toContain("youtube");
+    expect(listener).toContain("ev.origin");
+  });
+});

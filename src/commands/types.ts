@@ -47,7 +47,20 @@ export interface CommandDependencies {
   gifSearch?: (query: string) => Promise<{ url: string; title: string } | null>;
   approvalService?: {
     config: { enabled: boolean };
-    submit: (item: { url: string; durationSeconds: number; username: string; caption?: string; portrait?: boolean; cutAfterSeconds?: number; ttsGenerate?: () => Promise<import("../queue/playbackQueue").TtsPlaybackEvent | null>; userReply: (msg: string) => Promise<void> }, channelNotify: (msg: string) => Promise<void>) => Promise<void>;
+    submit: (
+      item: {
+        url: string;
+        durationSeconds: number;
+        username: string;
+        caption?: string;
+        portrait?: boolean;
+        cutAfterSeconds?: number;
+        presentation?: import("../queue/playbackQueue").PlaybackPresentation;
+        ttsGenerate?: () => Promise<import("../queue/playbackQueue").TtsPlaybackEvent | null>;
+        userReply: (msg: string) => Promise<void>;
+      },
+      channelNotify: (msg: string) => Promise<void>
+    ) => Promise<void>;
   };
   adminService?: AdminService;
   ttsService?: ITtsService;
