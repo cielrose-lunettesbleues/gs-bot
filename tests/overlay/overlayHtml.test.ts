@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getOverlayHtml } from "../../src/overlay/overlayHtml";
+import { getOverlayHtml, getOverlayVersion } from "../../src/overlay/overlayHtml";
 
 describe("getOverlayHtml", () => {
   it("cuts any media at the requested duration before falling back", () => {
@@ -136,5 +136,32 @@ describe("overlay, the frame actually holds what it frames", () => {
   it("leaves the spoken text alone, since it belongs to no clip", () => {
     const ttsRule = html.slice(html.indexOf("#tts-caption{"), html.indexOf("}", html.indexOf("#tts-caption{")));
     expect(ttsRule).toContain("4vw");
+  });
+});
+
+describe("overlay, surviving a deploy", () => {
+  it("stamps the page with its own source, the same stamp every time", () => {
+    const a = getOverlayVersion();
+    expect(a).toMatch(/^[0-9a-f]{10}$/);
+    // Stable, or every reconnection would look like a new deploy
+    expect(getOverlayVersion()).toBe(a);
+    expect(getOverlayHtml()).toContain(`var OVERLAY_VERSION='${a}';`);
+  });
+
+  it("reloads a page left open from an older deploy, but only once", () => {
+    const html = getOverlayHtml();
+    // A Browser Source keeps its page until someone refreshes it, so the page
+    // has to notice for itself that the server moved on
+    expect(html).toContain("d.overlayVersion!==OVERLAY_VERSION");
+    expect(html).toContain("location.reload()");
+    // Guarded, so a lasting disagreement cannot turn into a reload loop
+    expect(html).toContain("if(!reloaded){ reloaded=true;");
+  });
+
+  it("does nothing when the server reports the same page", () => {
+    const html = getOverlayHtml();
+    const branch = html.slice(html.indexOf("if(d.type==='connected'"), html.indexOf("if(d.type==='start'"));
+    // The reload hangs off the mismatch, not off the connection itself
+    expect(branch).toContain("d.overlayVersion &&");
   });
 });

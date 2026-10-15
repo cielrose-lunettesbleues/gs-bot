@@ -1,3 +1,4 @@
+import { getOverlayHtml, getOverlayVersion } from "../../src/overlay/overlayHtml";
 import { Hono } from "hono";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SessionUser } from "../../src/auth/sessionMiddleware";
@@ -247,5 +248,27 @@ describe("publicRoutes", () => {
     expect(response.headers.get("location")).toBe("/dashboard");
     expect(databaseMocks.createSession).toHaveBeenCalledWith({}, "generated-session-id", 42);
     expect(tenantManager.getOrCreate).toHaveBeenCalledWith(42);
+  });
+});
+
+describe("overlay stream, surviving a deploy", () => {
+  it("announces the page version OBS should be running", async () => {
+    const { app, tenantManager } = createApp();
+    const broadcaster = new OverlayBroadcaster();
+    (tenantManager.getOrCreate as unknown as { mockImplementation: (fn: () => unknown) => void }).mockImplementation(() => ({
+      overlayBroadcaster: broadcaster
+    }));
+
+    const response = await app.request("http://example.com/overlay/streamer/events?token=overlay-token");
+    const body = response.text();
+    await vi.waitFor(() => expect(broadcaster.clientCount()).toBe(1));
+    broadcaster.close();
+
+    // This route, not the broadcaster's own connect(), is the one OBS reaches:
+    // the version has to ride on the stream the Browser Source actually opens.
+    const connected = JSON.parse((await body).split("data: ")[1].split("\n")[0]);
+    expect(connected).toEqual({ type: "connected", overlayVersion: getOverlayVersion() });
+    // And it is the very stamp baked into the page it was served
+    expect(getOverlayHtml()).toContain(`var OVERLAY_VERSION='${connected.overlayVersion}';`);
   });
 });

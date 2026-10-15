@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "http";
 import type { PlaybackEvent } from "../queue/playbackQueue";
+import { getOverlayVersion } from "./overlayHtml";
 
 type AsyncWriteFn = (event: PlaybackEvent) => Promise<void>;
 
@@ -27,7 +28,9 @@ export class OverlayBroadcaster implements IOverlayBroadcaster {
       "Access-Control-Allow-Origin": "*"
     });
     try {
-      res.write('data: {"type":"connected"}\n\n');
+      // La version voyage avec la connexion: une page restée ouverte dans OBS
+      // depuis un déploiement précédent s'en aperçoit et se recharge.
+      res.write(`data: ${JSON.stringify({ type: "connected", overlayVersion: getOverlayVersion() })}\n\n`);
     } catch {
       return;
     }

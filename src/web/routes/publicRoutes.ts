@@ -13,7 +13,7 @@ import {
 } from "../../auth/sessionMiddleware";
 import type { ServerConfig } from "../../config/serverConfig";
 import { saveServerOAuthConfig } from "../../config/serverConfig";
-import { getOverlayHtml } from "../../overlay/overlayHtml";
+import { getOverlayHtml, getOverlayVersion } from "../../overlay/overlayHtml";
 import { TenantManager } from "../../tenant/tenantManager";
 import { getDashboardHtml } from "../../views/dashboardHtml";
 import { getLoginHtml } from "../../views/loginHtml";
@@ -197,7 +197,11 @@ export function registerPublicRoutes({ app, db, oauthConfig, config, logger, ten
 
     return streamSSE(c, async (stream) => {
       const broadcaster = tenant.overlayBroadcaster;
-      await stream.writeSSE({ data: JSON.stringify({ type: "connected" }) });
+      // La version part avec la connexion: une page restée ouverte dans OBS
+      // depuis un déploiement précédent s'en aperçoit et se recharge.
+      await stream.writeSSE({
+        data: JSON.stringify({ type: "connected", overlayVersion: getOverlayVersion() })
+      });
       const remove = broadcaster.addClient(async (event) => {
         await stream.writeSSE({ data: JSON.stringify(event) });
       });

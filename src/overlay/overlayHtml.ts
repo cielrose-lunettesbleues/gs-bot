@@ -1,6 +1,34 @@
+import crypto from "crypto";
 import { GUEST_USERNAME } from "../viewer/viewerIdentity";
 
+/**
+ * A Browser Source keeps the page it loaded until someone refreshes it, so a
+ * deploy leaves OBS running the old script for as long as the stream lasts.
+ * The page therefore carries a stamp of its own source, the server announces
+ * the current one on every connection, and a page that finds itself out of
+ * date reloads. Without it, every future change to this file would silently
+ * fail to reach the one place it matters.
+ */
+let cached: { html: string; version: string } | null = null;
+
+function build(): { html: string; version: string } {
+  if (!cached) {
+    const unstamped = buildOverlayHtml("");
+    const version = crypto.createHash("sha1").update(unstamped).digest("hex").slice(0, 10);
+    cached = { html: buildOverlayHtml(version), version };
+  }
+  return cached;
+}
+
 export function getOverlayHtml(): string {
+  return build().html;
+}
+
+export function getOverlayVersion(): string {
+  return build().version;
+}
+
+function buildOverlayHtml(version: string): string {
   return /* html */ `<!DOCTYPE html>
 <html>
 <head>
@@ -145,6 +173,8 @@ iframe{
 
 <script>
 (function(){
+  var OVERLAY_VERSION='${version}';
+  var reloaded=false;
   var wrap = document.getElementById('wrap');
   var mediaEl = document.getElementById('media');
   var info = document.getElementById('info');
@@ -414,6 +444,13 @@ iframe{
       if(!ev.data) return;
       try {
         var d=JSON.parse(ev.data);
+        if(d.type==='connected' && d.overlayVersion && d.overlayVersion!==OVERLAY_VERSION){
+          // Le serveur a changé sous nos pieds: cette page est celle d'avant.
+          // Une seule tentative, pour qu'un désaccord durable ne tourne pas
+          // en boucle de rechargement.
+          if(!reloaded){ reloaded=true; console.log('[overlay] nouvelle version, rechargement'); location.reload(); }
+          return;
+        }
         if(d.type==='start'){ console.log('[overlay] start', d.url); show(d); }
         else if(d.type==='stop'){ console.log('[overlay] stop'); hide(); }
         else if(d.type==='tts') playTts(d);

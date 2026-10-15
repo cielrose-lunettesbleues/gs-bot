@@ -269,6 +269,10 @@ Events envoyés :
 
 L'overlay réapplique le placement à chaque envoi, **y compris à vide** : sans remise à zéro, un envoi cadré laisserait son cadre au suivant.
 
+**Une source navigateur garde la page qu'elle a chargée** : un déploiement ne la recharge pas, donc OBS continue d'exécuter l'ancien script jusqu'à un rafraîchissement manuel. La page porte donc une empreinte de sa propre source (`getOverlayVersion()`), le serveur l'annonce dans l'évènement `connected`, et une page périmée se recharge d'elle-même — une seule fois, pour qu'un désaccord durable ne tourne pas en boucle. **Attention** : c'est la route `/overlay/:channel/events` de `publicRoutes` qu'OBS atteint, pas `OverlayBroadcaster.connect()` ; les deux écrivent un `connected`, et ne corriger que le second ne change rien à ce que reçoit OBS.
+
+Les règles CSS géométriques de l'overlay ne doivent pas se mesurer en unités de fenêtre (`vh`/`vw`) : à l'intérieur d'un cadre réduit elles gardent la taille du plein écran et le placement n'a plus aucun effet. Une assertion de test sur une sous-chaîne ne le voit pas — rendre la vraie feuille de style dans un navigateur et lire les rectangles, si.
+
 ---
 
 ## Page viewers
