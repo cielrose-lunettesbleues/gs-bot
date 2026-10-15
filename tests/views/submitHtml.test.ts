@@ -417,7 +417,11 @@ describe("getSubmitHtml, the editor", () => {
     const drag = html.slice(html.indexOf("function beginDrag"), html.indexOf("stageBox.addEventListener"));
     // It may hang off the edge, but never so far it cannot be grabbed back
     expect(drag).toContain("clamp(from.x + dx, -80, 95)");
-    expect(drag).toContain("clamp(from.w + dx, 5, 200)");
+    // Resizing multiplies both sides by one factor, so the media's shape
+    // survives whatever the drag does: it cannot be stretched
+    expect(drag).toContain("place.w = from.w * scale;");
+    expect(drag).toContain("place.h = from.h * scale;");
+    expect(drag).not.toContain("from.h + dy");
     // Pointer events, so a finger drags it as well as a mouse
     expect(drag).toContain('window.addEventListener("pointermove", move)');
     expect(drag).toContain('window.addEventListener("pointercancel", up)');
@@ -434,5 +438,39 @@ describe("getSubmitHtml, the editor", () => {
     const listener = html.slice(html.indexOf('window.addEventListener("message"'), html.indexOf("function doPreview"));
     expect(listener).toContain("youtube");
     expect(listener).toContain("ev.origin");
+  });
+});
+
+describe("getSubmitHtml, the frame cannot distort the media", () => {
+  const html = getSubmitHtml(props({}));
+
+  it("gives the frame the media's own shape", () => {
+    const fit = html.slice(html.indexOf("function computeFit"), html.indexOf("function setMediaRatio"));
+    // The biggest rectangle of the media's shape that fits the 16:9 source
+    expect(fit).toContain("if(mediaRatio >= SOURCE_RATIO) h = 100 * SOURCE_RATIO / mediaRatio;");
+    expect(fit).toContain("else w = 100 * mediaRatio / SOURCE_RATIO;");
+    expect(html).toContain("var SOURCE_RATIO = 16 / 9;");
+  });
+
+  it("takes the shape from the file itself once it is known", () => {
+    // The announced orientation starts it off, the real pixels correct it
+    expect(html).toContain("setMediaRatio(preview.portrait ? 9 / 16 : 16 / 9)");
+    expect(html).toContain("setMediaRatio(video.videoWidth / video.videoHeight)");
+    expect(html).toContain("setMediaRatio(img.naturalWidth / img.naturalHeight)");
+  });
+
+  it("does not undo a framing the viewer already made", () => {
+    const set = html.slice(html.indexOf("function setMediaRatio"), html.indexOf("function clamp"));
+    // A shape that arrives late must not wipe a frame placed by hand
+    expect(set).toContain("if(!placeDirty) resetPlace();");
+    expect(html).toContain("placeDirty = true;");
+  });
+
+  it("sends nothing when the frame is left at the media's own size", () => {
+    const touched = html.slice(html.indexOf("function placeTouched"), html.indexOf("function collectPresentation"));
+    // Compared against that default, not against full screen: a portrait clip
+    // defaults to a column, which is what the overlay does unaided
+    expect(touched).toContain("Math.abs(place.x - fit.x) > 0.5");
+    expect(touched).toContain("Math.abs(place.w - fit.w) > 0.5");
   });
 });

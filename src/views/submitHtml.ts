@@ -671,7 +671,7 @@ ${spriteStyles(props.sprites ?? {})}
           </div>
         </div>
         <div class="actions" style="margin-top:9px">
-          <button class="btn btn-sm" id="ed-reset" type="button">Plein écran</button>
+          <button class="btn btn-sm" id="ed-reset" type="button">Réinitialiser</button>
         </div>
       </div>
       <ul id="messages"></ul>
@@ -892,9 +892,13 @@ ${spriteStyles(props.sprites ?? {})}
         } catch(err){}
       });
       box.appendChild(iframe);
+      setMediaRatio(preview.portrait ? 9 / 16 : 16 / 9);
     } else if(preview.kind === "image"){
       box = frame(false);
       var img = document.createElement("img");
+      img.addEventListener("load", function(){
+        setMediaRatio(img.naturalWidth / img.naturalHeight);
+      });
       img.src = preview.url;
       box.appendChild(img);
     } else if(preview.kind === "video"){
@@ -912,8 +916,10 @@ ${spriteStyles(props.sprites ?? {})}
       previewVideo = video;
       // La durée réelle du fichier prime sur celle annoncée: c'est elle qui
       // borne les poignées de l'extrait.
+      setMediaRatio(preview.portrait ? 9 / 16 : 16 / 9);
       video.addEventListener("loadedmetadata", function(){
         setClipDuration(video.duration);
+        setMediaRatio(video.videoWidth / video.videoHeight);
       });
       if(preview.durationSeconds > 0){
         setClipDuration(preview.durationSeconds);
@@ -952,6 +958,31 @@ ${spriteStyles(props.sprites ?? {})}
   var previewVideo = null;
   var capPreviewEl = null;
 
+  // La source navigateur est en 16:9. Le cadre, lui, prend la forme du média:
+  // il ne peut alors que grandir ou rétrécir, jamais se déformer, et ce qu'on
+  // voit dans la scène est exactement ce qui sortira à l'écran.
+  var SOURCE_RATIO = 16 / 9;
+  var mediaRatio = SOURCE_RATIO;
+  var fit = { x:0, y:0, w:100, h:100 };
+  var placeDirty = false;
+
+  // Le plus grand rectangle de la forme du média qui tienne dans la source
+  function computeFit(){
+    var w = 100, h = 100;
+    if(mediaRatio >= SOURCE_RATIO) h = 100 * SOURCE_RATIO / mediaRatio;
+    else w = 100 * mediaRatio / SOURCE_RATIO;
+    fit = { x:(100 - w) / 2, y:(100 - h) / 2, w:w, h:h };
+  }
+
+  function setMediaRatio(r){
+    if(!(r > 0) || !isFinite(r)) return;
+    mediaRatio = r;
+    computeFit();
+    // Une forme qui se précise sur le tard ne doit pas effacer un cadrage
+    // déjà posé à la main.
+    if(!placeDirty) resetPlace();
+  }
+
   function clamp(n, lo, hi){ return n < lo ? lo : (n > hi ? hi : n); }
   function round2(n){ return Math.round(n * 100) / 100; }
 
@@ -966,11 +997,12 @@ ${spriteStyles(props.sprites ?? {})}
     stageBox.style.top = place.y + "%";
     stageBox.style.width = place.w + "%";
     stageBox.style.height = place.h + "%";
-    stageLbl.textContent = Math.round(place.w) + "%";
+    // 100% = aussi grand que le média peut l'être sans se déformer
+    stageLbl.textContent = Math.round(place.w / fit.w * 100) + "%";
   }
 
   function resetPlace(){
-    place = { x:0, y:0, w:100, h:100 };
+    place = { x:fit.x, y:fit.y, w:fit.w, h:fit.h };
     drawBox();
   }
 
@@ -979,14 +1011,22 @@ ${spriteStyles(props.sprites ?? {})}
     trimEl.hidden = true;
     clip = { duration:0, start:0, end:0 };
     previewVideo = null;
+    placeDirty = false;
+    mediaRatio = SOURCE_RATIO;
+    computeFit();
     resetPlace();
   }
 
   function trimTouched(){
     return clip.duration > 0 && (clip.start > 0 || clip.end < clip.duration - 0.5);
   }
+  // Comparé au cadrage par défaut, pas à "plein écran": pour un média portrait
+  // le défaut est déjà une colonne, et c'est exactement ce que l'overlay fait
+  // de lui-même. Rien à envoyer tant qu'on n'en a pas bougé.
   function placeTouched(){
-    return place.x !== 0 || place.y !== 0 || place.w !== 100 || place.h !== 100;
+    return Math.abs(place.x - fit.x) > 0.5
+      || Math.abs(place.y - fit.y) > 0.5
+      || Math.abs(place.w - fit.w) > 0.5;
   }
 
   // Rien n'est envoyé tant que rien n'a été touché: un envoi sans réglage doit
@@ -1046,6 +1086,7 @@ ${spriteStyles(props.sprites ?? {})}
 
   function beginDrag(ev, mode){
     ev.preventDefault();
+    placeDirty = true;
     var r = stage.getBoundingClientRect();
     var sx = ev.clientX, sy = ev.clientY;
     var from = { x:place.x, y:place.y, w:place.w, h:place.h };
@@ -1057,8 +1098,18 @@ ${spriteStyles(props.sprites ?? {})}
         place.x = clamp(from.x + dx, -80, 95);
         place.y = clamp(from.y + dy, -80, 95);
       } else {
-        place.w = clamp(from.w + dx, 5, 200);
-        place.h = clamp(from.h + dy, 5, 200);
+        // Le geste est projeté sur la diagonale du cadre, et les deux côtés
+        // sont multipliés par le même facteur: la forme du média est donc
+        // conservée quoi qu'on fasse, et la vidéo ne peut pas s'étirer.
+        var diag2 = from.w * from.w + from.h * from.h;
+        var scale = 1 + (dx * from.w + dy * from.h) / diag2;
+        scale = clamp(
+          scale,
+          Math.max(6 / from.w, 6 / from.h),
+          Math.min(200 / from.w, 200 / from.h)
+        );
+        place.w = from.w * scale;
+        place.h = from.h * scale;
       }
       drawBox();
     }
