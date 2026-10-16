@@ -276,7 +276,9 @@ export function registerPublicRoutes({ app, db, oauthConfig, config, logger, ten
       stream.onAbort(() => wake());
 
       try {
-        await stream.writeSSE({ data: JSON.stringify({ type: "connected" }) });
+        // La version voyage aussi ici: la fenêtre moniteur garde sa page comme
+        // OBS, et doit se recharger après un déploiement.
+        await stream.writeSSE({ data: JSON.stringify({ type: "connected", overlayVersion: getOverlayVersion() }) });
         while (!stream.aborted) {
           const tenant = tenantManager.get(userId);
           const broadcaster = tenant && !tenant.overlayBroadcaster.isClosed() ? tenant.overlayBroadcaster : null;

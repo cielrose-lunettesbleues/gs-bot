@@ -161,6 +161,27 @@ iframe{
   margin:0 32px;
 }
 #tts-caption.visible{opacity:1}
+/* Mode moniteur (?monitor=1): la même page, vue par le streamer hors OBS.
+   Le contour marque les bords de la source, invisibles sur fond transparent. */
+#monitor-frame,#monitor-bar{display:none}
+body.monitor #monitor-frame{
+  display:block;position:fixed;inset:0;
+  border:2px dashed rgba(255,255,255,.35);
+  pointer-events:none;
+}
+body.monitor.playing #monitor-frame{border:2px solid #a970ff}
+body.monitor #monitor-bar{
+  display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center;
+  position:fixed;top:6px;left:6px;max-width:calc(100% - 12px);
+  padding:4px 10px;border-radius:12px;
+  background:rgba(14,14,20,.72);color:#fff;
+  font:12px/1.4 system-ui,sans-serif;
+  pointer-events:none;
+}
+#monitor-dot{width:8px;height:8px;border-radius:50%;background:#888;flex:none}
+#monitor-dot.on{background:#3ecf6e}
+#monitor-dot.off{background:#e5534b}
+#monitor-approvals{color:#ffcf5c}
 </style>
 </head>
 <body>
@@ -170,6 +191,13 @@ iframe{
 </div>
 <div id="info"><span id="info-user"></span></div>
 <div id="tts-caption"></div>
+<div id="monitor-frame"></div>
+<div id="monitor-bar">
+  <span id="monitor-dot"></span>
+  <span id="monitor-state">Connexion…</span>
+  <span id="monitor-queue"></span>
+  <span id="monitor-approvals"></span>
+</div>
 
 <script>
 (function(){
@@ -185,7 +213,13 @@ iframe{
   // URL params: ?info=1 to show the username bar
   // Le nom de qui a envoyé s'affiche par défaut. Un streamer qui n'en veut pas
   // ajoute ?info=0 à l'URL de sa source OBS.
-  var showInfo = new URLSearchParams(location.search).get('info') !== '0';
+  var params = new URLSearchParams(location.search);
+  var showInfo = params.get('info') !== '0';
+  // ?monitor=1: la fenêtre de suivi du streamer. Elle affiche exactement ce
+  // que montre OBS, mais sans le son, qui partirait sinon une seconde fois
+  // dans le micro, et avec l'état de la file en plus.
+  var MONITOR = params.get('monitor') === '1';
+  if(MONITOR) document.body.classList.add('monitor');
   // Les invités de la page viewers n'ont pas de nom à montrer
   var GUEST_HANDLE = ${JSON.stringify(GUEST_USERNAME)};
 
@@ -240,6 +274,7 @@ iframe{
         // Pas de loop: une vidéo qui redémarre ne signale jamais sa fin, et on
         // la verrait repartir au lieu de s'arrêter.
         +'&iv_load_policy=3&disablekb=1'
+        +(MONITOR?'&mute=1':'')
         // Le lecteur YouTube sait se limiter à un extrait, en secondes entières
         +(start?'&start='+start:'')
         +(end?'&end='+end:'');
@@ -287,6 +322,7 @@ iframe{
     v.src = start ? url + (url.indexOf('#') === -1 ? '#t=' + start : '') : url;
     v.autoplay=true;
     v.playsInline=true;
+    v.muted=MONITOR;
     v.addEventListener('ended', hide);
     if(start){
       // Repli quand le serveur ignore les fragments: on s'y place à la main.
@@ -416,7 +452,7 @@ iframe{
     var fallbackMs = Math.max((data.durationSeconds || 4) * 1000 + 1500, 2000);
     ttsHideTimer = setTimeout(hideTtsCaption, fallbackMs);
 
-    if(data.audioUrl){
+    if(data.audioUrl && !MONITOR){
       // Append to DOM so OBS browser source captures the audio
       ttsAudio = document.createElement('audio');
       ttsAudio.src = data.audioUrl;
@@ -435,11 +471,27 @@ iframe{
     }
   }
 
+  var monitorDot = document.getElementById('monitor-dot');
+  var monitorState = document.getElementById('monitor-state');
+  var monitorQueue = document.getElementById('monitor-queue');
+  var monitorApprovals = document.getElementById('monitor-approvals');
+
+  function renderQueue(q){
+    document.body.classList.toggle('playing', q.playing);
+    monitorDot.className = q.resident ? 'on' : '';
+    monitorState.textContent = !q.resident ? 'Bot en veille' : q.playing ? 'Lecture en cours' : 'En attente';
+    monitorQueue.textContent = q.pending ? 'File : ' + q.pending : '';
+    monitorApprovals.textContent = q.approvals && q.approvals.length
+      ? 'À approuver : ' + q.approvals.join(', ')
+      : '';
+  }
+
   function connect(){
     var parts=location.pathname.split('/').filter(Boolean);
     var channel=parts[parts.length-1]||'';
     var search = location.search || '';
-    var es=new EventSource('/overlay/'+channel+'/events'+search);
+    var es=new EventSource('/overlay/'+channel+(MONITOR?'/monitor':'/events')+search);
+    es.onopen=function(){ if(MONITOR) monitorDot.className=''; };
     es.onmessage=function(ev){
       if(!ev.data) return;
       try {
@@ -454,9 +506,14 @@ iframe{
         if(d.type==='start'){ console.log('[overlay] start', d.url); show(d); }
         else if(d.type==='stop'){ console.log('[overlay] stop'); hide(); }
         else if(d.type==='tts') playTts(d);
+        else if(d.type==='queue' && MONITOR) renderQueue(d);
       } catch(e){ console.error('[overlay] event error', e); }
     };
     es.onerror=function(){
+      if(MONITOR){
+        monitorDot.className='off';
+        monitorState.textContent='Serveur injoignable, nouvelle tentative…';
+      }
       es.close();
       setTimeout(connect,3000);
     };

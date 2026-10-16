@@ -45,6 +45,7 @@ Le wizard est protégé:
 - `src/moderation/*`: mots interdits dans les textes soumis
 - `src/overlay/*`: page OBS et SSE
 - `src/views/*`: pages HTML server-rendered
+- `monitor-app/`: fenêtre transparente du streamer (Electron), qui suit la source GS hors OBS — voir `monitor-app/README.md`
 
 ## Refacto Réalisé
 

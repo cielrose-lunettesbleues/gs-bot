@@ -282,6 +282,9 @@ Il relaie les mêmes évènements que l'overlay (`start`, `stop`, `tts`) et ajou
 - **Le moniteur ne réveille pas le tenant et ne le garde pas en vie** : il passe par `tenantManager.get()`, jamais `getOrCreate()`, et s'abonne via `OverlayBroadcaster.addMonitor()`, que `clientCount()` ne compte pas. Une fenêtre restée ouverte hors stream ne doit pas tenir un bot IRC connecté. Tenant endormi → `resident: false`, et le flux s'accroche au tenant dès qu'il réapparaît.
 - **Limite propre** : 3 moniteurs par chaîne, comptés dans la route (un moniteur reste connecté sans broadcaster à qui se compter), sans prendre les 3 places réservées à OBS.
 - La file et les approbations n'ont pas d'évènement à elles, d'où l'échantillonnage plutôt qu'un abonnement.
+- Le `connected` du moniteur porte aussi `overlayVersion` : la fenêtre garde sa page comme OBS et doit se recharger après un déploiement.
+
+Côté page, `?monitor=1` sur `/overlay/:channel` lit ce flux au lieu de `/events`, coupe tout le son (vidéo, YouTube `mute=1`, TTS jamais joué : il repartirait dans le micro), dessine le contour de la source et un bandeau d'état. Le client est `monitor-app/` : un Electron en JS sans build (fenêtre sans bordure, transparente, toujours au premier plan, clic droit pour taille/opacité, Ctrl+Maj+M pour laisser passer les clics). Il transforme l'URL OBS collée en URL moniteur via `monitorUrl.js`, testé dans `tests/monitorApp/`.
 
 Les règles CSS géométriques de l'overlay ne doivent pas se mesurer en unités de fenêtre (`vh`/`vw`) : à l'intérieur d'un cadre réduit elles gardent la taille du plein écran et le placement n'a plus aucun effet. Une assertion de test sur une sous-chaîne ne le voit pas — rendre la vraie feuille de style dans un navigateur et lire les rectangles, si.
 
@@ -474,6 +477,7 @@ Couverture principale actuelle :
 - [x] Observabilité runtime exposée dans `/api/status` et le dashboard
 - [x] Routes SaaS découpées (`publicRoutes`, `apiRoutes`)
 - [x] Contrats d'entrée/sortie API mieux typés
+- [x] Moniteur du streamer hors OBS (`monitor-app/`, flux `/overlay/:channel/monitor`)
 
 ## Features futures
 

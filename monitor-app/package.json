@@ -1,0 +1,13 @@
+{
+  "name": "gs-monitor",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Fenêtre transparente, toujours au premier plan, qui montre au streamer ce que joue GS Bot",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "44.5.1"
+  }
+}

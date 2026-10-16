@@ -329,7 +329,7 @@ describe("monitor stream", () => {
     const events = await readUntil(response, (e) => e.length >= 2);
 
     expect(events).toEqual([
-      { type: "connected" },
+      { type: "connected", overlayVersion: getOverlayVersion() },
       { type: "queue", resident: false, playing: false, pending: 0, approvals: [] }
     ]);
     // A monitor left open off-stream must not keep an IRC bot connected
@@ -352,7 +352,7 @@ describe("monitor stream", () => {
     broadcaster.broadcast({ type: "start", url: "https://x.test/a.mp4", durationSeconds: 5, username: "bob" });
 
     expect(await events).toEqual([
-      { type: "connected" },
+      { type: "connected", overlayVersion: getOverlayVersion() },
       { type: "queue", resident: true, playing: false, pending: 0, approvals: [] },
       { type: "start", url: "https://x.test/a.mp4", durationSeconds: 5, username: "bob" },
       { type: "queue", resident: true, playing: true, pending: 0, approvals: ["viewer1"] }

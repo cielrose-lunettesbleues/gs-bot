@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>GS Bot · Moniteur</title>
+<style>
+  body{margin:0;padding:20px 24px;font:14px/1.5 system-ui,sans-serif;background:#18181b;color:#efeff1}
+  h1{font-size:17px;margin:0 0 6px}
+  p{margin:0 0 14px;color:#adadb8}
+  input{width:100%;box-sizing:border-box;padding:9px 10px;border-radius:6px;border:1px solid #3a3a3d;background:#0e0e10;color:#fff;font:13px monospace}
+  button{margin-top:12px;padding:8px 16px;border:0;border-radius:6px;background:#9147ff;color:#fff;font-weight:600;cursor:pointer}
+  #error{color:#ff6b6b;min-height:20px;margin-top:8px}
+  kbd{background:#2f2f35;border-radius:4px;padding:0 5px;font-size:12px}
+</style>
+</head>
+<body>
+  <h1>Moniteur GS Bot</h1>
+  <p>Collez l'URL de la source navigateur OBS, telle que l'affiche le dashboard. Le moniteur montre la même chose qu'OBS, sans le son.</p>
+  <form id="form">
+    <input id="url" placeholder="https://…/overlay/ma_chaine?token=…" autofocus>
+    <div id="error"></div>
+    <button type="submit">Ouvrir le moniteur</button>
+  </form>
+  <p style="margin-top:16px">Clic droit sur le moniteur pour la taille, l'opacité et le reste. <kbd>Ctrl</kbd>+<kbd>Maj</kbd>+<kbd>M</kbd> rend le moniteur traversable aux clics, ou le fait revenir.</p>
+<script>
+  const input = document.getElementById("url");
+  const error = document.getElementById("error");
+  window.gsMonitor.current().then((url) => { if (url) input.value = url; });
+  document.getElementById("form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const result = await window.gsMonitor.save(input.value);
+    error.textContent = result && result.error ? result.error : "";
+  });
+</script>
+</body>
+</html>
