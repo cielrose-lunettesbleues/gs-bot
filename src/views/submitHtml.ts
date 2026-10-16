@@ -67,6 +67,22 @@ const BACKDROP_SCROLL_SECONDS = 150;
 // l'une ou l'autre tuile ne le fausse pas.
 const SKYLINE_SPEED_RATIO = 0.45;
 
+/**
+ * Repère du streamer dans la scène de l'éditeur, pour que le viewer sache à
+ * peu près où ne pas poser la vidéo. Coordonnées dans un repère 160x90, soit
+ * la source 16:9, relevées sur une capture de la scène de live. Volontairement
+ * approximatif: il s'agit d'indiquer une zone, pas de faire un portrait.
+ *
+ * C'est pour l'instant la scène d'un seul streamer, codée en dur. Le jour où
+ * l'instance en sert plusieurs, cette géométrie devra devenir un réglage de
+ * tenant (quatre nombres suffiraient: centre et taille de la zone occupée).
+ */
+const STREAMER_SILHOUETTE = /* html */ `
+          <svg class="stage-me" viewBox="0 0 160 90" preserveAspectRatio="none" aria-hidden="true">
+            <ellipse cx="92" cy="30" rx="17" ry="17"></ellipse>
+            <path d="M44 90 C44 68, 56 54, 76 49 L76 44 L108 44 L108 49 C128 54, 140 68, 140 90 Z"></path>
+          </svg>`;
+
 // Emitted after the base stylesheet so these rules win, while every untouched
 // slot keeps its drawn fallback. Deleting a sprite file is therefore enough to
 // restore the original look.
@@ -489,6 +505,19 @@ input:focus{outline:3px solid var(--gold);outline-offset:1px}
   border:3px solid var(--panel-edge);border-radius:10px;
   overflow:hidden;touch-action:none;
 }
+/* Repère du streamer: une silhouette approximative, juste pour que le viewer
+   sache à peu près où ne pas poser la vidéo. Jamais cliquable, pour ne pas
+   gêner le geste sur le cadre. */
+.stage-me{
+  position:absolute;inset:0;width:100%;height:100%;
+  fill:rgba(190,205,240,.17);
+  pointer-events:none;
+}
+.stage-me-lbl{
+  position:absolute;left:50%;bottom:6%;transform:translateX(-50%);
+  font-size:11px;letter-spacing:.06em;text-transform:uppercase;
+  color:rgba(190,205,240,.5);pointer-events:none;white-space:nowrap;
+}
 .stage-box{
   position:absolute;
   border:2px solid var(--gold);
@@ -665,11 +694,14 @@ ${spriteStyles(props.sprites ?? {})}
 
         <div class="ed-head">Place sur l'écran</div>
         <div class="stage" id="ed-stage">
+          ${STREAMER_SILHOUETTE}
+          <span class="stage-me-lbl">le streamer</span>
           <div class="stage-box" id="ed-box">
             <span class="lbl" id="ed-box-lbl">100%</span>
             <span class="stage-handle" id="ed-handle"></span>
           </div>
         </div>
+        <div class="ed-note">Glisse le cadre, pince ou tire le coin pour le redimensionner.</div>
         <div class="actions" style="margin-top:9px">
           <button class="btn btn-sm" id="ed-reset" type="button">Réinitialiser</button>
         </div>
@@ -1084,6 +1116,56 @@ ${spriteStyles(props.sprites ?? {})}
   endRange.oninput = syncTrim;
   el("ed-reset").onclick = resetPlace;
 
+  // ── Pincer pour redimensionner ────────────────────────────────────────────
+  // Le geste instinctif sur téléphone. Les doigts sont suivis sur la scène
+  // entière: dès qu'il y en a deux, le glissement en cours est abandonné pour
+  // que le cadre ne parte pas de travers pendant le pincement.
+  var touches = new Map();
+  var pinch = null;
+
+  function pinchDistance(){
+    var pts = Array.from(touches.values());
+    var dx = pts[0].x - pts[1].x, dy = pts[0].y - pts[1].y;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  stage.addEventListener("pointerdown", function(ev){
+    touches.set(ev.pointerId, { x:ev.clientX, y:ev.clientY });
+    if(touches.size === 2){
+      placeDirty = true;
+      pinch = { dist: pinchDistance(), from: { x:place.x, y:place.y, w:place.w, h:place.h } };
+    }
+  });
+
+  stage.addEventListener("pointermove", function(ev){
+    if(!touches.has(ev.pointerId)) return;
+    touches.set(ev.pointerId, { x:ev.clientX, y:ev.clientY });
+    if(!pinch || touches.size !== 2) return;
+    ev.preventDefault();
+
+    var from = pinch.from;
+    var scale = clamp(
+      pinchDistance() / pinch.dist,
+      Math.max(6 / from.w, 6 / from.h),
+      Math.min(200 / from.w, 200 / from.h)
+    );
+    // Les deux côtés par le même facteur, et le centre reste sous les doigts:
+    // le pincement ne peut pas plus déformer que la poignée.
+    var cx = from.x + from.w / 2, cy = from.y + from.h / 2;
+    place.w = from.w * scale;
+    place.h = from.h * scale;
+    place.x = cx - place.w / 2;
+    place.y = cy - place.h / 2;
+    drawBox();
+  });
+
+  function endTouch(ev){
+    touches.delete(ev.pointerId);
+    if(touches.size < 2) pinch = null;
+  }
+  stage.addEventListener("pointerup", endTouch);
+  stage.addEventListener("pointercancel", endTouch);
+
   function beginDrag(ev, mode){
     ev.preventDefault();
     placeDirty = true;
@@ -1091,6 +1173,8 @@ ${spriteStyles(props.sprites ?? {})}
     var sx = ev.clientX, sy = ev.clientY;
     var from = { x:place.x, y:place.y, w:place.w, h:place.h };
     function move(e){
+      // Un second doigt a pris la main: le pincement décide seul du cadre.
+      if(pinch) return;
       var dx = (e.clientX - sx) / r.width * 100;
       var dy = (e.clientY - sy) / r.height * 100;
       if(mode === "move"){

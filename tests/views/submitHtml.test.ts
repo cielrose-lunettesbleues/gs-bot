@@ -474,3 +474,42 @@ describe("getSubmitHtml, the frame cannot distort the media", () => {
     expect(touched).toContain("Math.abs(place.w - fit.w) > 0.5");
   });
 });
+
+describe("getSubmitHtml, knowing where the streamer sits", () => {
+  const html = getSubmitHtml(props({}));
+
+  it("marks the streamer's place inside the stage, without catching the gesture", () => {
+    const stage = html.slice(html.indexOf('<div class="stage"'), html.indexOf('<div class="ed-note">Glisse'));
+    expect(stage).toContain('class="stage-me"');
+    // Drawn in the 16:9 space of the source, so it maps straight onto it
+    expect(stage).toContain('viewBox="0 0 160 90"');
+    // Never clickable, or it would swallow drags meant for the frame
+    const rule = html.slice(html.indexOf(".stage-me{"), html.indexOf("}", html.indexOf(".stage-me{")));
+    expect(rule).toContain("pointer-events:none");
+  });
+});
+
+describe("getSubmitHtml, pinching to resize", () => {
+  const html = getSubmitHtml(props({}));
+  const pinch = html.slice(html.indexOf("var touches = new Map();"), html.indexOf("function beginDrag"));
+
+  it("scales both sides by one factor and keeps the frame under the fingers", () => {
+    expect(pinch).toContain("pinchDistance() / pinch.dist");
+    expect(pinch).toContain("place.w = from.w * scale;");
+    expect(pinch).toContain("place.h = from.h * scale;");
+    // Recentred on what was there before, so the frame does not jump away
+    expect(pinch).toContain("place.x = cx - place.w / 2;");
+  });
+
+  it("hands over from a drag already under way", () => {
+    expect(pinch).toContain("if(touches.size === 2)");
+    // A second finger takes the frame, or the two gestures would fight
+    const drag = html.slice(html.indexOf("function beginDrag"), html.indexOf("stageBox.addEventListener"));
+    expect(drag).toContain("if(pinch) return;");
+  });
+
+  it("drops the pinch as soon as a finger leaves", () => {
+    expect(pinch).toContain("if(touches.size < 2) pinch = null;");
+    expect(pinch).toContain('stage.addEventListener("pointercancel", endTouch)');
+  });
+});
