@@ -7,7 +7,11 @@ const path = require("path");
 const { toMonitorUrl } = require("./monitorUrl");
 
 const CLICK_THROUGH_SHORTCUT = "CommandOrControl+Shift+M";
+const FULL_SCREEN_SHORTCUT = "CommandOrControl+Shift+F";
 const RETRY_MS = 5_000;
+// Un jeu ou un lecteur qui passe en plein écran se met lui aussi au premier
+// plan et peut repasser devant: on reprend la place régulièrement.
+const KEEP_ON_TOP_MS = 1_000;
 const SIZES = [
   { label: "Petite (25 %)", ratio: 0.25 },
   { label: "Moyenne (33 %)", ratio: 0.33 },
@@ -86,8 +90,27 @@ function setClickThrough(enabled) {
   monitorWindow.setIgnoreMouseEvents(enabled, { forward: true });
 }
 
+// Plein écran, mais pas celui d'Electron: une fenêtre transparente y perd sa
+// transparence sous Windows. On la pose simplement sur tout l'écran, barre des
+// tâches comprise, et elle laisse passer les clics: sinon plus rien n'est
+// cliquable dessous. Ctrl+Maj+F la fait revenir.
+function setFullScreenCover(enabled) {
+  if (!monitorWindow) return;
+  if (enabled) {
+    const display = screen.getDisplayMatching(monitorWindow.getBounds());
+    if (!settings.fullScreen) saveSettings({ windowedBounds: monitorWindow.getBounds() });
+    monitorWindow.setBounds(display.bounds);
+    setClickThrough(true);
+  } else {
+    monitorWindow.setBounds(visibleBounds(settings.windowedBounds));
+    setClickThrough(false);
+  }
+  saveSettings({ fullScreen: enabled });
+}
+
 function resizeTo(ratio) {
   if (!monitorWindow) return;
+  if (settings.fullScreen) setFullScreenCover(false);
   const bounds = monitorWindow.getBounds();
   const area = screen.getDisplayMatching(bounds).workArea;
   const width = Math.round(area.width * ratio);
@@ -98,6 +121,12 @@ function resizeTo(ratio) {
 function buildMenu() {
   const currentOpacity = monitorWindow ? monitorWindow.getOpacity() : 1;
   return Menu.buildFromTemplate([
+    {
+      label: "Plein écran (Ctrl+Maj+F)",
+      type: "checkbox",
+      checked: Boolean(settings.fullScreen),
+      click: (item) => setFullScreenCover(item.checked)
+    },
     { label: "Taille", submenu: SIZES.map(({ label, ratio }) => ({ label, click: () => resizeTo(ratio) })) },
     {
       label: "Opacité",
@@ -183,10 +212,18 @@ function openMonitor(url) {
   };
   monitorWindow.on("moved", rememberBounds);
   monitorWindow.on("resize", rememberBounds);
+
+  const keepOnTop = setInterval(() => {
+    if (!monitorWindow || monitorWindow.isFocused()) return;
+    monitorWindow.setAlwaysOnTop(true, "screen-saver");
+    monitorWindow.moveTop();
+  }, KEEP_ON_TOP_MS);
   monitorWindow.on("closed", () => {
+    clearInterval(keepOnTop);
     monitorWindow = null;
   });
 
+  if (settings.fullScreen) setFullScreenCover(true);
   monitorWindow.loadURL(url);
 }
 
@@ -211,6 +248,7 @@ if (!app.requestSingleInstanceLock()) {
   app.whenReady().then(() => {
     settings = loadSettings();
     globalShortcut.register(CLICK_THROUGH_SHORTCUT, () => setClickThrough(!clickThrough));
+    globalShortcut.register(FULL_SCREEN_SHORTCUT, () => setFullScreenCover(!settings.fullScreen));
     if (settings.url) openMonitor(settings.url);
     else openSetup();
   });
