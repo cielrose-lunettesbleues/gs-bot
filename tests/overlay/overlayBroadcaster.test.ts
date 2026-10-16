@@ -106,4 +106,21 @@ describe("OverlayBroadcaster", () => {
 
     expect(listener).toHaveBeenCalledTimes(1);
   });
+
+  it("feeds monitors without counting them as overlays", async () => {
+    const b = new OverlayBroadcaster();
+    const seen: unknown[] = [];
+    b.addMonitor(async (event) => {
+      seen.push(event);
+    });
+
+    b.broadcast({ type: "stop" });
+
+    expect(seen).toEqual([{ type: "stop" }]);
+    // Only OBS overlays keep a tenant resident or fill its slots
+    expect(b.clientCount()).toBe(0);
+    expect(b.monitorCount()).toBe(1);
+    b.close();
+    expect(b.monitorCount()).toBe(0);
+  });
 });

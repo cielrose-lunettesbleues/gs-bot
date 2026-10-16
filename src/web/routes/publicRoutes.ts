@@ -14,6 +14,8 @@ import {
 import type { ServerConfig } from "../../config/serverConfig";
 import { saveServerOAuthConfig } from "../../config/serverConfig";
 import { getOverlayHtml, getOverlayVersion } from "../../overlay/overlayHtml";
+import type { OverlayBroadcaster } from "../../overlay/overlayBroadcaster";
+import { buildMonitorSnapshot } from "../../overlay/monitorSnapshot";
 import { TenantManager } from "../../tenant/tenantManager";
 import { getDashboardHtml } from "../../views/dashboardHtml";
 import { getLoginHtml } from "../../views/loginHtml";
@@ -24,6 +26,11 @@ import { clearViewerFlow, completeViewerLogin, readViewerFlow } from "../../view
 import { escapeHtml, isSecureRequest, verifySameOrigin } from "../../security/httpSecurity";
 
 const MAX_OVERLAY_CLIENTS_PER_TENANT = 3;
+const MAX_MONITOR_CLIENTS_PER_TENANT = 3;
+// The queue and approvals have no event of their own, so the monitor samples
+// them; a start or stop also triggers an immediate sample.
+const MONITOR_POLL_MS = 1_000;
+const MONITOR_HEARTBEAT_MS = 25_000;
 
 interface PublicRoutesDeps {
   app: Hono;
@@ -35,6 +42,8 @@ interface PublicRoutesDeps {
 }
 
 export function registerPublicRoutes({ app, db, oauthConfig, config, logger, tenantManager }: PublicRoutesDeps): void {
+  const monitorClients = new Map<number, number>();
+
   app.get("/setup", (c) => {
     if (oauthConfig.clientId && oauthConfig.clientSecret) return c.redirect("/");
     if (!isValidSetupRequest(c, config)) {
@@ -233,6 +242,92 @@ export function registerPublicRoutes({ app, db, oauthConfig, config, logger, ten
       }
       offClose();
       remove();
+    });
+  });
+
+  // Flux du moniteur du streamer: les mêmes évènements que l'overlay, plus un
+  // instantané de la file et des approbations. Il ne réveille pas le tenant et
+  // ne le garde pas en vie: une fenêtre restée ouverte hors stream ne doit pas
+  // tenir un bot IRC connecté. Il s'accroche au tenant dès qu'il existe.
+  app.get("/overlay/:channel/monitor", (c) => {
+    const channel = c.req.param("channel").toLowerCase();
+    const token = c.req.query("token");
+    const dbUser = getUserByLogin(db, channel);
+    if (!dbUser) return c.text("Canal introuvable", 404);
+    const tenantConfig = getTenantConfig(db, dbUser.id);
+    if (!token || token !== tenantConfig.overlay_token) {
+      return c.text("Overlay token invalide", 403);
+    }
+    const userId = dbUser.id;
+    // Counted here rather than on the broadcaster: a monitor stays connected
+    // while the tenant sleeps, when there is no broadcaster to count on.
+    const connected = monitorClients.get(userId) ?? 0;
+    if (connected >= MAX_MONITOR_CLIENTS_PER_TENANT) {
+      return c.text("Trop de moniteurs", 429);
+    }
+    monitorClients.set(userId, connected + 1);
+
+    return streamSSE(c, async (stream) => {
+      let wake: () => void = () => undefined;
+      let attachedTo: OverlayBroadcaster | null = null;
+      let detach: () => void = () => undefined;
+      let lastSnapshot = "";
+      let lastWriteAt = Date.now();
+      stream.onAbort(() => wake());
+
+      try {
+        await stream.writeSSE({ data: JSON.stringify({ type: "connected" }) });
+        while (!stream.aborted) {
+          const tenant = tenantManager.get(userId);
+          const broadcaster = tenant && !tenant.overlayBroadcaster.isClosed() ? tenant.overlayBroadcaster : null;
+          if (broadcaster !== attachedTo) {
+            detach();
+            attachedTo = broadcaster;
+            detach = () => undefined;
+            if (broadcaster) {
+              const remove = broadcaster.addMonitor(async (event) => {
+                await stream.writeSSE({ data: JSON.stringify(event) });
+                lastWriteAt = Date.now();
+                // A start or stop moves the queue: resample now, not next tick
+                wake();
+              });
+              const offClose = broadcaster.onClose(() => wake());
+              detach = () => {
+                remove();
+                offClose();
+              };
+            }
+          }
+
+          const snapshot = JSON.stringify(buildMonitorSnapshot(broadcaster ? tenant : undefined));
+          if (snapshot !== lastSnapshot) {
+            await stream.writeSSE({ data: snapshot });
+            lastSnapshot = snapshot;
+            lastWriteAt = Date.now();
+          } else if (Date.now() - lastWriteAt >= MONITOR_HEARTBEAT_MS) {
+            await stream.writeSSE({ data: "" });
+            lastWriteAt = Date.now();
+          }
+
+          // A hang-up during a write fired the abort before this sleep could
+          // hear it: check now rather than holding the slot for a whole tick.
+          if (stream.aborted) break;
+          await new Promise<void>((resolve) => {
+            const timer = setTimeout(resolve, MONITOR_POLL_MS);
+            wake = () => {
+              clearTimeout(timer);
+              resolve();
+            };
+          });
+        }
+      } catch {
+        // client gone mid-write
+      } finally {
+        detach();
+        const remaining = (monitorClients.get(userId) ?? 1) - 1;
+        if (remaining > 0) monitorClients.set(userId, remaining);
+        else monitorClients.delete(userId);
+      }
     });
   });
 

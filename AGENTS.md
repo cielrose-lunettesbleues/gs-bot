@@ -271,6 +271,18 @@ L'overlay réapplique le placement à chaque envoi, **y compris à vide** : sans
 
 **Une source navigateur garde la page qu'elle a chargée** : un déploiement ne la recharge pas, donc OBS continue d'exécuter l'ancien script jusqu'à un rafraîchissement manuel. La page porte donc une empreinte de sa propre source (`getOverlayVersion()`), le serveur l'annonce dans l'évènement `connected`, et une page périmée se recharge d'elle-même — une seule fois, pour qu'un désaccord durable ne tourne pas en boucle. **Attention** : c'est la route `/overlay/:channel/events` de `publicRoutes` qu'OBS atteint, pas `OverlayBroadcaster.connect()` ; les deux écrivent un `connected`, et ne corriger que le second ne change rien à ce que reçoit OBS.
 
+### Flux moniteur du streamer
+
+```txt
+GET /overlay/:channel/monitor?token=... → SSE pour une fenêtre de suivi hors OBS (même token que l'overlay)
+```
+
+Il relaie les mêmes évènements que l'overlay (`start`, `stop`, `tts`) et ajoute un instantané `{ type: "queue"; resident; playing; pending; approvals }`, envoyé à la connexion puis à chaque changement (échantillonné chaque seconde, et tout de suite après un `start`/`stop`). Principes :
+
+- **Le moniteur ne réveille pas le tenant et ne le garde pas en vie** : il passe par `tenantManager.get()`, jamais `getOrCreate()`, et s'abonne via `OverlayBroadcaster.addMonitor()`, que `clientCount()` ne compte pas. Une fenêtre restée ouverte hors stream ne doit pas tenir un bot IRC connecté. Tenant endormi → `resident: false`, et le flux s'accroche au tenant dès qu'il réapparaît.
+- **Limite propre** : 3 moniteurs par chaîne, comptés dans la route (un moniteur reste connecté sans broadcaster à qui se compter), sans prendre les 3 places réservées à OBS.
+- La file et les approbations n'ont pas d'évènement à elles, d'où l'échantillonnage plutôt qu'un abonnement.
+
 Les règles CSS géométriques de l'overlay ne doivent pas se mesurer en unités de fenêtre (`vh`/`vw`) : à l'intérieur d'un cadre réduit elles gardent la taille du plein écran et le placement n'a plus aucun effet. Une assertion de test sur une sous-chaîne ne le voit pas — rendre la vraie feuille de style dans un navigateur et lire les rectangles, si.
 
 ---

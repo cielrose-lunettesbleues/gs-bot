@@ -272,3 +272,110 @@ describe("overlay stream, surviving a deploy", () => {
     expect(getOverlayHtml()).toContain(`var OVERLAY_VERSION='${connected.overlayVersion}';`);
   });
 });
+
+describe("monitor stream", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    databaseMocks.getTenantConfig.mockReturnValue({ overlay_token: "overlay-token" });
+    databaseMocks.getUserByLogin.mockReturnValue({ id: 42, twitch_login: "streamer" });
+  });
+
+  // Reads SSE payloads until `done` is satisfied, then hangs up like a closed window
+  async function readUntil(response: Response, done: (events: unknown[]) => boolean): Promise<unknown[]> {
+    const reader = response.body!.getReader();
+    const decoder = new TextDecoder();
+    const events: unknown[] = [];
+    let buffer = "";
+    while (!done(events)) {
+      const { value, done: ended } = await reader.read();
+      if (ended) break;
+      buffer += decoder.decode(value, { stream: true });
+      const frames = buffer.split("\n\n");
+      buffer = frames.pop() ?? "";
+      for (const frame of frames) {
+        const data = frame.split("\n").find((line) => line.startsWith("data: "))?.slice(6);
+        if (data) events.push(JSON.parse(data));
+      }
+    }
+    await reader.cancel();
+    return events;
+  }
+
+  function monitoredTenant(broadcaster: OverlayBroadcaster) {
+    const state = { busy: false, pendingCount: 0 };
+    const approvals: string[] = [];
+    return {
+      state,
+      approvals,
+      tenant: {
+        overlayBroadcaster: broadcaster,
+        queue: { getState: () => ({ ...state }) },
+        approvalService: { listPending: () => [...approvals] }
+      }
+    };
+  }
+
+  it("rejects a wrong token", async () => {
+    const { app } = createApp();
+    const response = await app.request("http://example.com/overlay/streamer/monitor?token=wrong");
+    expect(response.status).toBe(403);
+  });
+
+  it("reports a sleeping tenant without waking it", async () => {
+    const { app, tenantManager } = createApp();
+    (tenantManager.get as unknown as { mockReturnValue: (v: unknown) => void }).mockReturnValue(undefined);
+
+    const response = await app.request("http://example.com/overlay/streamer/monitor?token=overlay-token");
+    const events = await readUntil(response, (e) => e.length >= 2);
+
+    expect(events).toEqual([
+      { type: "connected" },
+      { type: "queue", resident: false, playing: false, pending: 0, approvals: [] }
+    ]);
+    // A monitor left open off-stream must not keep an IRC bot connected
+    expect(tenantManager.getOrCreate).not.toHaveBeenCalled();
+  });
+
+  it("relays playback and follows the queue without taking an overlay slot", async () => {
+    const { app, tenantManager } = createApp();
+    const broadcaster = new OverlayBroadcaster();
+    const { state, approvals, tenant } = monitoredTenant(broadcaster);
+    (tenantManager.get as unknown as { mockReturnValue: (v: unknown) => void }).mockReturnValue(tenant);
+
+    const response = await app.request("http://example.com/overlay/streamer/monitor?token=overlay-token");
+    const events = readUntil(response, (e) => e.length >= 4);
+    await vi.waitFor(() => expect(broadcaster.monitorCount()).toBe(1));
+    expect(broadcaster.clientCount()).toBe(0);
+
+    state.busy = true;
+    approvals.push("viewer1");
+    broadcaster.broadcast({ type: "start", url: "https://x.test/a.mp4", durationSeconds: 5, username: "bob" });
+
+    expect(await events).toEqual([
+      { type: "connected" },
+      { type: "queue", resident: true, playing: false, pending: 0, approvals: [] },
+      { type: "start", url: "https://x.test/a.mp4", durationSeconds: 5, username: "bob" },
+      { type: "queue", resident: true, playing: true, pending: 0, approvals: ["viewer1"] }
+    ]);
+    await vi.waitFor(() => expect(broadcaster.monitorCount()).toBe(0));
+  });
+
+  it("caps the number of monitors per channel", async () => {
+    const { app, tenantManager } = createApp();
+    (tenantManager.get as unknown as { mockReturnValue: (v: unknown) => void }).mockReturnValue(undefined);
+    const open = await Promise.all(
+      [0, 1, 2].map(() => app.request("http://example.com/overlay/streamer/monitor?token=overlay-token"))
+    );
+    open.forEach((r) => expect(r.status).toBe(200));
+
+    const extra = await app.request("http://example.com/overlay/streamer/monitor?token=overlay-token");
+    expect(extra.status).toBe(429);
+
+    await Promise.all(open.map((r) => readUntil(r, (e) => e.length >= 1)));
+    await vi.waitFor(async () => {
+      const again = await app.request("http://example.com/overlay/streamer/monitor?token=overlay-token");
+      expect(again.status).toBe(200);
+      await again.body?.cancel();
+    });
+  });
+});

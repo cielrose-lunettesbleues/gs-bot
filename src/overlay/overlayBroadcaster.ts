@@ -7,6 +7,8 @@ type AsyncWriteFn = (event: PlaybackEvent) => Promise<void>;
 export interface IOverlayBroadcaster {
   connect(req: IncomingMessage, res: ServerResponse): void;
   addClient(writeFn: AsyncWriteFn): () => void;
+  addMonitor(writeFn: AsyncWriteFn): () => void;
+  monitorCount(): number;
   broadcast(event: PlaybackEvent): void;
   clientCount(): number;
   onClose(listener: () => void): () => void;
@@ -17,6 +19,9 @@ export interface IOverlayBroadcaster {
 export class OverlayBroadcaster implements IOverlayBroadcaster {
   private readonly nodeClients = new Set<ServerResponse>();
   private readonly asyncClients = new Set<AsyncWriteFn>();
+  // Kept apart from the overlays: a monitor window watches the stream but must
+  // neither take an OBS slot nor keep an idle tenant resident.
+  private readonly monitors = new Set<AsyncWriteFn>();
   private readonly closeListeners = new Set<() => void>();
   private closed = false;
 
@@ -43,6 +48,15 @@ export class OverlayBroadcaster implements IOverlayBroadcaster {
     return () => this.asyncClients.delete(writeFn);
   }
 
+  addMonitor(writeFn: AsyncWriteFn): () => void {
+    this.monitors.add(writeFn);
+    return () => this.monitors.delete(writeFn);
+  }
+
+  monitorCount(): number {
+    return this.monitors.size;
+  }
+
   broadcast(event: PlaybackEvent): void {
     const data = `data: ${JSON.stringify(event)}\n\n`;
     for (const client of [...this.nodeClients]) {
@@ -54,6 +68,9 @@ export class OverlayBroadcaster implements IOverlayBroadcaster {
     }
     for (const write of [...this.asyncClients]) {
       write(event).catch(() => this.asyncClients.delete(write));
+    }
+    for (const write of [...this.monitors]) {
+      write(event).catch(() => this.monitors.delete(write));
     }
   }
 
@@ -88,6 +105,7 @@ export class OverlayBroadcaster implements IOverlayBroadcaster {
     }
     this.nodeClients.clear();
     this.asyncClients.clear();
+    this.monitors.clear();
     for (const listener of [...this.closeListeners]) listener();
     this.closeListeners.clear();
   }
