@@ -32,5 +32,10 @@ dashboard. Elle est mémorisée, avec la position, la taille et l'opacité.
 - **Ctrl+Maj+M** : la fenêtre laisse passer les clics vers ce qui est dessous,
   ou les reprend.
 
+La fenêtre n'apparaît pas dans la barre des tâches : son menu est aussi sur
+l'icône « GS » des icônes cachées, seul accès quand elle laisse passer les clics.
+Elle se lance à l'ouverture de session Windows (entrée « GS Bot Moniteur »),
+ce qui se décoche dans le même menu.
+
 La fenêtre ne réveille pas le bot : quand il dort, le bandeau affiche « Bot en veille ».
 Elle n'occupe aucune des places réservées à OBS.

@@ -1,7 +1,7 @@
 // Moniteur GS Bot: la page overlay en mode moniteur, dans une fenêtre sans
 // bordure, transparente et toujours au premier plan. Le streamer y voit ce que
 // joue sa source OBS, sans passer par l'interface d'OBS.
-const { app, BrowserWindow, Menu, globalShortcut, ipcMain, screen } = require("electron");
+const { app, BrowserWindow, Menu, Tray, globalShortcut, ipcMain, nativeImage, screen } = require("electron");
 const fs = require("fs");
 const path = require("path");
 const { toMonitorUrl } = require("./monitorUrl");
@@ -43,7 +43,39 @@ function saveSettings(patch) {
 
 let monitorWindow = null;
 let setupWindow = null;
+let tray = null;
 let clickThrough = false;
+
+// Lancement à l'ouverture de session. Sans exécutable empaqueté, c'est
+// electron.exe qui démarre: il faut lui redonner le dossier de l'appli, sinon
+// il ouvre sa page d'accueil au lieu du moniteur.
+function loginItemOptions() {
+  // Le nom de la valeur dans la clé Run: sans lui, Windows affiche « Electron »
+  // dans les applications de démarrage.
+  const name = "GS Bot Moniteur";
+  return app.isPackaged ? { name } : { name, path: process.execPath, args: [app.getAppPath()] };
+}
+
+function isStartAtLogin() {
+  return app.getLoginItemSettings(loginItemOptions()).openAtLogin;
+}
+
+function setStartAtLogin(enabled) {
+  app.setLoginItemSettings({ ...loginItemOptions(), openAtLogin: enabled });
+  saveSettings({ startAtLogin: enabled });
+}
+
+// Plus de bouton dans la barre des tâches: l'icône dans les icônes cachées est
+// le seul accès au menu quand la fenêtre laisse passer les clics.
+function createTray() {
+  if (tray) return;
+  tray = new Tray(nativeImage.createFromPath(path.join(__dirname, "icon.png")).resize({ width: 16, height: 16 }));
+  tray.setToolTip("GS Bot · Moniteur");
+  // Reconstruit à chaque ouverture, pour que les coches suivent l'état réel
+  const popup = () => tray.popUpContextMenu(buildMenu());
+  tray.on("click", popup);
+  tray.on("right-click", popup);
+}
 
 function defaultBounds() {
   const area = screen.getPrimaryDisplay().workArea;
@@ -146,6 +178,12 @@ function buildMenu() {
       checked: clickThrough,
       click: (item) => setClickThrough(item.checked)
     },
+    {
+      label: "Lancer au démarrage de Windows",
+      type: "checkbox",
+      checked: isStartAtLogin(),
+      click: (item) => setStartAtLogin(item.checked)
+    },
     { type: "separator" },
     { label: "Recharger", click: () => monitorWindow?.reload() },
     { label: "Changer d'URL…", click: openSetup },
@@ -171,6 +209,7 @@ function openMonitor(url) {
     maximizable: false,
     fullscreenable: false,
     alwaysOnTop: true,
+    skipTaskbar: true,
     title: "GS Bot · Moniteur",
     webPreferences: {
       // Sans ça, Chromium ralentit une fenêtre qu'il juge masquée et le
@@ -247,6 +286,9 @@ if (!app.requestSingleInstanceLock()) {
 
   app.whenReady().then(() => {
     settings = loadSettings();
+    createTray();
+    // Réécrit à chaque lancement, pour suivre le dossier si le dépôt a bougé.
+    if (settings.startAtLogin !== false) setStartAtLogin(true);
     globalShortcut.register(CLICK_THROUGH_SHORTCUT, () => setClickThrough(!clickThrough));
     globalShortcut.register(FULL_SCREEN_SHORTCUT, () => setFullScreenCover(!settings.fullScreen));
     if (settings.url) openMonitor(settings.url);
