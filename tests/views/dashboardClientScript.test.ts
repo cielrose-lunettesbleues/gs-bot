@@ -13,6 +13,6 @@ describe("dashboardClientScript", () => {
 
     expect(script).toContain("approvePending(\\'");
     expect(script).toContain("denyPending(\\'");
-    expect(script).toContain("Régénérer l'URL OBS ? L'ancienne URL cessera de fonctionner.");
+    expect(script).toContain("Régénérer l'URL OBS ? L'ancienne URL et le bouton Stream Deck cesseront de fonctionner.");
   });
 });

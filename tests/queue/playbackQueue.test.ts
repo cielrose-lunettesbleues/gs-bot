@@ -244,3 +244,14 @@ describe("PlaybackQueue — end reported by the overlay", () => {
     expect(queue.getState()).toEqual({ busy: false, pendingCount: 0 });
   });
 });
+
+describe("PlaybackQueue — emergency stop event", () => {
+  it("tells the overlays even when nothing is queued, so a lingering TTS is cut too", async () => {
+    const events: Array<{ type: string; emergency?: boolean }> = [];
+    const queue = new PlaybackQueue(makeObs(), { mode: "queue", maxSize: 3 }, makeLogger(), (e) => events.push(e));
+
+    await queue.stop();
+
+    expect(events).toEqual([{ type: "stop", emergency: true }]);
+  });
+});

@@ -255,6 +255,7 @@ GET /overlay/:channel?token=...         → HTML OBS Browser Source
 GET /overlay/:channel/events?token=...  → SSE stream protégé par token public
 GET /tts/audio/:channel/:id?token=...   → audio TTS protégé par le même token public tenant
 POST /overlay/:channel/ended?token=...  → { playbackId } : l'overlay signale que le média a quitté l'écran
+GET|POST /overlay/:channel/stop?token=... → arrêt d'urgence (bouton Stream Deck, action « Site web » en arrière-plan)
 ```
 
 Events envoyés :
@@ -264,7 +265,7 @@ Events envoyés :
 // startSeconds/endSeconds pour l'extrait, x/y/width/height en pourcentages
 // de la source navigateur pour la place à l'écran.
 { type: "start"; playbackId: number; url: string; durationSeconds: number; presentation?: PlaybackPresentation }
-{ type: "stop" }                                          // cacher
+{ type: "stop"; emergency?: boolean }                     // cacher ; emergency (!gstop, dashboard, Stream Deck) coupe aussi le TTS
 { type: "connected" }                                     // connexion initiale
 ```
 
@@ -490,7 +491,7 @@ Couverture principale actuelle :
 - [ ] Déploiement Docker
 - [ ] Filtrage NSFW/spam
 - [ ] Profils de sources multiples
-- [ ] Stream Deck plugin (base existante dans `streamdeck-plugin/`, à réaligner si ce sous-projet doit être conservé)
+- [ ] Stream Deck plugin (base existante dans `streamdeck-plugin/`, vise l'ancienne API de contrôle supprimée ; l'arrêt d'urgence passe désormais par l'action « Site web » et `/overlay/:channel/stop`, sans plugin)
 - [ ] Passe finale de handoff documentation après la fin complète du refacto
 
 ---

@@ -1,4 +1,4 @@
-import type { Hono } from "hono";
+import type { Context, Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import type { Logger } from "pino";
 import { createSession, deleteSession, getTenantConfig, getUserByLogin, upsertUser, type Database } from "../../db/database";
@@ -17,6 +17,7 @@ import { getOverlayHtml, getOverlayVersion } from "../../overlay/overlayHtml";
 import type { OverlayBroadcaster } from "../../overlay/overlayBroadcaster";
 import { buildMonitorSnapshot } from "../../overlay/monitorSnapshot";
 import { TenantManager } from "../../tenant/tenantManager";
+import { executeEmergencyStop } from "../../commands/stopAction";
 import { getDashboardHtml } from "../../views/dashboardHtml";
 import { getLoginHtml } from "../../views/loginHtml";
 import { getSetupHtml } from "../../views/setupHtml";
@@ -351,6 +352,28 @@ export function registerPublicRoutes({ app, db, oauthConfig, config, logger, ten
     if (finished) logger.info({ userId: dbUser.id, playbackId: parsed.data.playbackId }, "Overlay reported playback end");
     return c.json({ ok: true, finished });
   });
+
+  // Arrêt d'urgence depuis un bouton Stream Deck. GET accepté exprès: l'action
+  // « Site web » du Stream Deck sait faire une requête GET en arrière-plan sans
+  // plugin à installer. Même effet que !gstop: lecture coupée, file vidée, TTS
+  // coupé, sur OBS comme sur le moniteur. Protégé par le token overlay, et sans
+  // réveiller un tenant endormi, qui n'a rien à arrêter.
+  const emergencyStop = async (c: Context) => {
+    const channel = (c.req.param("channel") ?? "").toLowerCase();
+    const token = c.req.query("token");
+    const dbUser = getUserByLogin(db, channel);
+    if (!dbUser) return c.text("Canal introuvable", 404);
+    const tenantConfig = getTenantConfig(db, dbUser.id);
+    if (!token || token !== tenantConfig.overlay_token) {
+      return c.text("Overlay token invalide", 403);
+    }
+    const tenant = tenantManager.get(dbUser.id);
+    if (!tenant) return c.text("Rien à arrêter");
+    await executeEmergencyStop({ queue: tenant.queue, logger }, "streamdeck_plugin");
+    return c.text("Source arrêtée");
+  };
+  app.get("/overlay/:channel/stop", emergencyStop);
+  app.post("/overlay/:channel/stop", emergencyStop);
 
   app.get("/tts/audio/:channel/:id", (c) => {
     const channel = c.req.param("channel").toLowerCase();

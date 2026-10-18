@@ -146,6 +146,11 @@ input:checked+.slider:before{transform:translateX(18px)}
       <button class="btn-copy" id="rotate-overlay-btn" onclick="rotateOverlayUrl()">Régénérer</button>
     </div>
     <p style="font-size:11px;color:var(--muted)">Clients connectés : <span id="overlay-clients">0</span></p>
+    <p style="font-size:13px;color:var(--muted);margin-top:12px">Bouton d'arrêt <strong style="color:var(--text)">Stream Deck</strong> : action « Site web », coche « Accès en arrière-plan », colle ce lien. Il coupe la lecture, vide la file et coupe le TTS, sur le stream comme sur le moniteur.</p>
+    <div class="url-row">
+      <span class="url-box" id="stop-url"></span>
+      <button class="btn-copy" id="copy-stop-btn" onclick="copyStopUrl()">Copier</button>
+    </div>
   </div>
 
   <div class="panel col-full">

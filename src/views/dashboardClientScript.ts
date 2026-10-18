@@ -12,7 +12,15 @@ export function getDashboardClientScript(overlayPath: string): string {
   var overlayPath = '${safeOverlayPath}';
   var overlayUrl = window.location.origin + overlayPath;
   var urlEl = document.getElementById('overlay-url');
+  // Lien d'arrêt Stream Deck: l'URL OBS avec /stop, donc le même token, et il
+  // suit une régénération sans rien de plus.
+  function stopUrl() { return overlayUrl.replace('?', '/stop?'); }
+  function renderStopUrl() {
+    var el = document.getElementById('stop-url');
+    if(el) el.textContent = stopUrl();
+  }
   if(urlEl) urlEl.textContent = overlayUrl;
+  renderStopUrl();
 
   var toastTimer;
   function toast(msg, type) {
@@ -37,6 +45,7 @@ export function getDashboardClientScript(overlayPath: string): string {
     overlayPath = path;
     overlayUrl = window.location.origin + overlayPath;
     if(urlEl) urlEl.textContent = overlayUrl;
+    renderStopUrl();
   }
 
   var submitUrl = '';
@@ -283,9 +292,17 @@ export function getDashboardClientScript(overlayPath: string): string {
     }).catch(function(){ toast('Impossible de copier','err'); });
   };
 
+  window.copyStopUrl = function() {
+    navigator.clipboard.writeText(stopUrl()).then(function(){
+      var btn = document.getElementById('copy-stop-btn');
+      btn.textContent = 'Copié !'; btn.className = 'btn-copy copied';
+      setTimeout(function(){ btn.textContent = 'Copier'; btn.className = 'btn-copy'; }, 2000);
+    }).catch(function(){ toast('Impossible de copier','err'); });
+  };
+
   window.rotateOverlayUrl = async function() {
     var btn = document.getElementById('rotate-overlay-btn');
-    if(!confirm("Régénérer l'URL OBS ? L'ancienne URL cessera de fonctionner.")) return;
+    if(!confirm("Régénérer l'URL OBS ? L'ancienne URL et le bouton Stream Deck cesseront de fonctionner.")) return;
     btn.disabled = true;
     try {
       var result = await api('POST', '/api/overlay/rotate-token');
@@ -293,6 +310,7 @@ export function getDashboardClientScript(overlayPath: string): string {
         overlayPath = result.overlayUrl;
         overlayUrl = window.location.origin + overlayPath;
         if(urlEl) urlEl.textContent = overlayUrl;
+        renderStopUrl();
       }
       toast('URL OBS régénérée ✓', 'ok');
     } catch(e) {

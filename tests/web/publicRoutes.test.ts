@@ -429,3 +429,44 @@ describe("overlay end report", () => {
     expect(tenantManager.getOrCreate).not.toHaveBeenCalled();
   });
 });
+
+describe("Stream Deck stop link", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    databaseMocks.getTenantConfig.mockReturnValue({ overlay_token: "overlay-token" });
+    databaseMocks.getUserByLogin.mockReturnValue({ id: 42, twitch_login: "streamer" });
+  });
+
+  it("stops everything from a plain GET, which is all the Stream Deck Website action sends", async () => {
+    const { app, tenantManager } = createApp();
+    const stop = vi.fn(async () => undefined);
+    (tenantManager.get as unknown as { mockReturnValue: (v: unknown) => void }).mockReturnValue({ queue: { stop } });
+
+    const response = await app.request("http://example.com/overlay/streamer/stop?token=overlay-token");
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("Source arrêtée");
+    expect(stop).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses without the overlay token", async () => {
+    const { app, tenantManager } = createApp();
+    const stop = vi.fn(async () => undefined);
+    (tenantManager.get as unknown as { mockReturnValue: (v: unknown) => void }).mockReturnValue({ queue: { stop } });
+
+    const response = await app.request("http://example.com/overlay/streamer/stop?token=wrong", { method: "POST" });
+
+    expect(response.status).toBe(403);
+    expect(stop).not.toHaveBeenCalled();
+  });
+
+  it("does not wake a sleeping tenant just to stop nothing", async () => {
+    const { app, tenantManager } = createApp();
+    (tenantManager.get as unknown as { mockReturnValue: (v: unknown) => void }).mockReturnValue(undefined);
+
+    const response = await app.request("http://example.com/overlay/streamer/stop?token=overlay-token");
+
+    expect(response.status).toBe(200);
+    expect(tenantManager.getOrCreate).not.toHaveBeenCalled();
+  });
+});

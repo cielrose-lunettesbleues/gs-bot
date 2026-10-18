@@ -535,7 +535,16 @@ body.monitor #monitor-bar{
         }
         if(d.type==='start'){ console.log('[overlay] start', d.url); show(d); }
         // Fin décidée par le serveur: rien à lui signaler en retour
-        else if(d.type==='stop'){ console.log('[overlay] stop'); playbackId = null; hide(); }
+        else if(d.type==='stop'){
+          console.log('[overlay] stop');
+          playbackId = null;
+          hide();
+          // Arrêt d'urgence: le TTS aussi, même s'il survit à son clip
+          if(d.emergency){
+            if(ttsHideTimer){ clearTimeout(ttsHideTimer); ttsHideTimer=null; }
+            hideTtsCaption();
+          }
+        }
         else if(d.type==='tts') playTts(d);
         else if(d.type==='queue' && MONITOR) renderQueue(d);
       } catch(e){ console.error('[overlay] event error', e); }

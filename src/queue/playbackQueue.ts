@@ -66,7 +66,8 @@ export type PlaybackEvent =
       cutAfterSeconds?: number;
       presentation?: PlaybackPresentation;
     }
-  | { type: "stop" }
+  /** emergency: !gstop, dashboard or Stream Deck, which also silences TTS. */
+  | { type: "stop"; emergency?: boolean }
   | TtsPlaybackEvent;
 
 interface ObsOps {
@@ -142,6 +143,9 @@ export class PlaybackQueue {
     this.abortCurrent?.();
     this.pending.length = 0;
     await this.obsController.hideSource();
+    // Sent even when idle: an emergency stop must also clear what the server
+    // no longer tracks, such as a TTS still speaking after its clip ended.
+    this.onEvent?.({ type: "stop", emergency: true });
   }
 
   private async play(item: PlaybackItem): Promise<void> {
