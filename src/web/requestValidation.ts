@@ -130,3 +130,10 @@ export const favoriteCreateSchema = z.object({
   label: z.string().trim().max(120).optional()
 }).strict();
 export type FavoriteCreateBody = z.infer<typeof favoriteCreateSchema>;
+
+// ─── Overlay ──────────────────────────────────────────────────────────────────
+
+export const overlayEndedSchema = z.object({
+  playbackId: z.number().int().min(1)
+}).strict();
+export type OverlayEndedBody = z.infer<typeof overlayEndedSchema>;

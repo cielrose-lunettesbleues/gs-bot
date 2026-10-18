@@ -349,12 +349,12 @@ describe("monitor stream", () => {
 
     state.busy = true;
     approvals.push("viewer1");
-    broadcaster.broadcast({ type: "start", url: "https://x.test/a.mp4", durationSeconds: 5, username: "bob" });
+    broadcaster.broadcast({ type: "start", playbackId: 1, url: "https://x.test/a.mp4", durationSeconds: 5, username: "bob" });
 
     expect(await events).toEqual([
       { type: "connected", overlayVersion: getOverlayVersion() },
       { type: "queue", resident: true, playing: false, pending: 0, approvals: [] },
-      { type: "start", url: "https://x.test/a.mp4", durationSeconds: 5, username: "bob" },
+      { type: "start", playbackId: 1, url: "https://x.test/a.mp4", durationSeconds: 5, username: "bob" },
       { type: "queue", resident: true, playing: true, pending: 0, approvals: ["viewer1"] }
     ]);
     await vi.waitFor(() => expect(broadcaster.monitorCount()).toBe(0));
@@ -377,5 +377,55 @@ describe("monitor stream", () => {
       expect(again.status).toBe(200);
       await again.body?.cancel();
     });
+  });
+});
+
+describe("overlay end report", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    databaseMocks.getTenantConfig.mockReturnValue({ overlay_token: "overlay-token" });
+    databaseMocks.getUserByLogin.mockReturnValue({ id: 42, twitch_login: "streamer" });
+  });
+
+  function post(app: Hono, token: string, body: unknown) {
+    return app.request(`http://example.com/overlay/streamer/ended?token=${token}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+  }
+
+  it("lets the queue move on when OBS reports the clip is over", async () => {
+    const { app, tenantManager } = createApp();
+    const finishCurrent = vi.fn(() => true);
+    (tenantManager.get as unknown as { mockReturnValue: (v: unknown) => void }).mockReturnValue({ queue: { finishCurrent } });
+
+    const response = await post(app, "overlay-token", { playbackId: 7 });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ok: true, finished: true });
+    expect(finishCurrent).toHaveBeenCalledWith(7);
+  });
+
+  it("refuses a report without the overlay token", async () => {
+    const { app, tenantManager } = createApp();
+    const finishCurrent = vi.fn(() => true);
+    (tenantManager.get as unknown as { mockReturnValue: (v: unknown) => void }).mockReturnValue({ queue: { finishCurrent } });
+
+    const response = await post(app, "wrong", { playbackId: 7 });
+
+    expect(response.status).toBe(403);
+    expect(finishCurrent).not.toHaveBeenCalled();
+  });
+
+  it("rejects a malformed report and ignores a sleeping tenant", async () => {
+    const { app, tenantManager } = createApp();
+    expect((await post(app, "overlay-token", { playbackId: "7" })).status).toBe(400);
+
+    (tenantManager.get as unknown as { mockReturnValue: (v: unknown) => void }).mockReturnValue(undefined);
+    const response = await post(app, "overlay-token", { playbackId: 7 });
+    expect(await response.json()).toEqual({ ok: true, finished: false });
+    // Reporting must never wake a tenant up
+    expect(tenantManager.getOrCreate).not.toHaveBeenCalled();
   });
 });

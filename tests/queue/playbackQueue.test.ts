@@ -199,3 +199,48 @@ describe("PlaybackQueue — requested cut", () => {
     expect(events[0].cutAfterSeconds).toBeUndefined();
   });
 });
+
+describe("PlaybackQueue — end reported by the overlay", () => {
+  async function startedQueue() {
+    const obs = makeObs();
+    const events: Array<{ type: string; playbackId?: number; url?: string }> = [];
+    const queue = new PlaybackQueue(obs, { mode: "queue", maxSize: 3 }, makeLogger(), (e) => events.push(e));
+    // A long expected length: the overlay knows better when the clip is over
+    await queue.enqueue(makeItem("https://example.com/v1.mp4", 600));
+    await queue.enqueue(makeItem("https://example.com/v2.mp4", 600));
+    await vi.advanceTimersByTimeAsync(0);
+    return { queue, events };
+  }
+
+  it("moves on as soon as the overlay reports the current clip finished", async () => {
+    const { queue, events } = await startedQueue();
+    const first = events.find((e) => e.type === "start")!;
+
+    expect(queue.finishCurrent(first.playbackId!)).toBe(true);
+    await vi.advanceTimersByTimeAsync(0);
+
+    // No waiting out the 600 s the server expected
+    const starts = events.filter((e) => e.type === "start");
+    expect(starts.map((e) => e.url)).toEqual(["https://example.com/v1.mp4", "https://example.com/v2.mp4"]);
+    expect(starts[1].playbackId).not.toBe(first.playbackId);
+    expect(queue.getState()).toEqual({ busy: true, pendingCount: 0 });
+  });
+
+  it("ignores a late report, so it can never cut the next clip short", async () => {
+    const { queue, events } = await startedQueue();
+    const first = events.find((e) => e.type === "start")!;
+    queue.finishCurrent(first.playbackId!);
+    await vi.advanceTimersByTimeAsync(0);
+
+    // A second overlay, or a retry, reporting the same clip again
+    expect(queue.finishCurrent(first.playbackId!)).toBe(false);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(events.filter((e) => e.type === "stop")).toHaveLength(1);
+  });
+
+  it("still ends on its own timer when no overlay answers", async () => {
+    const { queue } = await startedQueue();
+    await vi.advanceTimersByTimeAsync(1200 * 1000);
+    expect(queue.getState()).toEqual({ busy: false, pendingCount: 0 });
+  });
+});

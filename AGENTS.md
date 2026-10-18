@@ -254,6 +254,7 @@ Toutes les routes `/api/*` requièrent une session valide (cookie `gs_session`).
 GET /overlay/:channel?token=...         → HTML OBS Browser Source
 GET /overlay/:channel/events?token=...  → SSE stream protégé par token public
 GET /tts/audio/:channel/:id?token=...   → audio TTS protégé par le même token public tenant
+POST /overlay/:channel/ended?token=...  → { playbackId } : l'overlay signale que le média a quitté l'écran
 ```
 
 Events envoyés :
@@ -262,12 +263,14 @@ Events envoyés :
 // jouer. presentation ne vient que du mini-éditeur de la page viewers:
 // startSeconds/endSeconds pour l'extrait, x/y/width/height en pourcentages
 // de la source navigateur pour la place à l'écran.
-{ type: "start"; url: string; durationSeconds: number; presentation?: PlaybackPresentation }
+{ type: "start"; playbackId: number; url: string; durationSeconds: number; presentation?: PlaybackPresentation }
 { type: "stop" }                                          // cacher
 { type: "connected" }                                     // connexion initiale
 ```
 
 L'overlay réapplique le placement à chaque envoi, **y compris à vide** : sans remise à zéro, un envoi cadré laisserait son cadre au suivant.
+
+**La file suit l'écran, pas seulement son minuteur** : `durationSeconds` n'est qu'une estimation (durée du tenant, plafond, durée annoncée par une API), et une vidéo peut finir plus tôt ou ne jamais se charger (lien CDN expiré, YouTube non intégrable). Quand le média quitte l'écran (`ended`, `error`, `onError` YouTube, coupe), l'overlay poste `playbackId` sur `/ended` et `PlaybackQueue.finishCurrent()` passe au suivant. Sans ça, toute la file attendait la durée prévue devant un écran vide et paraissait bloquée jusqu'à un `!gstop`. Un identifiant périmé est ignoré (un second overlay ne peut pas couper la vidéo suivante), un `stop` envoyé par le serveur n'est pas renvoyé, le moniteur ne signale rien, et le minuteur reste le plafond quand aucun overlay ne répond.
 
 **Une source navigateur garde la page qu'elle a chargée** : un déploiement ne la recharge pas, donc OBS continue d'exécuter l'ancien script jusqu'à un rafraîchissement manuel. La page porte donc une empreinte de sa propre source (`getOverlayVersion()`), le serveur l'annonce dans l'évènement `connected`, et une page périmée se recharge d'elle-même — une seule fois, pour qu'un désaccord durable ne tourne pas en boucle. **Attention** : c'est la route `/overlay/:channel/events` de `publicRoutes` qu'OBS atteint, pas `OverlayBroadcaster.connect()` ; les deux écrivent un `connected`, et ne corriger que le second ne change rien à ce que reçoit OBS.
 

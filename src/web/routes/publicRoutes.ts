@@ -20,7 +20,7 @@ import { TenantManager } from "../../tenant/tenantManager";
 import { getDashboardHtml } from "../../views/dashboardHtml";
 import { getLoginHtml } from "../../views/loginHtml";
 import { getSetupHtml } from "../../views/setupHtml";
-import { setupSchema, parseJsonBody } from "../requestValidation";
+import { overlayEndedSchema, setupSchema, parseJsonBody } from "../requestValidation";
 import { buildOverlayPath, buildSubmitPath, isValidSetupRequest } from "../publicTokens";
 import { clearViewerFlow, completeViewerLogin, readViewerFlow } from "../../viewer/viewerLogin";
 import { escapeHtml, isSecureRequest, verifySameOrigin } from "../../security/httpSecurity";
@@ -331,6 +331,25 @@ export function registerPublicRoutes({ app, db, oauthConfig, config, logger, ten
         else monitorClients.delete(userId);
       }
     });
+  });
+
+  // L'overlay signale que le média a quitté l'écran (fin, échec, coupe): la
+  // file passe au suivant au lieu d'attendre la durée prévue devant un écran
+  // vide. Même token que le flux, et un identifiant périmé est sans effet.
+  app.post("/overlay/:channel/ended", async (c) => {
+    const channel = c.req.param("channel").toLowerCase();
+    const token = c.req.query("token");
+    const dbUser = getUserByLogin(db, channel);
+    if (!dbUser) return c.text("Canal introuvable", 404);
+    const tenantConfig = getTenantConfig(db, dbUser.id);
+    if (!token || token !== tenantConfig.overlay_token) {
+      return c.text("Overlay token invalide", 403);
+    }
+    const parsed = await parseJsonBody(c, overlayEndedSchema);
+    if (!parsed.success) return parsed.response;
+    const finished = tenantManager.get(dbUser.id)?.queue.finishCurrent(parsed.data.playbackId) ?? false;
+    if (finished) logger.info({ userId: dbUser.id, playbackId: parsed.data.playbackId }, "Overlay reported playback end");
+    return c.json({ ok: true, finished });
   });
 
   app.get("/tts/audio/:channel/:id", (c) => {

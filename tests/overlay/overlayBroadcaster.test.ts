@@ -47,7 +47,7 @@ describe("OverlayBroadcaster", () => {
     b.connect(makeReq() as never, res1 as never);
     b.connect(makeReq() as never, res2 as never);
 
-    b.broadcast({ type: "start", url: "https://youtu.be/abc", durationSeconds: 15, username: "alice" });
+    b.broadcast({ type: "start", playbackId: 1, url: "https://youtu.be/abc", durationSeconds: 15, username: "alice" });
 
     expect(res1.write).toHaveBeenCalledTimes(2); // connected + start
     expect(res2.write).toHaveBeenCalledTimes(2);

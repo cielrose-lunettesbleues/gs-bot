@@ -56,6 +56,8 @@ export interface TtsPlaybackEvent {
 export type PlaybackEvent =
   | {
       type: "start";
+      /** Lets the overlay say which playback it finished, see finishCurrent(). */
+      playbackId: number;
       url: string;
       durationSeconds: number;
       username: string;
@@ -83,6 +85,8 @@ export class PlaybackQueue {
   private busy = false;
   private readonly pending: PlaybackItem[] = [];
   private abortCurrent: (() => void) | null = null;
+  private lastPlaybackId = 0;
+  private currentPlaybackId: number | null = null;
 
   constructor(
     private readonly obsController: ObsOps,
@@ -120,6 +124,20 @@ export class PlaybackQueue {
     return { busy: this.busy, pendingCount: this.pending.length };
   }
 
+  /**
+   * The overlay reports that the media left the screen: it ended, failed to
+   * load, or was cut. Without this the queue only trusts its own timer, set to
+   * the expected length, and every item behind waits on a screen that already
+   * shows nothing. The timer stays as the ceiling for when no overlay answers.
+   * A stale id (an earlier playback, or a second overlay reporting late) is
+   * ignored, so one report can never cut the next video short.
+   */
+  public finishCurrent(playbackId: number): boolean {
+    if (!this.busy || this.currentPlaybackId !== playbackId || !this.abortCurrent) return false;
+    this.abortCurrent();
+    return true;
+  }
+
   public async stop(): Promise<void> {
     this.abortCurrent?.();
     this.pending.length = 0;
@@ -128,11 +146,14 @@ export class PlaybackQueue {
 
   private async play(item: PlaybackItem): Promise<void> {
     this.busy = true;
+    const playbackId = ++this.lastPlaybackId;
+    this.currentPlaybackId = playbackId;
     try {
       await this.obsController.setSourceUrl(item.url);
       await this.obsController.showSource();
       this.onEvent?.({
         type: "start",
+        playbackId,
         url: item.url,
         durationSeconds: item.durationSeconds,
         username: item.username,
@@ -173,6 +194,7 @@ export class PlaybackQueue {
       this.onEvent?.({ type: "stop" });
     } finally {
       this.busy = false;
+      this.currentPlaybackId = null;
     }
 
     const next = this.pending.shift();

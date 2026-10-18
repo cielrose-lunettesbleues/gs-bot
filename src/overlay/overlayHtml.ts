@@ -254,6 +254,8 @@ body.monitor #monitor-bar{
     try {
       var d = JSON.parse(ev.data);
       if(d.event === 'onReady') ytPlay();
+      // Vidéo privée, supprimée ou non intégrable: rien ne jouera
+      if(d.event === 'onError') hide();
       if(d.event === 'onStateChange'){
         if(d.info === 0) hide();
         else if(d.info === 1) reveal();
@@ -317,6 +319,7 @@ body.monitor #monitor-bar{
     if(/\\.(gif|png|jpg|jpeg|webp)(\\?.*)?$/i.test(url)){
       var i=document.createElement('img');
       i.src=url;
+      i.addEventListener('error', hide);
       return i;
     }
     var v=document.createElement('video');
@@ -327,6 +330,8 @@ body.monitor #monitor-bar{
     v.playsInline=true;
     v.muted=MONITOR;
     v.addEventListener('ended', hide);
+    // Lien expiré ou bloqué: l'écran resterait vide jusqu'à la fin prévue
+    v.addEventListener('error', hide);
     if(start){
       // Repli quand le serveur ignore les fragments: on s'y place à la main.
       v.addEventListener('loadedmetadata', function(){
@@ -351,6 +356,26 @@ body.monitor #monitor-bar{
 
   var hideTimer = null;
   var revealTimer = null;
+
+  // Le serveur n'attend que la durée prévue avant de passer au suivant. Quand
+  // le média quitte l'écran plus tôt (fin, échec, coupe), on le lui dit, sinon
+  // toute la file attend devant un écran vide. Le moniteur ne fait que
+  // regarder: seule une vraie source OBS a son mot à dire.
+  var playbackId = null;
+  function reportEnded(){
+    if(MONITOR || !playbackId) return;
+    var id = playbackId;
+    playbackId = null;
+    var parts = location.pathname.split('/').filter(Boolean);
+    try {
+      fetch('/overlay/' + parts[parts.length-1] + '/ended' + location.search, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ playbackId: id }),
+        keepalive: true
+      }).catch(function(){});
+    } catch(e){}
+  }
 
   function reveal(){
     if(revealTimer){ clearTimeout(revealTimer); revealTimer=null; }
@@ -377,6 +402,7 @@ body.monitor #monitor-bar{
   }
 
   function show(data){
+    playbackId = data.playbackId || null;
     if(hideTimer){ clearTimeout(hideTimer); hideTimer=null; }
     if(revealTimer){ clearTimeout(revealTimer); revealTimer=null; }
     mediaEl.innerHTML='';
@@ -412,6 +438,7 @@ body.monitor #monitor-bar{
   }
 
   function hide(){
+    reportEnded();
     if(hideTimer){ clearTimeout(hideTimer); hideTimer=null; }
     if(revealTimer){ clearTimeout(revealTimer); revealTimer=null; }
     wrap.classList.remove('visible');
@@ -507,7 +534,8 @@ body.monitor #monitor-bar{
           return;
         }
         if(d.type==='start'){ console.log('[overlay] start', d.url); show(d); }
-        else if(d.type==='stop'){ console.log('[overlay] stop'); hide(); }
+        // Fin décidée par le serveur: rien à lui signaler en retour
+        else if(d.type==='stop'){ console.log('[overlay] stop'); playbackId = null; hide(); }
         else if(d.type==='tts') playTts(d);
         else if(d.type==='queue' && MONITOR) renderQueue(d);
       } catch(e){ console.error('[overlay] event error', e); }
