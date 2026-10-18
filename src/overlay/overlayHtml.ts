@@ -164,6 +164,9 @@ iframe{
 /* Mode moniteur (?monitor=1): la même page, vue par le streamer hors OBS.
    Le contour marque les bords de la source, invisibles sur fond transparent. */
 #monitor-frame,#monitor-bar{display:none}
+/* Le fond flou des Shorts sert à remplir la scène OBS. Le moniteur montre la
+   vidéo seule, sans bordure, par-dessus le bureau. */
+body.monitor .yt-short-bg{display:none}
 body.monitor #monitor-frame{
   display:block;position:fixed;inset:0;
   border:2px dashed rgba(255,255,255,.35);

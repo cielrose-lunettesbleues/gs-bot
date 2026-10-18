@@ -20,6 +20,18 @@ const SIZES = [
 ];
 const OPACITIES = [1, 0.8, 0.6, 0.4];
 
+// Profil séparé pour tester sans toucher au moniteur du streamer: ses
+// réglages, son verrou d'instance unique et son entrée de démarrage.
+const DEV_PROFILE = process.env.GS_MONITOR_PROFILE;
+if (DEV_PROFILE) app.setPath("userData", path.resolve(DEV_PROFILE));
+
+// Avec l'accélération matérielle, Windows peint toute la fenêtre transparente
+// en noir dès qu'une vidéo joue: les bandes autour d'une vidéo verticale ou
+// 4:3, transparentes dans OBS, deviennent noires. Couper les surcouches vidéo
+// DirectComposition n'y change rien (essayé); le rendu logiciel, si. Il coûte
+// un peu de processeur pendant la lecture, rien au repos.
+app.disableHardwareAcceleration();
+
 const settingsPath = () => path.join(app.getPath("userData"), "monitor.json");
 
 function loadSettings() {
@@ -288,7 +300,7 @@ if (!app.requestSingleInstanceLock()) {
     settings = loadSettings();
     createTray();
     // Réécrit à chaque lancement, pour suivre le dossier si le dépôt a bougé.
-    if (settings.startAtLogin !== false) setStartAtLogin(true);
+    if (!DEV_PROFILE && settings.startAtLogin !== false) setStartAtLogin(true);
     globalShortcut.register(CLICK_THROUGH_SHORTCUT, () => setClickThrough(!clickThrough));
     globalShortcut.register(FULL_SCREEN_SHORTCUT, () => setFullScreenCover(!settings.fullScreen));
     if (settings.url) openMonitor(settings.url);
