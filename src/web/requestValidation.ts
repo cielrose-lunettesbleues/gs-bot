@@ -14,6 +14,8 @@ export const configPatchSchema = z.object({
   modOnly: z.boolean().optional(),
   cooldownEnabled: z.boolean().optional(),
   cooldownSeconds: z.number().int().min(0).max(3600).optional(),
+  userCooldownEnabled: z.boolean().optional(),
+  userCooldownSeconds: z.number().int().min(1).max(3600).optional(),
   approvalEnabled: z.boolean().optional(),
   durationSeconds: z.number().int().min(1).max(300).optional(),
   chatFeedback: z.boolean().optional(),

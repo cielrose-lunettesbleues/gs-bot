@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CooldownService } from "../../src/cooldown/cooldownService";
 
 describe("CooldownService — global cooldown", () => {
@@ -75,5 +75,45 @@ describe("CooldownService — per-user cooldown", () => {
     service.checkAndConsume(cfgNoPerUserSeconds, "alice");
     const blocked = service.checkAndConsume(cfgNoPerUserSeconds, "alice");
     expect(blocked.allowed).toBe(false);
+  });
+});
+
+describe("CooldownService — per-viewer limit on its own", () => {
+  const perViewer = { enabled: false, seconds: 60, perUserEnabled: true, perUserSeconds: 30 };
+
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("holds back one viewer without slowing down the others", () => {
+    const service = new CooldownService();
+    expect(service.checkAndConsume(perViewer, "alice").allowed).toBe(true);
+
+    const again = service.checkAndConsume(perViewer, "alice");
+    expect(again).toMatchObject({ allowed: false, scope: "user" });
+    expect(again.retryAfterSeconds).toBe(30);
+    // Global cooldown off: bob is not caught by alice's limit
+    expect(service.checkAndConsume(perViewer, "bob").allowed).toBe(true);
+
+    vi.advanceTimersByTime(30_000);
+    expect(service.checkAndConsume(perViewer, "alice").allowed).toBe(true);
+  });
+
+  it("treats a name the same whatever its case", () => {
+    const service = new CooldownService();
+    service.checkAndConsume(perViewer, "Alice");
+    expect(service.checkAndConsume(perViewer, "alice").allowed).toBe(false);
+  });
+
+  it("skips the per-viewer limit when no name is given (mods, broadcaster)", () => {
+    const service = new CooldownService();
+    service.checkAndConsume(perViewer);
+    expect(service.checkAndConsume(perViewer).allowed).toBe(true);
+  });
+
+  it("reports the global limit as such when both apply", () => {
+    const service = new CooldownService();
+    const both = { ...perViewer, enabled: true };
+    service.checkAndConsume(both, "alice");
+    expect(service.checkAndConsume(both, "bob")).toMatchObject({ allowed: false, scope: "global" });
   });
 });

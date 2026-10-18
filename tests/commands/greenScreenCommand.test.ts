@@ -491,3 +491,29 @@ describe("greenScreenCommand, editor settings", () => {
     );
   });
 });
+
+describe("greenScreenCommand — per-viewer cooldown", () => {
+  it("names the viewer for the per-viewer limit, but not a mod", async () => {
+    const deps = makeDeps();
+    const command = createGreenScreenCommand(deps, "!gs");
+
+    await command.execute(modCtx("viewer"), ["https://youtube.com/watch?v=1"]);
+    const asMod = { ...modCtx("moderator"), user: { username: "moderator", isMod: true, isBroadcaster: false, isSubscriber: true } };
+    await command.execute(asMod, ["https://youtube.com/watch?v=1"]);
+
+    expect(deps.cooldownService.checkAndConsume).toHaveBeenNthCalledWith(1, deps.config.cooldown, "viewer");
+    expect(deps.cooldownService.checkAndConsume).toHaveBeenNthCalledWith(2, deps.config.cooldown, undefined);
+  });
+
+  it("tells the viewer when they can send again", async () => {
+    const deps = makeDeps();
+    deps.cooldownService.checkAndConsume = vi.fn(() => ({ allowed: false, retryAfterSeconds: 42, scope: "user" as const }));
+    const command = createGreenScreenCommand(deps, "!gs");
+    const ctx = modCtx("viewer");
+
+    await command.execute(ctx, ["https://youtube.com/watch?v=1"]);
+
+    expect(ctx.reply).toHaveBeenCalledWith("@viewer Tu pourras renvoyer une vidéo dans 42s.");
+    expect(deps.queue.enqueue).not.toHaveBeenCalled();
+  });
+});

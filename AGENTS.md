@@ -216,6 +216,7 @@ Chaque streamer a sa propre ligne dans `tenant_configs` :
 ```txt
 sub_only, mod_only
 cooldown_enabled, cooldown_seconds
+cooldown_per_user, cooldown_per_user_seconds
 approval_enabled, approval_timeout_seconds
 queue_mode (queue|replace|drop), queue_max_size
 duration_seconds
@@ -397,6 +398,8 @@ tmi.js → twitchMessageHandler → CommandRouter → GreenScreenCommand → Pla
 !gs modonly on|off     — active/désactive le mode mod-only (mod)
 !gs cooldown on|off    — active/désactive le cooldown (mod)
 !gs cooldown <n>       — définit la durée du cooldown en secondes (mod)
+!gs usercooldown on|off — active/désactive le cooldown par viewer (mod)
+!gs usercooldown <n>   — un envoi par viewer toutes les n secondes (mod)
 !gs history [n]        — affiche les n dernières URLs jouées
 !gs blacklist add <user>    — blackliste un user (mod)
 !gs blacklist remove <user> — retire du blacklist (mod)
@@ -463,6 +466,7 @@ Couverture principale actuelle :
 - [x] Commandes admin (`subonly`, `modonly`, `cooldown`, `history`, `blacklist`)
 - [x] File de lecture (modes queue/replace/drop)
 - [x] Cooldown global configurable
+- [x] Cooldown par viewer (`cooldown_per_user`), indépendant du global : un envoi par viewer toutes les N s, mods et streamer exemptés, invités partageant un seul cooldown via le pseudo `invite`
 - [x] Contrôle d'accès (sub-only, mod-only)
 - [x] Blacklist utilisateurs (persistée en DB)
 - [x] Mots interdits dans le texte affiché et lu par le TTS (persistés en DB)
@@ -487,7 +491,6 @@ Couverture principale actuelle :
 
 - [ ] Queue système pour plusieurs requests simultanées (architecture prête)
 - [ ] Support Channel Points (EventSub)
-- [ ] Cooldown par utilisateur
 - [ ] Déploiement Docker
 - [ ] Filtrage NSFW/spam
 - [ ] Profils de sources multiples

@@ -116,13 +116,18 @@ export function createGreenScreenCommand(
         return;
       }
 
+      // Le cooldown par viewer vise le spam d'un spectateur: la modération et la
+      // chaîne elle-même n'y sont pas soumises (le cooldown global, si).
+      const exemptFromUserCooldown = context.user.isMod || context.user.isBroadcaster;
       const cooldownDecision = deps.cooldownService.checkAndConsume(
         deps.config.cooldown,
-        context.user.username
+        exemptFromUserCooldown ? undefined : context.user.username
       );
       if (!cooldownDecision.allowed) {
         await context.reply(
-          `@${context.user.username} Commande en cooldown (${cooldownDecision.retryAfterSeconds}s).`
+          cooldownDecision.scope === "user"
+            ? `@${context.user.username} Tu pourras renvoyer une vidéo dans ${cooldownDecision.retryAfterSeconds}s.`
+            : `@${context.user.username} Commande en cooldown (${cooldownDecision.retryAfterSeconds}s).`
         );
         return;
       }

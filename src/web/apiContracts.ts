@@ -5,7 +5,7 @@ import type { TenantRuntimeState, TenantServices } from "../tenant/tenantManager
 export interface StatusResponse {
   config: {
     access: { subOnly: boolean; modOnly: boolean };
-    cooldown: { enabled: boolean; seconds: number };
+    cooldown: { enabled: boolean; seconds: number; perUserEnabled: boolean; perUserSeconds: number };
     approval: { enabled: boolean };
     playback: { durationSeconds: number; chatFeedback: boolean };
     tts: {
@@ -67,7 +67,12 @@ export function buildStatusResponse(
   return {
     config: {
       access: cfg.access,
-      cooldown: { enabled: cfg.cooldown.enabled, seconds: cfg.cooldown.seconds },
+      cooldown: {
+        enabled: cfg.cooldown.enabled,
+        seconds: cfg.cooldown.seconds,
+        perUserEnabled: cfg.cooldown.perUserEnabled,
+        perUserSeconds: cfg.cooldown.perUserSeconds
+      },
       approval: { enabled: cfg.approval.enabled },
       playback: { durationSeconds: cfg.playback.durationSeconds, chatFeedback: cfg.playback.chatFeedback },
       tts: {

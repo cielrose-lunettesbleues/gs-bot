@@ -99,7 +99,7 @@ export type CommandPermissionCheck = (
 export type CommandCooldownCheck = (
   config: { enabled: boolean; seconds: number; perUserEnabled?: boolean; perUserSeconds?: number },
   username?: string
-) => { allowed: boolean; retryAfterSeconds: number };
+) => { allowed: boolean; retryAfterSeconds: number; scope?: "user" | "global" };
 
 export type CommandUrlValidate = (
   url: string,

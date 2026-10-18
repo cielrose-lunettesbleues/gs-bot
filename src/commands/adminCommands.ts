@@ -10,6 +10,7 @@ const ADMIN_KEYWORDS = new Set([
   "subonly",
   "modonly",
   "cooldown",
+  "usercooldown",
   "reset",
   "block",
   "unblock",
@@ -24,7 +25,7 @@ const ADMIN_KEYWORDS = new Set([
 
 interface MutableRuntimeConfig {
   access: { subOnly: boolean; modOnly: boolean };
-  cooldown: { enabled: boolean; seconds: number };
+  cooldown: { enabled: boolean; seconds: number; perUserEnabled?: boolean; perUserSeconds?: number };
 }
 
 interface AdminDeps {
@@ -71,6 +72,9 @@ export class AdminService {
         break;
       case "cooldown":
         await this.handleCooldown(context, rest);
+        break;
+      case "usercooldown":
+        await this.handleUserCooldown(context, rest);
         break;
       case "reset":
         await this.handleReset(context);
@@ -157,6 +161,36 @@ export class AdminService {
       await context.reply(`@${context.user.username} Cooldown réglé à ${seconds}s.`);
     }
     this.deps.logger.info({ cooldown: this.deps.runtimeConfig.cooldown }, "Admin: cooldown changed");
+  }
+
+  private async handleUserCooldown(context: CommandContext, rest: string[]): Promise<void> {
+    const val = rest[0]?.toLowerCase();
+    if (val === "on" || val === "off") {
+      const enabled = val === "on";
+      this.updateConfig(
+        { cooldown_per_user: enabled ? 1 : 0 },
+        () => {
+          this.deps.runtimeConfig.cooldown.perUserEnabled = enabled;
+        }
+      );
+      await context.reply(
+        `@${context.user.username} Cooldown par viewer ${enabled ? "activé" : "désactivé"}.`
+      );
+    } else {
+      const seconds = parseInt(val ?? "", 10);
+      if (isNaN(seconds) || seconds < 1 || seconds > 3600) {
+        await context.reply(`@${context.user.username} Usage: !gs usercooldown on|off|<secondes>`);
+        return;
+      }
+      this.updateConfig(
+        { cooldown_per_user_seconds: seconds },
+        () => {
+          this.deps.runtimeConfig.cooldown.perUserSeconds = seconds;
+        }
+      );
+      await context.reply(`@${context.user.username} Cooldown par viewer réglé à ${seconds}s.`);
+    }
+    this.deps.logger.info({ cooldown: this.deps.runtimeConfig.cooldown }, "Admin: user cooldown changed");
   }
 
   private async handleReset(context: CommandContext): Promise<void> {

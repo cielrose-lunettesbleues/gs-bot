@@ -6,6 +6,8 @@ export type TenantConfigPatch = Partial<Pick<DbTenantConfig,
   | "mod_only"
   | "cooldown_enabled"
   | "cooldown_seconds"
+  | "cooldown_per_user"
+  | "cooldown_per_user_seconds"
   | "approval_enabled"
   | "duration_seconds"
   | "chat_feedback"
@@ -23,6 +25,8 @@ export type TenantAdminConfigPatch = Partial<Pick<DbTenantConfig,
   | "mod_only"
   | "cooldown_enabled"
   | "cooldown_seconds"
+  | "cooldown_per_user"
+  | "cooldown_per_user_seconds"
 >>;
 
 export function buildDashboardConfigPatch(body: ConfigPatchBody): TenantConfigPatch {
@@ -31,6 +35,8 @@ export function buildDashboardConfigPatch(body: ConfigPatchBody): TenantConfigPa
   if (typeof body.modOnly === "boolean") patch.mod_only = body.modOnly ? 1 : 0;
   if (typeof body.cooldownEnabled === "boolean") patch.cooldown_enabled = body.cooldownEnabled ? 1 : 0;
   if (typeof body.cooldownSeconds === "number") patch.cooldown_seconds = Math.floor(body.cooldownSeconds);
+  if (typeof body.userCooldownEnabled === "boolean") patch.cooldown_per_user = body.userCooldownEnabled ? 1 : 0;
+  if (typeof body.userCooldownSeconds === "number") patch.cooldown_per_user_seconds = Math.floor(body.userCooldownSeconds);
   if (typeof body.approvalEnabled === "boolean") patch.approval_enabled = body.approvalEnabled ? 1 : 0;
   if (typeof body.durationSeconds === "number") patch.duration_seconds = Math.floor(body.durationSeconds);
   if (typeof body.chatFeedback === "boolean") patch.chat_feedback = body.chatFeedback ? 1 : 0;

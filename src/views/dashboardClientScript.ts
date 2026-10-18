@@ -63,6 +63,8 @@ export function getDashboardClientScript(overlayPath: string): string {
     setCheck('cfg-modonly', cfg.access.modOnly);
     setCheck('cfg-cooldown', cfg.cooldown.enabled);
     setNumVal('cfg-cooldown-secs', cfg.cooldown.seconds);
+    setCheck('cfg-user-cooldown', cfg.cooldown.perUserEnabled);
+    setNumVal('cfg-user-cooldown-secs', cfg.cooldown.perUserSeconds);
     setNumVal('cfg-duration', cfg.playback ? cfg.playback.durationSeconds : null);
     setCheck('cfg-approval', cfg.approval.enabled);
     setCheck('cfg-chat-feedback', cfg.playback ? cfg.playback.chatFeedback !== false : true);

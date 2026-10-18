@@ -310,3 +310,29 @@ describe("AdminService — history", () => {
     expect(deps.historyService.getLast).toHaveBeenCalledWith(3);
   });
 });
+
+describe("AdminService — per-viewer cooldown", () => {
+  it("switches it on and sets its length through the shared config path", async () => {
+    const deps = makeDeps();
+    const persistRuntimeConfig = vi.fn();
+    const service = new AdminService({ ...deps, persistRuntimeConfig });
+
+    await service.execute(makeContext(), ["usercooldown", "on"]);
+    await service.execute(makeContext(), ["usercooldown", "90"]);
+
+    expect(persistRuntimeConfig).toHaveBeenNthCalledWith(1, { cooldown_per_user: 1 });
+    expect(persistRuntimeConfig).toHaveBeenNthCalledWith(2, { cooldown_per_user_seconds: 90 });
+  });
+
+  it("refuses a length of zero, which would mean no limit at all", async () => {
+    const deps = makeDeps();
+    const persistRuntimeConfig = vi.fn();
+    const service = new AdminService({ ...deps, persistRuntimeConfig });
+    const context = makeContext();
+
+    await service.execute(context, ["usercooldown", "0"]);
+
+    expect(persistRuntimeConfig).not.toHaveBeenCalled();
+    expect(context.reply).toHaveBeenCalledWith(expect.stringContaining("Usage"));
+  });
+});

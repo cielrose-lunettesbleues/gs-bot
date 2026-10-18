@@ -173,6 +173,9 @@ input:checked+.slider:before{transform:translateX(18px)}
     <div class="row"><span class="row-label">Cooldown</span><label class="toggle" id="tog-cooldown"><input type="checkbox" id="cfg-cooldown" onchange="patchConfig('cooldownEnabled',this.checked,this)"><span class="slider"></span></label></div>
     <div class="num-row"><label for="cfg-cooldown-secs">Durée cooldown (s)</label><input class="num-input" type="number" id="cfg-cooldown-secs" min="0" max="3600" onchange="patchConfig('cooldownSeconds',+this.value,this)"></div>
     <div class="num-row"><label for="cfg-duration">Durée lecture (s)</label><input class="num-input" type="number" id="cfg-duration" min="1" max="300" onchange="patchConfig('durationSeconds',+this.value,this)"></div>
+    <div class="row"><span class="row-label">Cooldown par viewer</span><label class="toggle" id="tog-user-cooldown"><input type="checkbox" id="cfg-user-cooldown" onchange="patchConfig('userCooldownEnabled',this.checked,this)"><span class="slider"></span></label></div>
+    <div class="num-row"><label for="cfg-user-cooldown-secs">Un envoi par viewer toutes les (s)</label><input class="num-input" type="number" id="cfg-user-cooldown-secs" min="1" max="3600" onchange="patchConfig('userCooldownSeconds',+this.value,this)"></div>
+    <p style="font-size:11px;color:var(--muted)">Les mods et toi n'y êtes pas soumis. Les invités de la page viewers partagent un seul cooldown.</p>
     <div class="row"><span class="row-label">Approbation mod</span><label class="toggle" id="tog-approval"><input type="checkbox" id="cfg-approval" onchange="patchConfig('approvalEnabled',this.checked,this)"><span class="slider"></span></label></div>
     <div class="row"><span class="row-label">Messages chat</span><label class="toggle" id="tog-chat-feedback"><input type="checkbox" id="cfg-chat-feedback" onchange="patchConfig('chatFeedback',this.checked,this)"><span class="slider"></span></label></div>
   </div>
