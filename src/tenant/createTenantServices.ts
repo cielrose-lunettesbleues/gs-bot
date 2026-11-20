@@ -135,7 +135,9 @@ export function createTenantServices({
     ...createAdminCommands()
   ]);
 
-  const twitchBotManager = new TwitchBotManager(router, logger);
+  // Also used by the bot on every reconnection: the tenant can stay resident
+  // for days (OBS overlay, monitor app), far beyond a token's 4-hour life.
+  const twitchBotManager = new TwitchBotManager(router, logger, resolveAccessToken);
 
   if (dbUser?.access_token && dbUser?.twitch_login) {
     const channel = dbUser.twitch_login;
